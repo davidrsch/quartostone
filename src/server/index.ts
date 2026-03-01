@@ -4,13 +4,17 @@
 import express from 'express';
 import { createServer as createHttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { QuartostoneConfig } from './config.js';
 import { registerPagesApi } from './api/pages.js';
 import { registerGitApi } from './api/git.js';
 import { registerRenderApi } from './api/render.js';
 import { startWatcher } from './watcher.js';
+
+// __dirname equivalent in ESM — resolves to dist/server/ after compilation
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export interface ServerContext {
   cwd: string;
@@ -28,10 +32,15 @@ export async function createServer(ctx: ServerContext) {
     app.use('/', express.static(siteDir));
   }
 
-  // Serve editor UI at /editor
-  const editorDist = join(ctx.cwd, 'node_modules', 'quartostone', 'dist', 'client');
+  // Serve editor UI at /editor — built by Vite to dist/client/
+  // __dirname is dist/server/ at runtime, so dist/client/ is one level up
+  const editorDist = join(__dirname, '../client');
   if (existsSync(editorDist)) {
     app.use('/editor', express.static(editorDist));
+  } else {
+    app.get('/editor', (_req, res) =>
+      res.send('<h2>Editor not built yet — run <code>npm run build:client</code></h2>')
+    );
   }
 
   // Register API routes

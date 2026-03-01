@@ -11,8 +11,10 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "dev:server": "tsx watch src/server/index.ts",
-    "dev:client": "tsc --project tsconfig.client.json --watch",
+    "build:client": "vite build",
+    "build:all": "npm run build && npm run build:client",
+    "dev:server": "tsx watch src/cli/commands/serve.ts",
+    "dev:client": "vite",
     "lint": "eslint src",
     "format": "prettier --write src",
     "typecheck": "tsc --noEmit",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@codemirror/lang-markdown": "^6.3.2",
     "@codemirror/lang-yaml": "^6.1.1",
+    "@codemirror/language-data": "^6.5.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.13",
@@ -37,10 +40,8 @@
     "eslint": "^9.0.0",
     "prettier": "^3.5.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.8.0"
-  },
-  "engines": {
-    "node": ">=22.0.0"
+    "typescript": "^5.8.0",
+    "vite": "^6.0.0"
   },
   "license": "MIT",
   "keywords": ["quarto", "notion", "knowledge-base", "git", "markdown", "literate-computing"]

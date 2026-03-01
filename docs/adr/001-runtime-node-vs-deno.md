@@ -12,19 +12,20 @@ file watcher, and build toolchain. The two credible options are **Node.js 22 LTS
 
 ## Decision Drivers
 
-| Factor | Weight |
-|---|---|
-| Ecosystem compatibility (npm packages) | High |
-| Toolchain maturity (lint, typecheck, bundle) | High |
-| CLI distribution (single binary) | Medium |
-| Long-term maintenance risk | Medium |
-| Developer familiarity | Low |
+| Factor                                       | Weight |
+| -------------------------------------------- | ------ |
+| Ecosystem compatibility (npm packages)       | High   |
+| Toolchain maturity (lint, typecheck, bundle) | High   |
+| CLI distribution (single binary)             | Medium |
+| Long-term maintenance risk                   | Medium |
+| Developer familiarity                        | Low    |
 
 ## Options Considered
 
 ### Option A — Node.js 22 LTS (chosen)
 
 **Pros:**
+
 - All chosen dependencies (`express`, `chokidar`, `simple-git`, `ws`, `commander`, `yaml`)
   publish stable typed Node.js packages with zero compatibility shims needed.
 - `tsx` provides instant TypeScript execution in development with fast startup.
@@ -37,6 +38,7 @@ file watcher, and build toolchain. The two credible options are **Node.js 22 LTS
 - Long-term: Node.js 22 is LTS until 2027; 24 LTS follows in 2025.
 
 **Cons:**
+
 - Requires explicit TypeScript compilation step (`tsc`) for production.
 - No built-in permissions model (Deno's sandboxing is a security advantage we forfeit).
 - `node_modules` vs Deno's URL-based imports (minor DX difference).
@@ -44,12 +46,14 @@ file watcher, and build toolchain. The two credible options are **Node.js 22 LTS
 ### Option B — Deno 2
 
 **Pros:**
+
 - Built-in TypeScript execution without `tsx`/`tsc` tooling.
 - Granular permissions model as a security layer.
 - `deno compile` produces a self-contained binary with no Node.js install required on end-user machines.
 - URL imports eliminate `node_modules` entirely.
 
 **Cons:**
+
 - npm compatibility via `npm:` specifiers works for most packages but adds a shim layer;
   some packages (notably older `chokidar` versions) required workarounds at time of evaluation.
 - ESLint 9 runs on Node.js; `deno lint` is a different tool with different rule sets —
@@ -72,6 +76,7 @@ local-only, single-user application where the process already has full filesyste
 by design.
 
 This decision should be **revisited** if:
+
 - A future phase requires packaging QuartoStone as a self-contained installer (at which
   point `deno compile` vs `pkg`/`nexe` should be re-evaluated).
 - Node.js drops LTS for 22 ahead of schedule.

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuartoStone</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <div id="sidebar-header">
+          <span class="logo">&#x1F4D0; QuartoStone</span>
+        </div>
+        <nav id="file-tree"></nav>
+        <div id="sidebar-footer">
+          <button id="btn-new-page">+ New page</button>
+        </div>
+      </aside>
+
+      <main id="main">
+        <div id="editor-toolbar">
+          <span id="current-page-title"></span>
+          <div id="toolbar-actions">
+            <button id="btn-mode-source" class="active" title="Source mode">Source</button>
+            <button id="btn-save" disabled title="Save (Ctrl+S)">Save</button>
+            <button id="btn-commit" disabled title="Commit changes">Commit</button>
+          </div>
+        </div>
+        <div id="editor-mount"></div>
+        <div id="no-page-message">
+          <div class="empty-state">
+            <p>Select a page from the sidebar, or create a new one.</p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <dialog id="commit-dialog">
+      <form method="dialog">
+        <h3>Commit changes</h3>
+        <label for="commit-msg">Message</label>
+        <input id="commit-msg" type="text" placeholder="qs-xxxxxxxx" autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="submit" id="btn-commit-confirm">Commit</button>
+          <button type="button" id="btn-commit-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
