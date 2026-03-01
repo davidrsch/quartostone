@@ -8,32 +8,69 @@
   </head>
   <body>
     <div id="app">
+      <!-- ── Left sidebar ── -->
       <aside id="sidebar">
         <div id="sidebar-header">
           <span class="logo">&#x1F4D0; QuartoStone</span>
         </div>
-        <nav id="file-tree"></nav>
-        <div id="sidebar-footer">
-          <button id="btn-new-page">+ New page</button>
+
+        <div id="sidebar-tabs">
+          <button class="stab active" data-tab="pages">Pages</button>
+          <button class="stab" data-tab="git">Git</button>
+        </div>
+
+        <!-- Pages tab -->
+        <div id="tab-pages" class="stab-panel">
+          <nav id="file-tree"></nav>
+          <div id="sidebar-footer">
+            <button id="btn-new-page">+ New page</button>
+          </div>
+        </div>
+
+        <!-- Git tab -->
+        <div id="tab-git" class="stab-panel hidden">
+          <div id="git-panel"></div>
         </div>
       </aside>
 
+      <!-- ── Editor area ── -->
       <main id="main">
         <div id="editor-toolbar">
           <span id="current-page-title"></span>
           <div id="toolbar-actions">
             <button id="btn-mode-source" class="active" title="Source mode">Source</button>
+            <button id="btn-properties" title="Toggle page properties">Properties</button>
             <button id="btn-save" disabled title="Save (Ctrl+S)">Save</button>
             <button id="btn-commit" disabled title="Commit changes">Commit</button>
           </div>
         </div>
-        <div id="editor-mount"></div>
-        <div id="no-page-message">
+
+        <div id="editor-body">
+          <div id="editor-mount"></div>
+
+          <!-- Page properties panel -->
+          <aside id="properties-panel" class="hidden">
+            <div id="properties-header">
+              <span>Page Properties</span>
+              <button id="btn-close-props" title="Close">×</button>
+            </div>
+            <div id="properties-body"></div>
+          </aside>
+        </div>
+
+        <div id="no-page-message" class="visible">
           <div class="empty-state">
             <p>Select a page from the sidebar, or create a new one.</p>
           </div>
         </div>
       </main>
+    </div>
+
+    <!-- Status bar -->
+    <div id="statusbar">
+      <span id="sb-branch"></span>
+      <span id="sb-render-status"></span>
+      <span id="sb-save-status"></span>
     </div>
 
     <div id="toast-container"></div>

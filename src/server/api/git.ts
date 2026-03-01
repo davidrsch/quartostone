@@ -2,6 +2,7 @@
 // GET  /api/git/log?path=   — commit history (all or per-file)
 // POST /api/git/commit      — commit staged + all .qmd changes
 // GET  /api/git/diff?sha=   — diff for a specific commit
+// GET  /api/git/status      — working tree status
 
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
@@ -13,9 +14,9 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.get('/api/git/log', async (req: Request, res: Response) => {
     try {
       const filePath = req.query.path as string | undefined;
-      const options = filePath ? ['--follow', '--', filePath] : [];
-      const log = await git.log({ maxCount: 50, '--': undefined, ...(!filePath ? {} : {}) });
-      void options;
+      const log = filePath
+        ? await git.log({ maxCount: 50, file: filePath })
+        : await git.log({ maxCount: 50 });
       res.json(log.all);
     } catch (e) {
       res.status(500).json({ error: String(e) });
