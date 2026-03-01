@@ -2,6 +2,8 @@
 // Application entry point — wires sidebar, editor, git panel, properties panel.
 
 import { createEditor, connectLiveReload } from './editor/index.js';
+import { createVisualEditor } from './visual/index.js';
+import type { VisualEditorInstance } from './visual/index.js';
 import { initSidebar } from './sidebar/index.js';
 import { initGitPanel } from './git/index.js';
 import { createPropertiesPanel } from './properties/index.js';
@@ -15,6 +17,8 @@ const pageTitleEl      = document.getElementById('current-page-title')!;
 const btnSave          = document.getElementById('btn-save') as HTMLButtonElement;
 const btnCommit        = document.getElementById('btn-commit') as HTMLButtonElement;
 const btnNewPage       = document.getElementById('btn-new-page') as HTMLButtonElement;
+const btnModeSource    = document.getElementById('btn-mode-source') as HTMLButtonElement;
+const btnModeVisual    = document.getElementById('btn-mode-visual') as HTMLButtonElement;
 const btnProperties    = document.getElementById('btn-properties') as HTMLButtonElement;
 const btnCloseProps    = document.getElementById('btn-close-props') as HTMLButtonElement;
 const propertiesPanel  = document.getElementById('properties-panel')!;
@@ -31,8 +35,10 @@ const sbSaveStatus     = document.getElementById('sb-save-status')!;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let activeView: EditorView | null = null;
+let activeVisual: VisualEditorInstance | null = null;
 let activePath: string | null = null;
 let isDirty = false;
+let editorMode: 'source' | 'visual' = 'source';
 let refreshSidebar: (() => Promise<void>) | null = null;
 let refreshGit: (() => Promise<void>) | null = null;
 
@@ -96,6 +102,73 @@ btnCommitConfirm.addEventListener('click', async () => {
 
 btnCommitCancel.addEventListener('click', () => commitDialog.close());
 
+// ─── Editor mode toggle ──────────────────────────────────────────────────────
+async function switchMode(mode: 'source' | 'visual') {
+  if (mode === editorMode) return;
+  if (!activePath) return;
+
+  if (mode === 'visual') {
+    // Get current source content, destroy source editor, init visual
+    const markdown = activeView ? activeView.state.doc.toString() : '';
+    activeView?.destroy();
+    activeView = null;
+    editorMountEl.innerHTML = '';
+
+    activeVisual = await createVisualEditor({
+      container: editorMountEl,
+      initialMarkdown: markdown,
+      onDirty: () => {
+        isDirty = true;
+        btnSave.disabled = false;
+        sbSaveStatus.textContent = 'Unsaved changes';
+      },
+    });
+
+    editorMode = 'visual';
+    btnModeSource.classList.remove('active');
+    btnModeVisual.classList.add('active');
+  } else {
+    // Get current visual content, destroy visual editor, init source
+    const markdown = activeVisual ? activeVisual.getMarkdown() : '';
+    activeVisual?.destroy();
+    activeVisual = null;
+    editorMountEl.innerHTML = '';
+
+    activeView = await createEditor({
+      container: editorMountEl,
+      pagePath: activePath,
+      onSave: () => {
+        isDirty = false;
+        btnSave.disabled = true;
+        sbSaveStatus.textContent = 'Saved';
+        setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+        refreshGit?.();
+        updateBranchStatus();
+      },
+      onDirty: () => {
+        isDirty = true;
+        btnSave.disabled = false;
+        sbSaveStatus.textContent = 'Unsaved changes';
+      },
+    });
+
+    // Inject markdown from visual editor into source editor
+    if (markdown && activeView) {
+      const { dispatch, state } = activeView;
+      dispatch(state.update({
+        changes: { from: 0, to: state.doc.length, insert: markdown },
+      }));
+    }
+
+    editorMode = 'source';
+    btnModeSource.classList.add('active');
+    btnModeVisual.classList.remove('active');
+  }
+}
+
+btnModeSource.addEventListener('click', () => switchMode('source'));
+btnModeVisual.addEventListener('click', () => switchMode('visual'));
+
 // ─── Sidebar tabs ─────────────────────────────────────────────────────────────
 document.querySelectorAll<HTMLButtonElement>('.stab').forEach(tab => {
   tab.addEventListener('click', () => {
@@ -111,18 +184,20 @@ document.querySelectorAll<HTMLButtonElement>('.stab').forEach(tab => {
 btnProperties.addEventListener('click', () => {
   const hidden = propertiesPanel.classList.toggle('hidden');
   btnProperties.classList.toggle('active', !hidden);
-  if (!hidden && activePath && activeView) {
-    propsPanel.mount(
-      activePath,
-      () => activeView!.state.doc.toString(),
-      (newContent) => {
-        // Replace editor content with updated frontmatter
-        const { dispatch, state } = activeView!;
+  if (!hidden && activePath) {
+    const getContent = () =>
+      editorMode === 'visual' && activeVisual
+        ? activeVisual.getMarkdown()
+        : (activeView ? activeView.state.doc.toString() : '');
+    const setContent = (newContent: string) => {
+      if (editorMode === 'source' && activeView) {
+        const { dispatch, state } = activeView;
         dispatch(state.update({
           changes: { from: 0, to: state.doc.length, insert: newContent },
         }));
-      },
-    );
+      }
+    };
+    propsPanel.mount(activePath, getContent, setContent);
   }
 });
 
@@ -134,7 +209,7 @@ btnCloseProps.addEventListener('click', () => {
 
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 btnSave.addEventListener('click', async () => {
-  if (!activeView || !activePath) return;
+  if (!activePath) return;
   await saveCurrentPage();
 });
 
@@ -162,8 +237,11 @@ btnNewPage.addEventListener('click', async () => {
 
 // ─── Save ─────────────────────────────────────────────────────────────────────
 async function saveCurrentPage() {
-  if (!activeView || !activePath) return;
-  const content = activeView.state.doc.toString();
+  if (!activePath) return;
+  const content = editorMode === 'visual' && activeVisual
+    ? activeVisual.getMarkdown()
+    : (activeView ? activeView.state.doc.toString() : '');
+  if (!content) return;
   sbSaveStatus.textContent = 'Saving…';
   try {
     await fetch(`/api/pages/${encodeURIComponent(activePath)}`, {
@@ -196,43 +274,64 @@ async function updateBranchStatus() {
 
 // ─── Editor load ──────────────────────────────────────────────────────────────
 async function openPage(path: string, name: string) {
-  if (activeView) { activeView.destroy(); activeView = null; }
+  // Destroy any active editor
+  activeView?.destroy(); activeView = null;
+  activeVisual?.destroy(); activeVisual = null;
   editorMountEl.innerHTML = '';
 
   activePath = path;
+  isDirty = false;
   pageTitleEl.textContent = name;
   noPageMessageEl.classList.remove('visible');
-  btnSave.disabled = false;
+  btnSave.disabled = true;
   btnCommit.disabled = false;
 
-  activeView = await createEditor({
-    container: editorMountEl,
-    pagePath: path,
-    onSave: () => {
-      isDirty = false;
-      btnSave.disabled = true;
-      sbSaveStatus.textContent = 'Saved';
-      setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
-      refreshGit?.();
-      updateBranchStatus();
-    },
-    onDirty: () => {
-      isDirty = true;
-      btnSave.disabled = false;
-      sbSaveStatus.textContent = 'Unsaved changes';
-    },
-  });
+  if (editorMode === 'visual') {
+    // Fetch content then open in visual mode
+    const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
+    const { content } = (await res.json()) as { content: string };
+    activeVisual = await createVisualEditor({
+      container: editorMountEl,
+      initialMarkdown: content,
+      onDirty: () => {
+        isDirty = true;
+        btnSave.disabled = false;
+        sbSaveStatus.textContent = 'Unsaved changes';
+      },
+    });
+  } else {
+    activeView = await createEditor({
+      container: editorMountEl,
+      pagePath: path,
+      onSave: () => {
+        isDirty = false;
+        btnSave.disabled = true;
+        sbSaveStatus.textContent = 'Saved';
+        setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+        refreshGit?.();
+        updateBranchStatus();
+      },
+      onDirty: () => {
+        isDirty = true;
+        btnSave.disabled = false;
+        sbSaveStatus.textContent = 'Unsaved changes';
+      },
+    });
+  }
 
   // Re-mount properties panel if open
   if (!propertiesPanel.classList.contains('hidden')) {
-    propsPanel.mount(
-      path,
-      () => activeView!.state.doc.toString(),
-      (newContent) => {
-        const { dispatch, state } = activeView!;
+    const getContent = () =>
+      editorMode === 'visual' && activeVisual
+        ? activeVisual.getMarkdown()
+        : (activeView ? activeView.state.doc.toString() : '');
+    const setContent = (newContent: string) => {
+      if (editorMode === 'source' && activeView) {
+        const { dispatch, state } = activeView;
         dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
-      },
-    );
+      }
+    };
+    propsPanel.mount(path, getContent, setContent);
   }
 }
 

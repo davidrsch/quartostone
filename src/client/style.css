@@ -589,3 +589,165 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 #statusbar .sb-dirty { color: #d7ba7d; }
 #sb-render-status { opacity: 0.85; }
 #sb-save-status   { margin-left: auto; opacity: 0.85; }
+
+/* ─── Mode toggle buttons ─── */
+#btn-mode-source,
+#btn-mode-visual {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 3px 0 0 3px;
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#btn-mode-visual { border-radius: 0 3px 3px 0; border-left: none; }
+#btn-mode-source.active,
+#btn-mode-visual.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ─── Tiptap / ProseMirror visual editor ─── */
+.ProseMirror {
+  outline: none;
+  min-height: 100%;
+  padding: 32px 48px;
+  line-height: 1.7;
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.ProseMirror p { margin: 0 0 0.75em; }
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
+.ProseMirror h4, .ProseMirror h5, .ProseMirror h6 {
+  color: var(--text-heading);
+  margin: 1.2em 0 0.4em;
+  font-weight: 600;
+}
+.ProseMirror h1 { font-size: 1.8em; }
+.ProseMirror h2 { font-size: 1.4em; }
+.ProseMirror h3 { font-size: 1.15em; }
+
+.ProseMirror ul, .ProseMirror ol { padding-left: 1.5em; margin: 0.5em 0; }
+.ProseMirror li { margin: 0.2em 0; }
+
+.ProseMirror code {
+  background: #2d2d2d;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #d7ba7d;
+}
+
+.ProseMirror pre {
+  background: #1a1a1a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 18px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  color: #d4d4d4;
+  font-size: 13px;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  color: var(--text-dim);
+}
+
+.ProseMirror hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+
+.ProseMirror img { max-width: 100%; border-radius: 4px; }
+
+.ProseMirror a { color: var(--accent); text-decoration: underline; }
+
+/* Table */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+.ProseMirror td, .ProseMirror th {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  min-width: 80px;
+}
+.ProseMirror th { background: #2a2a2a; font-weight: 600; }
+.ProseMirror .selectedCell { background: rgba(14, 112, 192, 0.18); }
+
+/* Placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* ─── Quarto callout blocks ─── */
+.callout {
+  border-left: 4px solid;
+  border-radius: 0 6px 6px 0;
+  margin: 1em 0;
+  padding: 0;
+  overflow: hidden;
+}
+.callout-title {
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.callout-body { padding: 10px 14px; }
+
+.callout-note   { border-color: #4fc3f7; }
+.callout-note .callout-title   { background: rgba(79,195,247,0.12); color: #4fc3f7; }
+
+.callout-warning { border-color: #ffb74d; }
+.callout-warning .callout-title { background: rgba(255,183,77,0.12); color: #ffb74d; }
+
+.callout-tip    { border-color: #66bb6a; }
+.callout-tip .callout-title    { background: rgba(102,187,106,0.12); color: #66bb6a; }
+
+.callout-important { border-color: #ef5350; }
+.callout-important .callout-title { background: rgba(239,83,80,0.12); color: #ef5350; }
+
+.callout-caution { border-color: #ef5350; }
+.callout-caution .callout-title { background: rgba(239,83,80,0.12); color: #ef5350; }
+
+/* ─── Slash command menu ─── */
+.slash-menu {
+  background: #252526;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  min-width: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 9999;
+}
+
+.slash-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.1s;
+}
+.slash-item strong { font-size: 13px; color: var(--text-heading); }
+.slash-item span { font-size: 11px; color: var(--text-dim); }
+.slash-item:hover, .slash-item.selected { background: var(--bg-hover); }
+
