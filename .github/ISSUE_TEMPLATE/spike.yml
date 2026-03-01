@@ -1,0 +1,23 @@
+name: Spike (Research)
+description: Investigate a technical question or evaluate options
+labels: ["spike"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+      description: What are you trying to find out?
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach
+      description: How will you investigate?
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected outcome / deliverable
+      description: What artifact (doc, prototype, decision) will this produce?
+    validations:
+      required: true

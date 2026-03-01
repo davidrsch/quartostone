@@ -1,0 +1,9 @@
+node_modules/
+dist/
+_site/
+.quartostone/
+*.quartostone.lock
+.DS_Store
+Thumbs.db
+*.log
+.env

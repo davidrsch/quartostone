@@ -1,0 +1,21 @@
+project:
+  type: website
+  title: "My Quartostone"
+
+website:
+  title: "My Quartostone"
+  navbar:
+    left:
+      - text: "Home"
+        href: pages/index.qmd
+  sidebar:
+    style: "docked"
+    search: true
+    contents:
+      - pages/index.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3

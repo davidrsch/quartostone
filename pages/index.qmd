@@ -1,0 +1,29 @@
+---
+title: "Welcome to Quartostone"
+date: today
+---
+
+# Welcome to your Quartostone workspace
+
+This is your first page. Edit it in **Visual mode** (WYSIWYG) or **Source mode** (raw `.qmd`).
+
+## What you can do
+
+- **Write** — rich text with headings, lists, callouts, and code blocks
+- **Execute code** — Python, R, Julia, and Observable JS via Quarto
+- **Version control** — every save can auto-commit to Git
+- **Publish** — render your workspace as a Quarto website with one command
+
+## Getting started
+
+Create new pages from the sidebar. Use `/` in Visual mode to insert blocks.
+
+```{python}
+#| eval: false
+print("Hello from Quartostone!")
+```
+
+::: {.callout-tip}
+## Tip
+Switch between **Visual** and **Source** mode using the toggle in the toolbar.
+:::

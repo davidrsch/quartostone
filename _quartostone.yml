@@ -1,0 +1,26 @@
+# Quartostone workspace configuration
+# Full schema: https://github.com/davidrsch/quartostone/docs/config-schema.md
+
+# How commits are created after each save + render cycle.
+#   auto   — commit immediately with an auto-generated slug (e.g. qs-a3f9b2c1)
+#   prompt — show a toast asking for a message (30s timeout falls back to slug)
+#   manual — no auto-commits; user triggers from the Git panel
+commit_mode: prompt
+
+# Pattern for auto-generated commit messages when commit_mode is 'auto' or on timeout.
+# {alphanum8} is replaced with a random 8-character alphanumeric string.
+commit_message_auto: "qs-{alphanum8}"
+
+# Whether to run `quarto render` after each save.
+render_on_save: true
+
+# Scope of quarto render on save.
+#   file    — render only the changed file (fast)
+#   project — render the entire project (thorough)
+render_scope: file
+
+# File-watcher debounce interval in milliseconds.
+watch_interval_ms: 300
+
+# Port for the local Quartostone server.
+port: 4242

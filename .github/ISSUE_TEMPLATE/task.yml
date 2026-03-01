@@ -1,0 +1,17 @@
+name: Task (Technical)
+description: Infrastructure, tooling, or non-user-facing technical work
+labels: ["task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be done?
+    validations:
+      required: true
+  - type: textarea
+    id: subtasks
+    attributes:
+      label: Subtasks
+      placeholder: |
+        - [ ] Step 1
+        - [ ] Step 2
