@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "A Notion-like, Git-native knowledge base built on Quarto",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "bin": {
     "quartostone": "./dist/cli/index.js"
   },
