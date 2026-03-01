@@ -4,7 +4,7 @@
 // GET  /api/git/diff?sha=   — diff for a specific commit
 
 import type { Express, Request, Response } from 'express';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type { ServerContext } from '../index.js';
 
 export function registerGitApi(app: Express, ctx: ServerContext) {

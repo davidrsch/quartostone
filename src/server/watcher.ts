@@ -4,7 +4,7 @@
 import chokidar from 'chokidar';
 import { join } from 'node:path';
 import { exec } from 'node:child_process';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type { QuartostoneConfig } from './config.js';
 import { generateCommitSlug } from './config.js';
 
