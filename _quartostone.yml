@@ -1,5 +1,6 @@
+# yaml-language-server: $schema=./docs/config.schema.json
 # Quartostone workspace configuration
-# Full schema: https://github.com/davidrsch/quartostone/docs/config-schema.md
+# Full schema: docs/config.schema.json
 
 # How commits are created after each save + render cycle.
 #   auto   — commit immediately with an auto-generated slug (e.g. qs-a3f9b2c1)

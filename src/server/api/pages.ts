@@ -32,7 +32,7 @@ function buildTree(dir: string, rootDir: string): PageNode[] {
 }
 
 export function registerPagesApi(app: Express, ctx: ServerContext) {
-  const pagesDir = join(ctx.cwd, 'pages');
+  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
 
   app.get('/api/pages', (_req: Request, res: Response) => {
     try {

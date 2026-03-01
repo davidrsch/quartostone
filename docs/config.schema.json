@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/davidrsch/quartostone/blob/main/docs/config.schema.json",
+  "title": "QuartoStone Configuration",
+  "description": "Schema for _quartostone.yml — the workspace configuration file for QuartoStone.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "commit_mode": {
+      "type": "string",
+      "enum": ["auto", "prompt", "manual"],
+      "default": "prompt",
+      "description": "Controls when Git commits are made after a save/render cycle. 'auto' commits immediately with a generated message; 'prompt' shows a toast in the UI with the auto-generated slug so the user can confirm or edit; 'manual' never auto-commits."
+    },
+    "commit_message_auto": {
+      "type": "string",
+      "default": "qs-{alphanum8}",
+      "description": "Template for auto-generated commit messages. Supported placeholder: {alphanum8} (random 8-character alphanumeric string)."
+    },
+    "render_on_save": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to run 'quarto render' automatically whenever a .qmd file is saved."
+    },
+    "render_scope": {
+      "type": "string",
+      "enum": ["file", "project"],
+      "default": "file",
+      "description": "Scope of the render triggered on save. 'file' renders only the changed file; 'project' renders the entire Quarto project."
+    },
+    "watch_interval_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 10000,
+      "default": 500,
+      "description": "Debounce interval in milliseconds for the file watcher. Changes within this window are batched into a single render cycle."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535,
+      "default": 4242,
+      "description": "TCP port the QuartoStone dev server listens on."
+    },
+    "pages_dir": {
+      "type": "string",
+      "default": "pages",
+      "description": "Directory (relative to workspace root) where .qmd page files live."
+    },
+    "open_browser": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to automatically open the browser when 'quartostone serve' starts."
+    }
+  }
+}

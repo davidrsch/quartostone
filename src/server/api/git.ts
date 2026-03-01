@@ -26,7 +26,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const { message } = req.body as { message?: string };
       if (!message) return res.status(400).json({ error: 'message required' });
-      await git.add('pages/');
+      await git.add(`${ctx.config.pages_dir}/`);
       const result = await git.commit(message);
       res.json({ ok: true, commit: result.commit });
     } catch (e) {

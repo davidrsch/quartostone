@@ -15,7 +15,7 @@ interface WatcherContext {
 }
 
 export function startWatcher(ctx: WatcherContext) {
-  const pagesDir = join(ctx.cwd, 'pages');
+  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
   const git = simpleGit(ctx.cwd);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;

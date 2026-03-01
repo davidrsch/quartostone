@@ -22,7 +22,8 @@ export async function serve(options: { port: string; open: boolean }) {
   const server = await createServer({ cwd, config, port });
   server.listen(port, () => {
     console.log(`\n✓ Quartostone running at http://localhost:${port}`);
-    if (options.open) {
+    const shouldOpen = options.open !== undefined ? options.open : config.open_browser;
+    if (shouldOpen) {
       import('node:child_process').then(({ exec }) => {
         const cmd =
           process.platform === 'win32'

@@ -12,6 +12,8 @@ export interface QuartostoneConfig {
   render_scope: RenderScope;
   watch_interval_ms: number;
   port: number;
+  pages_dir: string;
+  open_browser: boolean;
 }
 
 const DEFAULTS: QuartostoneConfig = {
@@ -21,6 +23,8 @@ const DEFAULTS: QuartostoneConfig = {
   render_scope: 'file',
   watch_interval_ms: 300,
   port: 4242,
+  pages_dir: 'pages',
+  open_browser: true,
 };
 
 export async function loadConfig(configPath: string): Promise<QuartostoneConfig> {
