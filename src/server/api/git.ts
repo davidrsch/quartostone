@@ -2,7 +2,11 @@
 // GET  /api/git/log?path=   — commit history (all or per-file)
 // POST /api/git/commit      — commit staged + all .qmd changes
 // GET  /api/git/diff?sha=   — diff for a specific commit
-// GET  /api/git/status      — working tree status
+// GET  /api/git/status      — working tree status + ahead/behind counts
+// GET  /api/git/remote      — remote URL + ahead/behind
+// POST /api/git/push        — push to remote
+// POST /api/git/pull        — pull from remote (fast-forward only)
+// PATCH /api/git/remote     — set remote URL
 
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
@@ -50,6 +54,79 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const status = await git.status();
       res.json(status);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // ── Remote push/pull ────────────────────────────────────────────────────────
+
+  app.get('/api/git/remote', async (_req: Request, res: Response) => {
+    try {
+      // Get remote URL
+      let url = '';
+      try {
+        url = (await git.remote(['get-url', 'origin']) ?? '').trim();
+      } catch { /* no remote */ }
+
+      // Fetch to update tracking info (non-failing)
+      try {
+        await git.fetch(['--no-tags', '--prune', 'origin']);
+      } catch { /* no network / no remote */ }
+
+      const status = await git.status();
+      res.json({
+        url,
+        branch: status.current ?? '',
+        tracking: status.tracking ?? '',
+        ahead: status.ahead,
+        behind: status.behind,
+      });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.post('/api/git/push', async (_req: Request, res: Response) => {
+    try {
+      const pushResult = await git.push('origin');
+      res.json({ ok: true, pushed: pushResult.pushed });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.post('/api/git/pull', async (_req: Request, res: Response) => {
+    try {
+      // Fast-forward only — if not FF-able, return error with message
+      const pullResult = await git.pull('origin', undefined, ['--ff-only']);
+      res.json({
+        ok: true,
+        summary: { changes: pullResult.summary.changes, insertions: pullResult.summary.insertions, deletions: pullResult.summary.deletions },
+      });
+    } catch (e) {
+      const msg = String(e);
+      const conflict = msg.includes('CONFLICT') || msg.includes('not possible to fast-forward');
+      res.status(conflict ? 409 : 500).json({
+        error: conflict
+          ? 'Cannot fast-forward. Remote has diverged. Pull manually or rebase.'
+          : msg,
+        conflict,
+      });
+    }
+  });
+
+  app.patch('/api/git/remote', async (req: Request, res: Response) => {
+    try {
+      const { url } = req.body as { url?: string };
+      if (!url) return res.status(400).json({ error: 'url required' });
+      // Set or add remote
+      try {
+        await git.remote(['set-url', 'origin', url]);
+      } catch {
+        await git.addRemote('origin', url);
+      }
+      res.json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

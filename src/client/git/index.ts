@@ -1,5 +1,5 @@
 // src/client/git/index.ts
-// Git sidebar panel — status strip, commit history list, inline diff viewer
+// Git sidebar panel — status strip, commit history list, inline diff viewer, remote sync
 
 interface CommitEntry {
   hash: string;
@@ -20,6 +20,14 @@ interface GitStatus {
   isClean?: boolean;
 }
 
+interface RemoteInfo {
+  url: string;
+  branch: string;
+  tracking: string;
+  ahead: number;
+  behind: number;
+}
+
 type CommitCallback = (defaultMsg: string) => void;
 
 export async function initGitPanel(
@@ -31,6 +39,12 @@ export async function initGitPanel(
     <div id="git-commit-bar">
       <button id="btn-git-commit-now">+ Commit</button>
     </div>
+    <div id="git-remote-bar">
+      <span id="git-sync-info" class="git-meta">No remote</span>
+      <button id="btn-git-pull" class="btn-sync" disabled title="Pull (fast-forward only)">↓ Pull</button>
+      <button id="btn-git-push" class="btn-sync" disabled title="Push to origin">↑ Push</button>
+      <button id="btn-git-sync-settings" class="btn-sync-settings" title="Remote settings">⚙</button>
+    </div>
     <div id="git-history-label">Recent commits</div>
     <div id="git-commit-list"></div>
     <div id="git-diff-panel" class="hidden">
@@ -40,15 +54,33 @@ export async function initGitPanel(
       </div>
       <pre id="git-diff-body"></pre>
     </div>
+    <dialog id="git-remote-dialog">
+      <h3>Remote settings</h3>
+      <label>Remote URL<br>
+        <input id="git-remote-url" type="text" placeholder="https://github.com/user/repo.git" />
+      </label>
+      <div class="dialog-actions">
+        <button id="btn-remote-save">Save</button>
+        <button id="btn-remote-cancel">Cancel</button>
+      </div>
+    </dialog>
   `;
 
-  const statusStrip = containerEl.querySelector<HTMLElement>('#git-status-strip')!;
-  const commitList  = containerEl.querySelector<HTMLElement>('#git-commit-list')!;
-  const diffPanel   = containerEl.querySelector<HTMLElement>('#git-diff-panel')!;
-  const diffTitle   = containerEl.querySelector<HTMLElement>('#git-diff-title')!;
-  const diffBody    = containerEl.querySelector<HTMLElement>('#git-diff-body')!;
-  const btnCommit   = containerEl.querySelector<HTMLElement>('#btn-git-commit-now')!;
-  const btnCloseDiff = containerEl.querySelector<HTMLElement>('#btn-close-diff')!;
+  const statusStrip    = containerEl.querySelector<HTMLElement>('#git-status-strip')!;
+  const commitList     = containerEl.querySelector<HTMLElement>('#git-commit-list')!;
+  const diffPanel      = containerEl.querySelector<HTMLElement>('#git-diff-panel')!;
+  const diffTitle      = containerEl.querySelector<HTMLElement>('#git-diff-title')!;
+  const diffBody       = containerEl.querySelector<HTMLElement>('#git-diff-body')!;
+  const btnCommit      = containerEl.querySelector<HTMLElement>('#btn-git-commit-now')!;
+  const btnCloseDiff   = containerEl.querySelector<HTMLElement>('#btn-close-diff')!;
+  const syncInfo       = containerEl.querySelector<HTMLElement>('#git-sync-info')!;
+  const btnPull        = containerEl.querySelector<HTMLButtonElement>('#btn-git-pull')!;
+  const btnPush        = containerEl.querySelector<HTMLButtonElement>('#btn-git-push')!;
+  const btnSyncSettings = containerEl.querySelector<HTMLElement>('#btn-git-sync-settings')!;
+  const remoteDialog   = containerEl.querySelector<HTMLDialogElement>('#git-remote-dialog')!;
+  const remoteUrlInput = containerEl.querySelector<HTMLInputElement>('#git-remote-url')!;
+  const btnRemoteSave  = containerEl.querySelector<HTMLElement>('#btn-remote-save')!;
+  const btnRemoteCancel = containerEl.querySelector<HTMLElement>('#btn-remote-cancel')!;
 
   btnCommit.addEventListener('click', () => {
     const slug = `qs-${Math.random().toString(36).slice(2, 10)}`;
@@ -57,6 +89,75 @@ export async function initGitPanel(
 
   btnCloseDiff.addEventListener('click', () => {
     diffPanel.classList.add('hidden');
+  });
+
+  btnSyncSettings.addEventListener('click', () => {
+    remoteDialog.showModal();
+  });
+
+  btnRemoteCancel.addEventListener('click', () => {
+    remoteDialog.close();
+  });
+
+  btnRemoteSave.addEventListener('click', async () => {
+    const url = remoteUrlInput.value.trim();
+    if (!url) return;
+    const res = await fetch('/api/git/remote', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (res.ok) {
+      remoteDialog.close();
+      await loadRemote();
+    } else {
+      const err = await res.json() as { error?: string };
+      alert(`Failed to set remote: ${err.error ?? 'unknown error'}`);
+    }
+  });
+
+  btnPush.addEventListener('click', async () => {
+    btnPush.disabled = true;
+    btnPush.textContent = '↑ Pushing…';
+    try {
+      const res = await fetch('/api/git/push', { method: 'POST' });
+      if (res.ok) {
+        await loadRemote();
+      } else {
+        const err = await res.json() as { error?: string };
+        alert(`Push failed: ${err.error ?? 'unknown error'}`);
+        btnPush.disabled = false;
+        btnPush.textContent = '↑ Push';
+      }
+    } catch {
+      alert('Push failed: network error');
+      btnPush.disabled = false;
+      btnPush.textContent = '↑ Push';
+    }
+  });
+
+  btnPull.addEventListener('click', async () => {
+    btnPull.disabled = true;
+    btnPull.textContent = '↓ Pulling…';
+    try {
+      const res = await fetch('/api/git/pull', { method: 'POST' });
+      if (res.ok) {
+        await Promise.all([loadStatus(), loadHistory(), loadRemote()]);
+      } else if (res.status === 409) {
+        alert('Pull failed: branches have diverged (not fast-forwardable). Please resolve manually.');
+        btnPull.disabled = false;
+        btnPull.textContent = '↓ Pull';
+      } else {
+        const err = await res.json() as { error?: string };
+        alert(`Pull failed: ${err.error ?? 'unknown error'}`);
+        btnPull.disabled = false;
+        btnPull.textContent = '↓ Pull';
+      }
+    } catch {
+      alert('Pull failed: network error');
+      btnPull.disabled = false;
+      btnPull.textContent = '↓ Pull';
+    }
   });
 
   async function loadStatus() {
@@ -89,8 +190,35 @@ export async function initGitPanel(
     }
   }
 
+  async function loadRemote() {
+    try {
+      const res = await fetch('/api/git/remote');
+      if (!res.ok) {
+        syncInfo.textContent = 'No remote';
+        btnPush.disabled = true;
+        btnPull.disabled = true;
+        return;
+      }
+      const info: RemoteInfo = await res.json();
+      remoteUrlInput.value = info.url;
+      const parts: string[] = [];
+      if (info.ahead > 0) parts.push(`↑${info.ahead}`);
+      if (info.behind > 0) parts.push(`↓${info.behind}`);
+      if (parts.length === 0) parts.push('✓ up-to-date');
+      syncInfo.textContent = `${parts.join(' ')} · ${info.tracking || info.branch}`;
+      btnPush.disabled = info.ahead === 0;
+      btnPush.textContent = info.ahead > 0 ? `↑ Push ${info.ahead}` : '↑ Push';
+      btnPull.disabled = info.behind === 0;
+      btnPull.textContent = info.behind > 0 ? `↓ Pull ${info.behind}` : '↓ Pull';
+    } catch {
+      syncInfo.textContent = 'Remote unavailable';
+      btnPush.disabled = true;
+      btnPull.disabled = true;
+    }
+  }
+
   async function refresh() {
-    await Promise.all([loadStatus(), loadHistory()]);
+    await Promise.all([loadStatus(), loadHistory(), loadRemote()]);
   }
 
   await refresh();
