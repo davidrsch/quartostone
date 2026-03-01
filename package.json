@@ -10,7 +10,7 @@
     "build": "tsc --project tsconfig.json",
     "dev:server": "tsx watch src/server/index.ts",
     "dev:client": "tsc --project tsconfig.client.json --watch",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "format": "prettier --write src",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules node_modules/.bin/jest"
@@ -29,8 +29,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.13",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
+    "typescript-eslint": "^8.0.0",
     "codemirror": "^6.0.1",
     "eslint": "^9.0.0",
     "prettier": "^3.5.0",
