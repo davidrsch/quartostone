@@ -4,6 +4,8 @@
 import { createEditor, connectLiveReload } from './editor/index.js';
 import { createVisualEditor } from './visual/index.js';
 import type { VisualEditorInstance } from './visual/index.js';
+import { initDatabaseView } from './database/index.js';
+import type { DbInstance } from './database/index.js';
 import { initSidebar } from './sidebar/index.js';
 import { initGitPanel } from './git/index.js';
 import { createPropertiesPanel } from './properties/index.js';
@@ -17,6 +19,7 @@ const pageTitleEl      = document.getElementById('current-page-title')!;
 const btnSave          = document.getElementById('btn-save') as HTMLButtonElement;
 const btnCommit        = document.getElementById('btn-commit') as HTMLButtonElement;
 const btnNewPage       = document.getElementById('btn-new-page') as HTMLButtonElement;
+const btnNewDb         = document.getElementById('btn-new-db') as HTMLButtonElement;
 const btnModeSource    = document.getElementById('btn-mode-source') as HTMLButtonElement;
 const btnModeVisual    = document.getElementById('btn-mode-visual') as HTMLButtonElement;
 const btnProperties    = document.getElementById('btn-properties') as HTMLButtonElement;
@@ -36,6 +39,7 @@ const sbSaveStatus     = document.getElementById('sb-save-status')!;
 // ─── State ────────────────────────────────────────────────────────────────────
 let activeView: EditorView | null = null;
 let activeVisual: VisualEditorInstance | null = null;
+let activeDb: DbInstance | null = null;
 let activePath: string | null = null;
 let isDirty = false;
 let editorMode: 'source' | 'visual' = 'source';
@@ -235,9 +239,29 @@ btnNewPage.addEventListener('click', async () => {
   }
 });
 
+btnNewDb.addEventListener('click', async () => {
+  const name = window.prompt('Database name (e.g. "tasks"):');
+  if (!name) return;
+  const path = `pages/${name.replace(/\s+/g, '-').toLowerCase()}.qmd`;
+  try {
+    const res = await fetch(`/api/db/create?path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: name }),
+    });
+    if (!res.ok) throw new Error((await res.json() as { error: string }).error);
+    await refreshSidebar?.();
+    showToast(`Created database ${name}`, 'success');
+    openPage(path, name);
+  } catch (e) {
+    showToast(`Failed: ${String(e)}`, 'error');
+  }
+});
+
 // ─── Save ─────────────────────────────────────────────────────────────────────
 async function saveCurrentPage() {
   if (!activePath) return;
+  if (activeDb) return; // Database auto-saves on cell change
   const content = editorMode === 'visual' && activeVisual
     ? activeVisual.getMarkdown()
     : (activeView ? activeView.state.doc.toString() : '');
@@ -277,6 +301,7 @@ async function openPage(path: string, name: string) {
   // Destroy any active editor
   activeView?.destroy(); activeView = null;
   activeVisual?.destroy(); activeVisual = null;
+  activeDb?.destroy(); activeDb = null;
   editorMountEl.innerHTML = '';
 
   activePath = path;
@@ -285,6 +310,20 @@ async function openPage(path: string, name: string) {
   noPageMessageEl.classList.remove('visible');
   btnSave.disabled = true;
   btnCommit.disabled = false;
+
+  // Check if this is a database page
+  const dbInstance = await initDatabaseView(editorMountEl, path);
+  if (dbInstance) {
+    activeDb = dbInstance;
+    // Hide mode toggle buttons — database has its own view switcher
+    btnModeSource.style.display = 'none';
+    btnModeVisual.style.display = 'none';
+    return;
+  }
+
+  // Show mode toggle buttons for regular pages
+  btnModeSource.style.display = '';
+  btnModeVisual.style.display = '';
 
   if (editorMode === 'visual') {
     // Fetch content then open in visual mode

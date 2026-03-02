@@ -96,10 +96,12 @@ html, body {
 #sidebar-footer {
   padding: 8px 12px;
   border-top: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
 }
 
 #btn-new-page {
-  width: 100%;
+  flex: 2;
   padding: 5px 10px;
   background: transparent;
   border: 1px solid var(--border);
@@ -873,4 +875,256 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 .slash-item strong { font-size: 13px; color: var(--text-heading); }
 .slash-item span { font-size: 11px; color: var(--text-dim); }
 .slash-item:hover, .slash-item.selected { background: var(--bg-hover); }
+
+/* ─── Database views ──────────────────────────────────────────────────────── */
+
+/* Sidebar footer — new database button */
+#btn-new-db {
+  flex: 1;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+#btn-new-db:hover { background: var(--bg-hover); color: var(--text); }
+
+/* View header */
+.db-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.db-view-switcher {
+  display: flex;
+  gap: 4px;
+}
+
+.db-view-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.db-view-btn:hover   { background: var(--bg-hover); color: var(--text); }
+.db-view-btn.active  { background: var(--bg-active); color: var(--text); border-color: var(--accent, #2563eb); }
+
+.db-view-content {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 12px;
+}
+
+/* ─── Table view ──────────────────────────── */
+
+.db-table-wrapper { overflow-x: auto; }
+
+.db-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  min-width: 400px;
+}
+
+.db-table th {
+  background: var(--bg-sidebar);
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.db-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.db-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+.db-cell-input,
+.db-cell-select {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 3px 5px;
+  box-sizing: border-box;
+}
+.db-cell-input:focus,
+.db-cell-select:focus {
+  background: var(--bg-sidebar);
+  border-color: var(--accent, #2563eb);
+  outline: none;
+}
+.db-cell-input:hover,
+.db-cell-select:hover { border-color: var(--border); }
+
+.db-cell-check { width: 16px; height: 16px; cursor: pointer; }
+
+.db-btn-del-row {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.db-table tr:hover .db-btn-del-row { opacity: 1; }
+.db-btn-del-row:hover { background: #dc2626; color: #fff; border-color: #dc2626; }
+
+.db-th-actions { width: 36px; }
+
+.db-table-footer {
+  display: flex;
+  gap: 8px;
+  padding: 8px 4px;
+}
+
+.db-btn-add-row,
+.db-btn-add-col {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.db-btn-add-row:hover,
+.db-btn-add-col:hover { background: var(--bg-hover); color: var(--text); }
+
+/* ─── Kanban view ─────────────────────────── */
+
+.db-kanban-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 4px 0 12px;
+  overflow-x: auto;
+  min-height: 300px;
+}
+
+.db-kanban-column {
+  flex-shrink: 0;
+  width: 220px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.db-kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.db-col-label { font-size: 11px; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+.db-col-count { font-size: 11px; color: var(--text-dim); background: var(--bg-panel); padding: 1px 6px; border-radius: 10px; }
+
+.db-kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 40px;
+  border-radius: 4px;
+  padding: 2px;
+  transition: background 0.15s;
+}
+.db-kanban-cards.drag-over { background: rgba(37,99,235,0.12); }
+
+.db-kanban-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: grab;
+  font-size: 13px;
+}
+.db-kanban-card:hover   { border-color: var(--accent, #2563eb); }
+.db-kanban-card.dragging { opacity: 0.4; }
+
+.db-card-title { font-weight: 500; margin-bottom: 3px; }
+.db-card-meta  { font-size: 11px; color: var(--text-dim); }
+
+.db-btn-add-card {
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  width: 100%;
+}
+.db-btn-add-card:hover { background: var(--bg-hover); color: var(--text); }
+
+.db-kanban-no-select {
+  padding: 20px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ─── Add column dialog ───────────────────── */
+
+.db-dialog {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  padding: 20px 24px;
+  min-width: 300px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.db-dialog::backdrop { background: rgba(0,0,0,0.4); }
+.db-dialog h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; }
+.db-dialog label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.db-dialog input,
+.db-dialog select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-sidebar);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.db-dialog .hidden { display: none; }
+
 

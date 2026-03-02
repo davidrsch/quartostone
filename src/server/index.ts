@@ -11,6 +11,7 @@ import type { QuartostoneConfig } from './config.js';
 import { registerPagesApi } from './api/pages.js';
 import { registerGitApi } from './api/git.js';
 import { registerRenderApi } from './api/render.js';
+import { registerDbApi } from './api/db.js';
 import { startWatcher } from './watcher.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
@@ -47,6 +48,7 @@ export async function createServer(ctx: ServerContext) {
   registerPagesApi(app, ctx);
   registerGitApi(app, ctx);
   registerRenderApi(app, ctx);
+  registerDbApi(app, ctx);
 
   // Create HTTP + WebSocket server for live-reload
   const httpServer = createHttpServer(app);
