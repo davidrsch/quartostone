@@ -2,7 +2,7 @@
 // Bootstraps a real Quartostone server against the fixture workspace for Playwright E2E tests.
 // Invoked by playwright.config.ts webServer.command.
 
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -46,7 +46,11 @@ async function main() {
   const configPath = resolve(workspace, '_quartostone.yml');
   const config = await loadConfig(configPath);
 
-  const server = await createServer({ cwd: workspace, config, port: PORT });
+  // When this fixture runs via tsx, __dirname in server/index.ts resolves to
+  // the TypeScript source (src/server/), not the compiled output.  Supply the
+  // real dist/client/ path so the editor UI is served correctly.
+  const clientDist = join(resolve(__dirname, '../../..'), 'dist', 'client');
+  const server = await createServer({ cwd: workspace, config, port: PORT, clientDist });
   server.listen(PORT, () => {
     // Playwright waits for this line that matches the `url` it polls, but it actually
     // polls the URL directly — we just need to keep the process alive.

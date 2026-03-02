@@ -261,11 +261,19 @@ test.describe('Editor UI', () => {
     }
   });
 
-  test('Ctrl+S shows "Saved" in status bar', async ({ page }) => {
-    test.skip(!!process.env['CI'], 'UI interaction test — requires interactive local session');
+  test('Ctrl+S shows "Saved" in status bar', async ({ page }, testInfo) => {
+    // Skip if the client was not built (no dist/client/index.html)
+    const isBuilt = await page.evaluate(() =>
+      !document.body.textContent?.includes('not built yet') &&
+      !document.body.textContent?.includes('Cannot GET')
+    );
+    if (!isBuilt) {
+      testInfo.skip(true, 'Editor client not built — run npm run build:client first');
+      return;
+    }
 
     // Wait for the sidebar file tree to render
-    await page.waitForSelector('[data-path]', { timeout: 15_000 });
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
 
     // Click the index.qmd file in the sidebar
     const fileEntry = page.locator('[data-path="pages/index.qmd"]').first();

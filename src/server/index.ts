@@ -26,6 +26,10 @@ export interface ServerContext {
   cwd: string;
   config: QuartostoneConfig;
   port: number;
+  /** Explicit path to the built editor client (dist/client/). Useful when the
+   * server is loaded from source via tsx and __dirname resolves to src/server/
+   * instead of the compiled dist/server/. */
+  clientDist?: string;
 }
 
 /**
@@ -46,7 +50,9 @@ export function createApp(ctx: ServerContext) {
   }
 
   // Serve editor UI at /editor — built by Vite to dist/client/
-  const editorDist = join(__dirname, '../client');
+  // ctx.clientDist allows callers (e.g. the E2E fixture running via tsx) to
+  // override the path when __dirname resolves to the TypeScript source tree.
+  const editorDist = ctx.clientDist ?? join(__dirname, '../client');
   if (existsSync(editorDist)) {
     app.use('/editor', express.static(editorDist));
   } else {
