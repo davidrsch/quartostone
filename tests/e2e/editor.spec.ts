@@ -276,7 +276,8 @@ test.describe('Editor UI', () => {
     await page.waitForSelector('[data-path]', { timeout: 20_000 });
 
     // Click the index.qmd file in the sidebar
-    const fileEntry = page.locator('[data-path="pages/index.qmd"]').first();
+    // The API returns paths relative to pages_dir, so just "index.qmd"
+    const fileEntry = page.locator('[data-path="index.qmd"]').first();
     await fileEntry.click();
 
     // Wait for CodeMirror editor to mount
@@ -285,8 +286,8 @@ test.describe('Editor UI', () => {
     // Press Ctrl+S (save shortcut)
     await page.keyboard.press('Control+s');
 
-    // Expect status bar to show "Saved"
-    await expect(page.locator('#status-bar')).toContainText('Saved', { timeout: 5_000 });
+    // Expect the save-status span to show "Saved" (id=sb-save-status, clears after 2s)
+    await expect(page.locator('#sb-save-status')).toContainText('Saved', { timeout: 5_000 });
   });
 });
 
