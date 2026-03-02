@@ -49,9 +49,10 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
   app.get('/api/git/diff', async (req: Request, res: Response) => {
     try {
-      const sha = req.query.sha as string;
-      if (!sha) return res.status(400).json({ error: 'sha required' });
-      const diff = await git.show([sha]);
+      const sha = req.query.sha as string | undefined;
+      // Without sha: return the unstaged working-tree diff
+      // With sha: show the diff introduced by that commit
+      const diff = sha ? await git.show([sha]) : await git.diff();
       res.json({ diff });
     } catch (e) {
       res.status(500).json({ error: String(e) });

@@ -92,7 +92,12 @@ Stage all changes and create a commit.
 
 ### `GET /api/git/diff`
 
-**Response:** `{ diff: string }` — unified diff of all unstaged changes.
+**Query:** `?sha=COMMIT_SHA` (optional)
+
+- Without `sha`: returns the unstaged working-tree diff.
+- With `sha`: returns the diff introduced by that specific commit.
+
+**Response:** `{ diff: string }`
 
 ---
 
@@ -152,15 +157,20 @@ Start `quarto preview` for a file.
 
 ### `POST /api/preview/stop`
 
-Stop the running preview process.
+Stop a running preview.
 
-**Response:** `{ ok: true }`
+**Body:** `{ path?: string }` — if omitted, stops **all** running previews.
+
+**Response:** `{ ok: true, wasRunning?: boolean, stopped?: number }`
 
 ---
 
 ### `GET /api/preview/status`
 
-**Response:** `{ running: boolean, url?: string, path?: string }`
+**Query:** `?path=PATH` (optional)
+
+- Without `path`: `{ running: boolean, count: number }` — whether any preview is active.
+- With `path`: `{ running: boolean, url?: string, path?: string }` — state for a specific file.
 
 ---
 

@@ -123,10 +123,22 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     res.json({ port: entry.port, url: entry.url, reused: false });
   });
 
-  // POST /api/preview/stop  body: { path: string }
+  // POST /api/preview/stop  body: { path?: string }
+  // Without path: stops ALL running previews.
+  // With path: stops only the preview for that file.
   app.post('/api/preview/stop', (req: Request, res: Response) => {
     const { path: filePath } = req.body as { path?: string };
-    if (!filePath) return res.status(400).json({ error: 'path is required' });
+
+    if (!filePath) {
+      // Stop everything
+      let stopped = 0;
+      for (const [key, entry] of previews.entries()) {
+        try { entry.proc.kill(); } catch { /* ignore */ }
+        previews.delete(key);
+        stopped++;
+      }
+      return res.json({ ok: true, stopped });
+    }
 
     const entry = previews.get(filePath);
     if (!entry) return res.json({ ok: true, wasRunning: false });
@@ -140,9 +152,14 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   });
 
   // GET /api/preview/status?path=
+  // Without path: returns overall running state (any preview active).
+  // With path: returns state for a specific file preview.
   app.get('/api/preview/status', (req: Request, res: Response) => {
     const filePath = req.query['path'] as string | undefined;
-    if (!filePath) return res.status(400).json({ error: 'path is required' });
+
+    if (!filePath) {
+      return res.json({ running: previews.size > 0, count: previews.size });
+    }
 
     const entry = previews.get(filePath);
     if (!entry) return res.json({ running: false });
