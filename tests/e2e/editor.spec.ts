@@ -20,7 +20,7 @@ test.describe('API smoke tests', () => {
   });
 
   test('fixture index page exists via API', async ({ request }) => {
-    const res = await request.get('/api/pages/pages/index.qmd');
+    const res = await request.get('/api/pages/index.qmd');
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.content).toContain('Welcome to Quartostone');

@@ -6,6 +6,8 @@ export default defineConfig({
   // Retry twice on CI to absorb flakiness; zero retries locally for fast feedback.
   retries: process.env['CI'] ? 2 : 0,
   reporter: process.env['CI'] ? 'github' : 'html',
+  // Create missing snapshots and pass on first run; compare on subsequent runs.
+  updateSnapshots: 'missing',
   use: {
     baseURL: 'http://localhost:4343',
     trace: 'on-first-retry',
