@@ -24,7 +24,11 @@ export interface ServerContext {
   port: number;
 }
 
-export async function createServer(ctx: ServerContext) {
+/**
+ * Create and configure the Express application with all API routes.
+ * Exported separately so integration tests can use Supertest without a real HTTP server.
+ */
+export function createApp(ctx: ServerContext) {
   const app = express();
   app.use(express.json());
 
@@ -35,7 +39,6 @@ export async function createServer(ctx: ServerContext) {
   }
 
   // Serve editor UI at /editor — built by Vite to dist/client/
-  // __dirname is dist/server/ at runtime, so dist/client/ is one level up
   const editorDist = join(__dirname, '../client');
   if (existsSync(editorDist)) {
     app.use('/editor', express.static(editorDist));
@@ -51,6 +54,12 @@ export async function createServer(ctx: ServerContext) {
   registerRenderApi(app, ctx);
   registerDbApi(app, ctx);
   registerExecApi(app, ctx);
+
+  return app;
+}
+
+export async function createServer(ctx: ServerContext) {
+  const app = createApp(ctx);
 
   // Create HTTP + WebSocket server for live-reload
   const httpServer = createHttpServer(app);

@@ -18,7 +18,11 @@
     "lint": "eslint src",
     "format": "prettier --write src",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -32,6 +36,7 @@
     "@codemirror/lang-markdown": "^6.3.2",
     "@codemirror/lang-yaml": "^6.1.1",
     "@codemirror/language-data": "^6.5.1",
+    "@playwright/test": "^1.58.2",
     "@tiptap/core": "^3.20.0",
     "@tiptap/extension-image": "^3.20.0",
     "@tiptap/extension-link": "^3.20.0",
@@ -44,15 +49,19 @@
     "@tiptap/starter-kit": "^3.20.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^7.2.0",
     "@types/ws": "^8.5.13",
+    "@vitest/coverage-v8": "^4.0.18",
     "codemirror": "^6.0.1",
     "eslint": "^9.0.0",
     "prettier": "^3.5.0",
     "prosemirror-markdown": "^1.13.4",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.0.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.0.18"
   },
   "license": "MIT",
   "keywords": [

@@ -6,4 +6,10 @@ _site/
 .DS_Store
 Thumbs.db
 *.log
+# Test output
+coverage/
+playwright-report/
+test-results/
+# E2E fixture workspace git repo (initialised at runtime, not tracked)
+tests/e2e/fixtures/workspace/.git/
 .env

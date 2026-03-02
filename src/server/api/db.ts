@@ -83,7 +83,7 @@ function normaliseSchema(raw: unknown): FieldDef[] {
   }));
 }
 
-function parseDbFile(content: string): DbPage | null {
+export function parseDbFile(content: string): DbPage | null {
   const { meta, body } = parseFrontmatter(content);
   if (meta['quartostone'] !== 'database') return null;
   const schema = normaliseSchema(meta['schema']);
@@ -91,7 +91,7 @@ function parseDbFile(content: string): DbPage | null {
   return { schema, rows };
 }
 
-function serialiseDbFile(page: DbPage): string {
+export function serialiseDbFile(page: DbPage): string {
   const frontmatter: Record<string, unknown> = {
     quartostone: 'database',
     schema: page.schema.map(f => {

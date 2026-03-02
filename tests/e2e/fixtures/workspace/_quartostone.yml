@@ -1,0 +1,7 @@
+---
+commit_mode: prompt
+render_on_save: false
+watch_interval_ms: 300
+port: 4343
+pages_dir: pages
+open_browser: false
