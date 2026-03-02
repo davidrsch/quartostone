@@ -15,6 +15,10 @@ import { initHistoryPanel } from './history/index.js';
 import { initExportPicker } from './export/index.js';
 import { initPreviewPanel } from './preview/index.js';
 import type { PreviewPanel } from './preview/index.js';
+import { initBacklinksPanel } from './backlinks/index.js';
+import type { BacklinksPanel } from './backlinks/index.js';
+import { initSearchOverlay } from './search/index.js';
+import { initGraphPanel } from './graph/index.js';
 import type { EditorView } from '@codemirror/view';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
@@ -55,6 +59,8 @@ let refreshGit: (() => Promise<void>) | null = null;
 let branchPicker: BranchPickerResult | null = null;
 let historySetPage: ((path: string | null) => void) | null = null;
 let previewPanel: PreviewPanel | null = null;
+let backlinksPanel: BacklinksPanel | null = null;
+let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -379,6 +385,9 @@ async function openPage(path: string, name: string) {
   // Update preview panel with newly opened page
   previewPanel?.setPage(path);
 
+  // Update backlinks panel with newly opened page
+  backlinksPanel?.setPage(path);
+
   // Re-mount properties panel if open
   if (!propertiesPanel.classList.contains('hidden')) {
     const getContent = () =>
@@ -430,6 +439,22 @@ initExportPicker(() => activePath);
 
 // ── Preview panel ────────────────────────────────────────────────────────────
 previewPanel = initPreviewPanel();
+
+// ── Backlinks panel ──────────────────────────────────────────────────────────
+backlinksPanel = initBacklinksPanel(
+  document.getElementById('backlinks-panel')!,
+  (path, title) => openPage(path, title),
+);
+
+// ── Search overlay ───────────────────────────────────────────────────────────
+initSearchOverlay((path, title) => openPage(path, title));
+
+// ── Graph panel ──────────────────────────────────────────────────────────────
+graphView = initGraphPanel(
+  document.getElementById('graph-panel')!,
+  (path, title) => openPage(path, title),
+);
+document.getElementById('btn-graph')?.addEventListener('click', () => graphView?.open());
 
 const historyPanel = initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page

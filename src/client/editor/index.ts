@@ -3,7 +3,11 @@
 
 import { EditorState } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorView, keymap, ViewPlugin, Decoration } from '@codemirror/view';
+import type { DecorationSet, ViewUpdate } from '@codemirror/view';
+import { RangeSetBuilder } from '@codemirror/state';
+import { autocompletion } from '@codemirror/autocomplete';
+import type { CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -31,6 +35,67 @@ async function savePage(path: string, content: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Failed to save page: ${path}`);
 }
+
+// ── Wiki link highlight decoration ───────────────────────────────────────────
+
+const wikiLinkMark = Decoration.mark({ class: 'cm-wiki-link' });
+
+const wikiLinkPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) { this.decorations = this.build(view); }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+    }
+    build(view: EditorView): DecorationSet {
+      const builder = new RangeSetBuilder<typeof wikiLinkMark>();
+      const re = /\[\[[^\]]+\]\]/g;
+      for (const { from, to } of view.visibleRanges) {
+        const text = view.state.sliceDoc(from, to);
+        let m: RegExpExecArray | null;
+        re.lastIndex = 0;
+        while ((m = re.exec(text)) !== null) {
+          builder.add(from + m.index, from + m.index + m[0].length, wikiLinkMark);
+        }
+      }
+      return builder.finish();
+    }
+  },
+  { decorations: v => v.decorations },
+);
+
+// ── [[ autocomplete ───────────────────────────────────────────────────────────
+
+interface PageHit { path: string; title: string; }
+
+async function wikiLinkCompletions(context: CompletionContext): Promise<CompletionResult | null> {
+  const match = context.matchBefore(/\[\[[^\]]*/);
+  if (!match) return null;
+  const typedAfterBrackets = match.text.slice(2); // text after [[
+  try {
+    const res = await fetch(`/api/links/search?q=${encodeURIComponent(typedAfterBrackets)}`);
+    const pages = await res.json() as PageHit[];
+    return {
+      from:    match.from + 2,  // replace text after [[
+      options: pages.map(p => ({
+        label:   p.title,
+        detail:  p.path,
+        apply:   p.title + ']]',
+      })),
+      validFor: /^[^\]]*$/,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const wikiLinkTheme = EditorView.baseTheme({
+  '.cm-wiki-link': {
+    color: '#a78bfa',
+    borderRadius: '2px',
+    textDecoration: 'underline dotted',
+  },
+});
 
 export async function createEditor(opts: EditorOptions): Promise<EditorView> {
   const initialContent = await loadPage(opts.pagePath);
@@ -79,6 +144,9 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
       autoSave,
       EditorView.lineWrapping,
       markdown({ codeLanguages: languages }),
+      wikiLinkPlugin,
+      wikiLinkTheme,
+      autocompletion({ override: [wikiLinkCompletions] }),
       darkTheme,
       ...runCellExtension,
     ],

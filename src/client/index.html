@@ -18,6 +18,7 @@
           <button class="stab active" data-tab="pages">Pages</button>
           <button class="stab" data-tab="git">Git</button>
           <button class="stab" data-tab="history">History</button>
+          <button class="stab" data-tab="links">Links</button>
         </div>
 
         <!-- Pages tab -->
@@ -26,6 +27,7 @@
           <div id="sidebar-footer">
             <button id="btn-new-page">+ New page</button>
             <button id="btn-new-db">⊞ Database</button>
+            <button id="btn-graph" title="Open page-link graph">&#x25c8; Graph</button>
           </div>
         </div>
 
@@ -39,6 +41,13 @@
           <div id="history-panel">
             <div id="history-empty" class="history-empty">Open a page to see its history.</div>
             <div id="history-list" class="hidden"></div>
+          </div>
+        </div>
+
+        <!-- Links tab (backlinks to current page) -->
+        <div id="tab-links" class="stab-panel hidden">
+          <div id="backlinks-panel">
+            <p class="bl-empty">Open a page to see backlinks.</p>
           </div>
         </div>
       </aside>
@@ -115,6 +124,9 @@
       <span id="sb-render-status"></span>
       <span id="sb-save-status"></span>
     </div>
+
+    <!-- Graph panel -->
+    <div id="graph-panel" class="hidden"></div>
 
     <div id="toast-container"></div>
 

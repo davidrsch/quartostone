@@ -1,13 +1,16 @@
 // src/server/api/pages.ts
-// GET /api/pages          — page tree
-// GET /api/pages/:path    — read .qmd content
-// PUT /api/pages/:path    — write .qmd content
-// POST /api/pages/:path   — create new page
+// GET    /api/pages          — page tree
+// GET    /api/pages/:path    — read .qmd content
+// PUT    /api/pages/:path    — write .qmd content
+// POST   /api/pages          — create new page
+// DELETE /api/pages/:path    — delete a page
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join, relative, extname, dirname } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
+import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
 
 interface PageNode {
   name: string;
@@ -57,6 +60,10 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, 'utf-8');
+    // Keep link and search indexes in sync
+    const relPath = (req.params[0] as string) + (pagePath.endsWith('.qmd') ? '' : '.qmd');
+    updateLinkIndexForFile(pagesDir, relPath.endsWith('.qmd') ? relPath : relPath + '.qmd');
+    updateSearchIndexForFile(pagesDir, relPath.endsWith('.qmd') ? relPath : relPath + '.qmd');
     res.json({ ok: true });
   });
 
@@ -68,6 +75,22 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const pageTitle = title ?? newPath.split('/').pop()?.replace('.qmd', '') ?? 'New Page';
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, `---\ntitle: "${pageTitle}"\ndate: today\n---\n\n# ${pageTitle}\n`, 'utf-8');
+    const newRel = (newPath.endsWith('.qmd') ? newPath : newPath + '.qmd');
+    updateLinkIndexForFile(pagesDir, newRel);
+    updateSearchIndexForFile(pagesDir, newRel);
     res.status(201).json({ ok: true, path: newPath });
+  });
+
+  app.delete('/api/pages/*', (req: Request, res: Response) => {
+    const pagePath = join(pagesDir, req.params[0] as string);
+    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
+    if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
+    rmSync(filePath);
+    const relPath = ((req.params[0] as string).endsWith('.qmd')
+      ? req.params[0] as string
+      : (req.params[0] as string) + '.qmd');
+    removeLinkIndexForFile(relPath);
+    removeSearchIndexForFile(relPath);
+    res.json({ ok: true });
   });
 }

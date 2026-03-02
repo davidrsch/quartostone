@@ -15,6 +15,8 @@ import { registerDbApi } from './api/db.js';
 import { registerExecApi } from './api/exec.js';
 import { registerExportApi } from './api/export.js';
 import { registerPreviewApi } from './api/preview.js';
+import { registerLinksApi, rebuildLinkIndex } from './api/links.js';
+import { registerSearchApi, rebuildSearchIndex } from './api/search.js';
 import { startWatcher } from './watcher.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
@@ -61,6 +63,13 @@ export function createApp(ctx: ServerContext) {
   registerExecApi(app, ctx);
   registerExportApi(app, ctx);
   registerPreviewApi(app, ctx);
+  registerLinksApi(app, ctx);
+  registerSearchApi(app, ctx);
+
+  // Build in-memory indexes on startup
+  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
+  try { rebuildLinkIndex(pagesDir); } catch { /* empty workspace */ }
+  try { rebuildSearchIndex(pagesDir); } catch { /* empty workspace */ }
 
   return app;
 }

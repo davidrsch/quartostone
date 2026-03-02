@@ -5,6 +5,7 @@
 --   1. Custom callout types  — ::: {.callout-todo} and ::: {.callout-question}
 --   2. Backlink rendering   — reads 'quartostone-backlinks' YAML list
 --   3. Page footer          — injects last-commit message + date via `git log`
+--   4. Wiki links           — converts [[Page Name]] and [[Page|Display]] to real links
 --
 -- Disable footer per-page with: quartostone-footer: false
 
@@ -106,4 +107,68 @@ function Pandoc(doc)
   end
 
   return pandoc.Pandoc(blocks, meta)
+end
+
+-- ── Wiki link filter ──────────────────────────────────────────────────────────
+-- Converts [[Page Name]], [[Page Name|Display Text]], [[Page#anchor]] to
+-- real Pandoc Link elements so that all output formats (HTML, PDF, DOCX…)
+-- contain proper hyperlinks.
+
+function Inlines(inlines)
+  -- Quick scan: skip paragraphs that contain no '[['
+  local has_wikilink = false
+  for _, el in ipairs(inlines) do
+    if el.t == 'Str' and el.text:find('%[%[', 1, true) then
+      has_wikilink = true
+      break
+    end
+  end
+  if not has_wikilink then return nil end
+
+  -- Flatten inlines to a plain-text string, preserving basic markdown
+  local parts = {}
+  for _, el in ipairs(inlines) do
+    if     el.t == 'Str'      then parts[#parts + 1] = el.text
+    elseif el.t == 'Space'    then parts[#parts + 1] = ' '
+    elseif el.t == 'SoftBreak'then parts[#parts + 1] = ' '
+    elseif el.t == 'Code'     then parts[#parts + 1] = '`' .. el.text .. '`'
+    elseif el.t == 'Emph'     then
+      parts[#parts + 1] = '*' .. pandoc.utils.stringify(el.content) .. '*'
+    elseif el.t == 'Strong'   then
+      parts[#parts + 1] = '**' .. pandoc.utils.stringify(el.content) .. '**'
+    else
+      parts[#parts + 1] = pandoc.utils.stringify(el)
+    end
+  end
+  local text = table.concat(parts)
+
+  -- Replace [[Target|Display Text]] → [Display Text](target.html)
+  local modified = text:gsub('%[%[([^%]|]+)|([^%]]+)%]%]', function(target, display)
+    local href = target:lower()
+                       :gsub('%s+', '-')
+                       :gsub('[^%a%d%-_/]', '')
+                 .. '.html'
+    return '[' .. display .. '](' .. href .. ')'
+  end)
+
+  -- Replace [[Target]] → [Target](target.html)
+  modified = modified:gsub('%[%[([^%]]+)%]%]', function(target)
+    -- Strip anchor portion for the href slug, but keep full target as display
+    local slug_part = target:match('^([^#]+)') or target
+    local href = slug_part:lower()
+                           :gsub('%s+', '-')
+                           :gsub('[^%a%d%-_/]', '')
+                 .. '.html'
+    return '[' .. target .. '](' .. href .. ')'
+  end)
+
+  -- If nothing changed, leave document alone
+  if modified == text then return nil end
+
+  -- Parse the modified markdown back to proper Pandoc inlines
+  local doc = pandoc.read(modified, 'markdown')
+  if doc.blocks[1] and doc.blocks[1].t == 'Para' then
+    return doc.blocks[1].content
+  end
+  return nil
 end
