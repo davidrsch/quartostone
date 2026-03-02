@@ -6,6 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: resolve(__dirname, 'src/client'),
+  base: './',
   build: {
     outDir: resolve(__dirname, 'dist/client'),
     emptyOutDir: true,
