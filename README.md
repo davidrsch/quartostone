@@ -88,11 +88,11 @@ quartostone serve
 The `quartostone` Quarto extension (`_extensions/quartostone/`) provides three
 features that work even without the Quartostone server:
 
-| Feature | Description |
-|---|---|
-| **Custom callouts** | `::: {.callout-todo}` and `::: {.callout-question}` render as styled callout blocks |
-| **Backlinks** | Pages listing `quartostone-backlinks:` in YAML get a linked backlinks section at the bottom |
-| **Page footer** | Each rendered page gets a footer showing the last Git commit message and date |
+| Feature             | Description                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| **Custom callouts** | `::: {.callout-todo}` and `::: {.callout-question}` render as styled callout blocks         |
+| **Backlinks**       | Pages listing `quartostone-backlinks:` in YAML get a linked backlinks section at the bottom |
+| **Page footer**     | Each rendered page gets a footer showing the last Git commit message and date               |
 
 Disable the footer on a specific page by adding `quartostone-footer: false` to
 its YAML front matter.
@@ -115,6 +115,10 @@ Issues and planned work are tracked on the [GitHub Project board](https://github
 - **Phase 1 – Core MVP:** CLI, local server, file watcher, CodeMirror editor, sidebar
 - **Phase 2 – Polish:** Visual/WYSIWYG mode, Git history panel, page properties, commit UI
 - **Phase 3 – Power Features:** Database views, remote push/pull, Quarto template distribution, single-cell execution
+- **Phase 4 – Testing Infrastructure:** Vitest unit + integration tests (Supertest), Playwright E2E + visual-regression baseline, CI coverage gate ≥ 80 %
+- **Phase 5 – Git-Native Versioning:** Branch picker in the toolbar (create / switch / merge), per-page commit timeline with side-by-side diff, one-click file restore at any commit
+- **Phase 6 – Quarto Export & Preview:** Async export to HTML, PDF, DOCX, RevealJS, EPUB, Typst; live split-pane preview via `quarto preview` with hot-reload on save
+- **Phase 7 – Knowledge Graph & Discovery:** Wiki-style `[[page]]` links + backlinks panel, full-text search (⌘K palette), force-directed graph view of the page link network
 
 ## Contributing
 
