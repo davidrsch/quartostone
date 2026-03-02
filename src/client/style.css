@@ -1127,4 +1127,72 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 }
 .db-dialog .hidden { display: none; }
 
+/* ─── Code cell execution (run button + output) ──────────────────────────── */
+
+.cm-run-btn {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(14,112,192,0.5);
+  background: rgba(14,112,192,0.15);
+  color: #4fc3f7;
+  cursor: pointer;
+  vertical-align: middle;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cm-run-btn:hover:not(:disabled) {
+  background: rgba(14,112,192,0.35);
+  border-color: #4fc3f7;
+  color: #fff;
+}
+
+.cm-cell-output {
+  background: #141414;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  margin: 2px 0 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cm-output-stdout {
+  margin: 0;
+  padding: 0;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.cm-output-stderr {
+  margin: 4px 0 0;
+  padding: 0;
+  color: #f97171;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.cm-output-loading {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.cm-output-error {
+  color: #f97171;
+}
+
+.cm-output-empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+
 

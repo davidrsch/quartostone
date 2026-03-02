@@ -7,6 +7,7 @@ import { EditorView, keymap } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
+import { runCellExtension } from './runWidget.js';
 
 export interface EditorOptions {
   container: HTMLElement;
@@ -79,6 +80,7 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
       EditorView.lineWrapping,
       markdown({ codeLanguages: languages }),
       darkTheme,
+      ...runCellExtension,
     ],
   });
 

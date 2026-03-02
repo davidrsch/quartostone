@@ -12,6 +12,7 @@ import { registerPagesApi } from './api/pages.js';
 import { registerGitApi } from './api/git.js';
 import { registerRenderApi } from './api/render.js';
 import { registerDbApi } from './api/db.js';
+import { registerExecApi } from './api/exec.js';
 import { startWatcher } from './watcher.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
@@ -49,6 +50,7 @@ export async function createServer(ctx: ServerContext) {
   registerGitApi(app, ctx);
   registerRenderApi(app, ctx);
   registerDbApi(app, ctx);
+  registerExecApi(app, ctx);
 
   // Create HTTP + WebSocket server for live-reload
   const httpServer = createHttpServer(app);
