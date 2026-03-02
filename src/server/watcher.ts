@@ -2,7 +2,7 @@
 // Watches pages/ for .qmd changes and runs the save → render → commit pipeline.
 
 import chokidar from 'chokidar';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { exec } from 'node:child_process';
 import { simpleGit } from 'simple-git';
 import type { QuartostoneConfig } from './config.js';
@@ -37,8 +37,8 @@ export function startWatcher(ctx: WatcherContext) {
       return;
     }
 
-    // Render
-    const relPath = filePath.replace(pagesDir + '/', '');
+    // Render — compute a POSIX-style path relative to pagesDir (safe on Windows too)
+    const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
     const cmd =
       ctx.config.render_scope === 'file'
         ? `quarto render "${filePath}"`
@@ -56,7 +56,7 @@ export function startWatcher(ctx: WatcherContext) {
       if (ctx.config.commit_mode === 'auto') {
         try {
           const message = generateCommitSlug(ctx.config.commit_message_auto);
-          await git.add('pages/');
+          await git.add(ctx.config.pages_dir + '/');
           await git.commit(message);
           ctx.broadcast('git:committed', { message });
         } catch (e) {

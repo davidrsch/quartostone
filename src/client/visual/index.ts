@@ -160,10 +160,20 @@ function makeSlashPlugin(editorRef: { current: Editor | null }): Plugin {
         // Allow the '/' char to be typed, then show menu
         setTimeout(() => {
           const { dom } = view;
-          const caretEl = dom.ownerDocument.querySelector('.ProseMirror p:focus') as HTMLElement ??
-            dom.querySelector<HTMLElement>('[data-slash-anchor]') ??
-            dom;
-          buildSlashMenu(editor, caretEl || dom as HTMLElement);
+          // Use ProseMirror's coordsAtPos for accurate caret-based positioning
+          const coords = view.coordsAtPos(view.state.selection.from);
+          const anchor = document.createElement('span');
+          anchor.style.position = 'fixed';
+          anchor.style.left = `${coords.left}px`;
+          anchor.style.top = `${coords.bottom}px`;
+          anchor.style.pointerEvents = 'none';
+          document.body.appendChild(anchor);
+          const menu = buildSlashMenu(editor, dom as HTMLElement);
+          // Reposition the menu to where the anchor is
+          menu.style.left = `${coords.left}px`;
+          menu.style.top = `${coords.bottom + 4}px`;
+          anchor.remove();
+          void menu; // already appended by buildSlashMenu
         }, 0);
         return false; // let the / be inserted normally
       },
@@ -181,14 +191,71 @@ export interface VisualEditorOptions {
 
 export interface VisualEditorInstance {
   getMarkdown(): string;
+  /** Replace the entire editor content with parsed markdown. */
+  setMarkdown(md: string): void;
   destroy(): void;
+}
+
+/**
+ * Pre-process Quarto-style ::: {.callout-*} fences into HTML divs that the
+ * ProseMirror markdown parser can map to quartoCallout nodes via parseHTML().
+ *
+ * Only single-level callouts are handled (no nesting). The title line
+ * ("## Title") immediately after the opening fence is extracted as the
+ * title attribute.
+ */
+function preprocessCallouts(md: string): string {
+  const OPEN_RE = /^::: \{?\.callout-(\w+)(?:\})?\s*$/;
+  const CLOSE_RE = /^:::$/;
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let inCallout: { type: string; title: string } | null = null;
+
+  for (const line of lines) {
+    if (!inCallout) {
+      const m = OPEN_RE.exec(line.trim());
+      if (m) {
+        inCallout = { type: m[1], title: '' };
+        // Don't emit yet — wait to see if next line is a title
+        out.push(`<div data-callout="${inCallout.type}" class="callout callout-${inCallout.type}">`);
+      } else {
+        out.push(line);
+      }
+    } else {
+      const titleMatch = /^##\s+(.+)/.exec(line);
+      if (!inCallout.title && titleMatch) {
+        inCallout.title = titleMatch[1];
+        out.push(`<div class="callout-title">${inCallout.title}</div>`);
+        out.push('<div class="callout-body">');
+      } else if (CLOSE_RE.test(line.trim())) {
+        if (!inCallout.title) {
+          // No title found — still wrap body
+          out.push('<div class="callout-body">');
+        }
+        out.push('</div></div>');
+        inCallout = null;
+      } else {
+        if (!inCallout.title) {
+          // First content line without a ## title
+          inCallout.title = '_content_'; // sentinel
+          out.push('<div class="callout-body">');
+        }
+        out.push(line);
+      }
+    }
+  }
+
+  if (inCallout) out.push('</div></div>'); // unclosed callout
+  return out.join('\n');
 }
 
 // Parse markdown into ProseMirror doc using prosemirror-markdown default parser.
 // The default parser handles most CommonMark constructs.
 function parseMarkdown(md: string, editor: Editor): import('@tiptap/pm/model').Node {
   try {
-    return defaultMarkdownParser.parse(md) ?? editor.schema.topNodeType.createAndFill()!;
+    // Pre-process Quarto-specific syntax that prosemirror-markdown doesn't know about
+    const processed = preprocessCallouts(md);
+    return defaultMarkdownParser.parse(processed) ?? editor.schema.topNodeType.createAndFill()!;
   } catch {
     // Fallback: wrap raw text in a paragraph
     return editor.schema.topNodeType.createAndFill(null, [
@@ -240,6 +307,10 @@ export async function createVisualEditor(opts: VisualEditorOptions): Promise<Vis
   return {
     getMarkdown() {
       return docToMarkdown(editor.state.doc);
+    },
+    setMarkdown(md: string) {
+      const doc = parseMarkdown(md, editor);
+      editor.commands.setContent(doc.toJSON());
     },
     destroy() {
       editor.destroy();

@@ -13,7 +13,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
 
     let cmd: string;
     if (renderScope === 'file' && filePath) {
-      const absPath = join(ctx.cwd, 'pages', filePath);
+      const absPath = join(ctx.cwd, ctx.config.pages_dir, filePath);
       cmd = `quarto render "${absPath}"`;
     } else {
       cmd = `quarto render "${ctx.cwd}"`;

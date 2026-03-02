@@ -154,10 +154,10 @@ describe('POST /api/export — success', () => {
     expect(typeof res.body.token).toBe('string');
   });
 
-  it('transitions to complete after quarto exits successfully', async () => {
+  it('transitions to done after quarto exits successfully', async () => {
     // We need the fake process to also write the expected output file,
     // but we don't know its tmp path ahead of time.
-    // Instead we test that the job becomes 'complete' by using a spy that
+    // Instead we test that the job becomes 'done' by using a spy that
     // writes to the outFile argument passed to spawn.
 
     let capturedOutFile = '';
@@ -178,7 +178,7 @@ describe('POST /api/export — success', () => {
     expect(postRes.status).toBe(200);
     const { token } = postRes.body as { token: string };
 
-    // Poll until complete (or timeout)
+    // Poll until done (or timeout)
     let job: { status: string; filename?: string } = { status: 'pending' };
     for (let i = 0; i < 20; i++) {
       await sleep(30);
@@ -187,7 +187,7 @@ describe('POST /api/export — success', () => {
       if (job.status !== 'pending' && job.status !== 'running') break;
     }
 
-    expect(job.status).toBe('complete');
+    expect(job.status).toBe('done');
     expect(job.filename).toMatch(/\.html$/);
   });
 });
@@ -272,7 +272,7 @@ describe('GET /api/export/download', () => {
     for (let i = 0; i < 30; i++) {
       await sleep(30);
       const s = await client.get(`/api/export/status?token=${token}`);
-      if ((s.body as { status: string }).status === 'complete') break;
+      if ((s.body as { status: string }).status === 'done') break;
     }
 
     const dlRes = await client.get(`/api/export/download?token=${token}`);

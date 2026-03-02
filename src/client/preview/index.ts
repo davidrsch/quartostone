@@ -78,7 +78,21 @@ export function initPreviewPanel(): PreviewPanel {
       const data = await res.json() as PreviewStartResponse;
       currentUrl = data.url;
 
-      if (frame) frame.src = data.url;
+      // Poll until Quarto is ready (up to 15 × 500ms = 7.5 s) before loading the iframe.
+      // Without this, the iframe shows a connection-refused error because Quarto
+      // needs a few seconds to start accepting connections.
+      let ready = false;
+      for (let attempt = 0; attempt < 15; attempt++) {
+        try {
+          await fetch(data.url, { mode: 'no-cors' });
+          ready = true;
+          break;
+        } catch {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      if (frame) frame.src = data.url; // set regardless; best-effort
       showPane();
     } catch (err) {
       setError('Preview failed: ' + String(err));

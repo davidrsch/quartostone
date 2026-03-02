@@ -16,6 +16,7 @@ interface ExecResult {
   stderr: string;
   exitCode: number | null;
   timedOut: boolean;
+  notFound?: boolean;   // true when the command binary was not found (ENOENT)
 }
 
 function runSubprocess(
@@ -29,7 +30,9 @@ function runSubprocess(
     let stderr = '';
     let timedOut = false;
 
-    const proc = spawn(cmd, args, { cwd, shell: false, timeout });
+    // Rely only on the manual timer (not spawn's built-in timeout) so timedOut
+    // is always set before the close event fires, avoiding a race condition.
+    const proc = spawn(cmd, args, { cwd, shell: false });
 
     proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
@@ -44,9 +47,12 @@ function runSubprocess(
       resolve({ stdout, stderr, exitCode, timedOut });
     });
 
-    proc.on('error', err => {
+    proc.on('error', (err: NodeJS.ErrnoException) => {
       clearTimeout(timer);
-      resolve({ stdout, stderr: err.message, exitCode: null, timedOut: false });
+      resolve({
+        stdout, stderr: err.message, exitCode: null, timedOut: false,
+        notFound: err.code === 'ENOENT' || err.message.includes('ENOENT'),
+      });
     });
   });
 }
@@ -69,8 +75,8 @@ ${code}
   // Try 'python' first, fall back to 'python3'
   for (const cmd of ['python', 'python3']) {
     const result = await runSubprocess(cmd, ['-c', wrapped], cwd, EXEC_TIMEOUT_MS);
-    if (result.exitCode !== null || result.timedOut) return result;
-    // exitCode === null + not timed out means the command wasn't found — try next
+    // Only fall through to next candidate when the binary was genuinely not found
+    if (!result.notFound) return result;
   }
   return {
     stdout: '',

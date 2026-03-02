@@ -170,6 +170,33 @@
       </form>
     </dialog>
 
+    <!-- New page dialog (L-2: replaces window.prompt) -->
+    <dialog id="new-page-dialog">
+      <form method="dialog">
+        <h3>New page</h3>
+        <label for="new-page-name">Page name (e.g. "my-notes")</label>
+        <input id="new-page-name" type="text" placeholder="my-notes" autocomplete="off" />
+        <p class="dialog-hint">A <code>.qmd</code> file will be created in the pages directory.</p>
+        <div class="dialog-actions">
+          <button type="submit" id="btn-new-page-confirm">Create</button>
+          <button type="button" id="btn-new-page-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- New database dialog (L-2: replaces window.prompt) -->
+    <dialog id="new-db-dialog">
+      <form method="dialog">
+        <h3>New database</h3>
+        <label for="new-db-name">Database name (e.g. "tasks")</label>
+        <input id="new-db-name" type="text" placeholder="tasks" autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="submit" id="btn-new-db-confirm">Create</button>
+          <button type="button" id="btn-new-db-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

@@ -17,6 +17,7 @@ export interface EditorOptions {
   container: HTMLElement;
   pagePath: string;
   onSave?: (content: string) => void;
+  onSaveError?: (err: Error) => void;
   onDirty?: () => void;
 }
 
@@ -106,10 +107,11 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
     if (!update.docChanged) return;
     opts.onDirty?.();
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
+    saveTimer = setTimeout(() => {
       const content = update.state.doc.toString();
-      await savePage(opts.pagePath, content);
-      opts.onSave?.(content);
+      savePage(opts.pagePath, content)
+        .then(() => opts.onSave?.(content))
+        .catch((err: unknown) => opts.onSaveError?.(err instanceof Error ? err : new Error(String(err))));
     }, 1000);
   });
 

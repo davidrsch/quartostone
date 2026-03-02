@@ -7,7 +7,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, createWriteStream, existsSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, existsSync, unlinkSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -30,7 +30,7 @@ export type ExportFormat = typeof SUPPORTED_FORMATS[number] | string;
 
 // ── Job store (in-memory) ─────────────────────────────────────────────────────
 
-export type JobStatus = 'pending' | 'running' | 'complete' | 'error';
+export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
 interface ExportJob {
   token:     string;
@@ -114,7 +114,7 @@ function runExport(
 
   proc.on('close', (code) => {
     if (code === 0 && existsSync(outFile)) {
-      job.status   = 'complete';
+      job.status   = 'done';
       job.outputPath = outFile;
       job.filename   = `${stem}${ext}`;
       job.stderr   = stderr;
@@ -191,7 +191,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
 
     const job = jobs.get(token);
     if (!job)              return res.status(404).json({ error: 'Job not found' });
-    if (job.status !== 'complete' || !job.outputPath || !job.filename) {
+    if (job.status !== 'done' || !job.outputPath || !job.filename) {
       return res.status(409).json({ error: `Job is not complete (status: ${job.status})` });
     }
 

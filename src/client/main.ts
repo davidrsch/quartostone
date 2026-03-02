@@ -47,6 +47,16 @@ const sbBranch         = document.getElementById('sb-branch')!;
 const sbRenderStatus   = document.getElementById('sb-render-status')!;
 const sbSaveStatus     = document.getElementById('sb-save-status')!;
 
+// L-2: named-input dialogs (replace window.prompt)
+const newPageDialog    = document.getElementById('new-page-dialog') as HTMLDialogElement;
+const newPageNameInput = document.getElementById('new-page-name') as HTMLInputElement;
+const btnNewPageConfirm = document.getElementById('btn-new-page-confirm') as HTMLButtonElement;
+const btnNewPageCancel  = document.getElementById('btn-new-page-cancel') as HTMLButtonElement;
+const newDbDialog      = document.getElementById('new-db-dialog') as HTMLDialogElement;
+const newDbNameInput   = document.getElementById('new-db-name') as HTMLInputElement;
+const btnNewDbConfirm  = document.getElementById('btn-new-db-confirm') as HTMLButtonElement;
+const btnNewDbCancel   = document.getElementById('btn-new-db-cancel') as HTMLButtonElement;
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let activeView: EditorView | null = null;
 let activeVisual: VisualEditorInstance | null = null;
@@ -61,6 +71,7 @@ let historySetPage: ((path: string | null) => void) | null = null;
 let previewPanel: PreviewPanel | null = null;
 let backlinksPanel: BacklinksPanel | null = null;
 let graphView: { open(): void; close(): void; refresh(): void } | null = null;
+let switchingMode = false; // M-4: guard against concurrent mode switches
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -84,14 +95,31 @@ function showCommitPrompt(autoSlug: string) {
   actions.className = 'toast-actions';
   const confirmBtn = document.createElement('button');
   confirmBtn.textContent = 'Commit';
-  confirmBtn.addEventListener('click', () => { toast.remove(); openCommitDialog(autoSlug); });
+  confirmBtn.addEventListener('click', () => { toast.remove(); clearTimeout(autoCommitTimer); openCommitDialog(autoSlug); });
   const dismissBtn = document.createElement('button');
   dismissBtn.textContent = 'Dismiss';
-  dismissBtn.addEventListener('click', () => toast.remove());
+  dismissBtn.addEventListener('click', () => { toast.remove(); clearTimeout(autoCommitTimer); });
   actions.append(confirmBtn, dismissBtn);
   toast.appendChild(actions);
   toastContainer.appendChild(toast);
-  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 30000);
+  // M-3: if the user ignores the toast for 30 s, auto-commit with the slug
+  const autoCommitTimer = setTimeout(async () => {
+    if (!toast.parentNode) return; // user already acted
+    toast.remove();
+    try {
+      const res = await fetch('/api/git/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: autoSlug }),
+      });
+      if (res.ok) {
+        showToast(`Auto-committed: ${autoSlug}`, 'info');
+        refreshGit?.();
+        branchPicker?.refresh();
+        updateBranchStatus();
+      }
+    } catch { /* silent best-effort */ }
+  }, 30000);
 }
 
 // ─── Commit dialog ────────────────────────────────────────────────────────────
@@ -131,8 +159,11 @@ btnCommitCancel.addEventListener('click', () => commitDialog.close());
 async function switchMode(mode: 'source' | 'visual') {
   if (mode === editorMode) return;
   if (!activePath) return;
-
-  if (mode === 'visual') {
+  // M-4: prevent concurrent mode switches spawning duplicate editors
+  if (switchingMode) return;
+  switchingMode = true;
+  try {
+    if (mode === 'visual') {
     // Get current source content, destroy source editor, init visual
     const markdown = activeView ? activeView.state.doc.toString() : '';
     activeView?.destroy();
@@ -170,6 +201,10 @@ async function switchMode(mode: 'source' | 'visual') {
         refreshGit?.();
         updateBranchStatus();
       },
+      onSaveError: (err) => {
+        showToast(`Auto-save failed: ${err.message}`, 'error');
+        sbSaveStatus.textContent = '';
+      },
       onDirty: () => {
         isDirty = true;
         btnSave.disabled = false;
@@ -188,6 +223,9 @@ async function switchMode(mode: 'source' | 'visual') {
     editorMode = 'source';
     btnModeSource.classList.add('active');
     btnModeVisual.classList.remove('active');
+  }
+  } finally {
+    switchingMode = false;
   }
 }
 
@@ -220,6 +258,9 @@ btnProperties.addEventListener('click', () => {
         dispatch(state.update({
           changes: { from: 0, to: state.doc.length, insert: newContent },
         }));
+      } else if (editorMode === 'visual' && activeVisual) {
+        // M-2: push frontmatter edits back into the visual editor
+        activeVisual.setMarkdown(newContent);
       }
     };
     propsPanel.mount(activePath, getContent, setContent);
@@ -243,9 +284,25 @@ btnCommit.addEventListener('click', () => {
   openCommitDialog(slug);
 });
 
-btnNewPage.addEventListener('click', async () => {
-  const name = window.prompt('Page name (e.g. "my-notes"):');
-  if (!name) return;
+btnNewPage.addEventListener('click', () => {
+  newPageNameInput.value = '';
+  newPageDialog.showModal();
+  newPageNameInput.focus();
+});
+
+/** L-3: validate a user-supplied page name */
+function validatePageName(name: string): string | null {
+  const trimmed = name.trim().replace(/^\/+/, '');
+  if (!trimmed) return null;
+  if (trimmed.includes('\0')) return null;
+  return trimmed;
+}
+
+btnNewPageCancel.addEventListener('click', () => newPageDialog.close());
+btnNewPageConfirm.addEventListener('click', async () => {
+  const name = validatePageName(newPageNameInput.value);
+  newPageDialog.close();
+  if (!name) { showToast('Page name is invalid', 'error'); return; }
   try {
     const res = await fetch('/api/pages', {
       method: 'POST',
@@ -260,20 +317,29 @@ btnNewPage.addEventListener('click', async () => {
   }
 });
 
-btnNewDb.addEventListener('click', async () => {
-  const name = window.prompt('Database name (e.g. "tasks"):');
-  if (!name) return;
-  const path = `pages/${name.replace(/\s+/g, '-').toLowerCase()}.qmd`;
+btnNewDb.addEventListener('click', () => {
+  newDbNameInput.value = '';
+  newDbDialog.showModal();
+  newDbNameInput.focus();
+});
+
+btnNewDbCancel.addEventListener('click', () => newDbDialog.close());
+btnNewDbConfirm.addEventListener('click', async () => {
+  const rawName = newDbNameInput.value.trim();
+  newDbDialog.close();
+  if (!rawName) { showToast('Database name is invalid', 'error'); return; }
+  const slug = rawName.replace(/\s+/g, '-').toLowerCase();
+  const path = `pages/${slug}.qmd`;
   try {
     const res = await fetch(`/api/db/create?path=${encodeURIComponent(path)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: name }),
+      body: JSON.stringify({ title: rawName }),
     });
     if (!res.ok) throw new Error((await res.json() as { error: string }).error);
     await refreshSidebar?.();
-    showToast(`Created database ${name}`, 'success');
-    openPage(path, name);
+    showToast(`Created database ${rawName}`, 'success');
+    openPage(path, rawName);
   } catch (e) {
     showToast(`Failed: ${String(e)}`, 'error');
   }
@@ -318,7 +384,11 @@ async function updateBranchStatus() {
 }
 
 // ─── Editor load ──────────────────────────────────────────────────────────────
-async function openPage(path: string, name: string) {
+async function openPage(path: string, name: string) {  // M-1: guard against silently discarding unsaved changes
+  if (isDirty) {
+    const discard = confirm('You have unsaved changes. Discard them?');
+    if (!discard) return;
+  }
   // Destroy any active editor
   activeView?.destroy(); activeView = null;
   activeVisual?.destroy(); activeVisual = null;
@@ -347,18 +417,25 @@ async function openPage(path: string, name: string) {
   btnModeVisual.style.display = '';
 
   if (editorMode === 'visual') {
-    // Fetch content then open in visual mode
-    const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
-    const { content } = (await res.json()) as { content: string };
-    activeVisual = await createVisualEditor({
-      container: editorMountEl,
-      initialMarkdown: content,
-      onDirty: () => {
-        isDirty = true;
-        btnSave.disabled = false;
-        sbSaveStatus.textContent = 'Unsaved changes';
-      },
-    });
+    // Fetch content then open in visual mode — C-2: add error handling
+    try {
+      const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json() as { content?: string };
+      activeVisual = await createVisualEditor({
+        container: editorMountEl,
+        initialMarkdown: data.content ?? '',
+        onDirty: () => {
+          isDirty = true;
+          btnSave.disabled = false;
+          sbSaveStatus.textContent = 'Unsaved changes';
+        },
+      });
+    } catch (e) {
+      showToast(`Failed to load page: ${String(e)}`, 'error');
+      noPageMessageEl.classList.add('visible');
+      activePath = null;
+    }
   } else {
     activeView = await createEditor({
       container: editorMountEl,
@@ -370,6 +447,10 @@ async function openPage(path: string, name: string) {
         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
         refreshGit?.();
         updateBranchStatus();
+      },
+      onSaveError: (err) => {
+        showToast(`Auto-save failed: ${err.message}`, 'error');
+        sbSaveStatus.textContent = '';
       },
       onDirty: () => {
         isDirty = true;
@@ -398,6 +479,9 @@ async function openPage(path: string, name: string) {
       if (editorMode === 'source' && activeView) {
         const { dispatch, state } = activeView;
         dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
+      } else if (editorMode === 'visual' && activeVisual) {
+        // M-2: push frontmatter edits back into the visual editor
+        activeVisual.setMarkdown(newContent);
       }
     };
     propsPanel.mount(path, getContent, setContent);
@@ -468,11 +552,28 @@ updateBranchStatus();
 // Refresh git status every 30s
 setInterval(updateBranchStatus, 30_000);
 
-// Global Ctrl+S
+// Global keyboard shortcuts
 document.addEventListener('keydown', e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  const mod = e.ctrlKey || e.metaKey;
+  // Ctrl+S — save
+  if (mod && e.key === 's') {
     e.preventDefault();
     if (isDirty) saveCurrentPage();
+  }
+  // Ctrl+Shift+G — open commit dialog (L-1)
+  if (mod && e.shiftKey && e.key === 'G') {
+    e.preventDefault();
+    if (activePath) openCommitDialog(`qs-${Math.random().toString(36).slice(2, 10)}`);
+  }
+  // Ctrl+Shift+E — toggle source/visual mode (L-1)
+  if (mod && e.shiftKey && e.key === 'E') {
+    e.preventDefault();
+    if (activePath && !activeDb) switchMode(editorMode === 'source' ? 'visual' : 'source');
+  }
+  // Ctrl+Shift+P — toggle preview panel (L-1)
+  if (mod && e.shiftKey && e.key === 'P') {
+    e.preventDefault();
+    document.getElementById('btn-preview')?.click();
   }
 });
 

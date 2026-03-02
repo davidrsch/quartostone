@@ -35,7 +35,7 @@ function parseYamlSimple(yaml: string): Frontmatter {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    const m = line.match(/^(\w[\w-]*):\s*(.*)/);
+    const m = line.match(/^([-_\w][\w-]*):\s*(.*)/);
     if (m) {
       const key = m[1];
       const val = m[2].trim();
@@ -136,11 +136,12 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     form.append(
       field('Title', 'text', 'title', String(fm.title ?? '')),
       field('Author', 'text', 'author', String(fm.author ?? '')),
-      field('Date', 'date', 'date', String(fm.date ?? '')),
+      dateField(String(fm.date ?? '')),
       field('Description', 'text', 'description', String(fm.description ?? '')),
       field('Categories', 'text', 'categories',
         Array.isArray(fm.categories) ? fm.categories.join(', ') : String(fm.categories ?? '')),
       checkField('Draft', 'draft', fm.draft === true),
+      dateField(String(fm.date ?? '')),
     );
 
     form.querySelectorAll<HTMLInputElement>('input').forEach(el => {
@@ -201,6 +202,17 @@ function checkField(label: string, name: string, checked: boolean): HTMLElement 
     <input class="props-check" type="checkbox" name="${name}" ${checked ? 'checked' : ''} />
   `;
   return wrap;
+}
+
+/**
+ * Date field — uses <input type="date"> for valid ISO dates and falls back to
+ * <input type="text"> for special values like "today" or human-readable dates.
+ * This prevents Quarto's `date: today` from being silently deleted on save.
+ */
+function dateField(value: string): HTMLElement {
+  const isIsoDate = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const type = (value === '' || isIsoDate) ? 'date' : 'text';
+  return field('Date', type, 'date', value);
 }
 
 function readForm(form: HTMLElement): Frontmatter {
