@@ -287,11 +287,11 @@ describe('POST /api/pages', () => {
 // ── GET /api/git/diff ─────────────────────────────────────────────────────────
 
 describe('GET /api/git/diff', () => {
-  it('returns 400 when sha parameter is missing', async () => {
+  it('returns working-tree diff when sha parameter is omitted', async () => {
     const res = await client.get('/api/git/diff');
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/sha required/i);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('diff');
   });
 
   it('returns diff content for the initial commit sha', async () => {

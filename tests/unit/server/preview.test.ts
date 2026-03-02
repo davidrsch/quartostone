@@ -187,10 +187,11 @@ describe('POST /api/preview/start — success', () => {
 // ── POST /api/preview/stop ────────────────────────────────────────────────────
 
 describe('POST /api/preview/stop', () => {
-  it('returns 400 when path is missing', async () => {
+  it('returns ok with stopped:0 when path is omitted (stops all; none running)', async () => {
     const res = await client.post('/api/preview/stop').send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/path/i);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.stopped).toBe(0);
   });
 
   it('returns wasRunning: false when no preview is running for that path', async () => {
@@ -225,10 +226,11 @@ describe('POST /api/preview/stop', () => {
 // ── GET /api/preview/status ───────────────────────────────────────────────────
 
 describe('GET /api/preview/status', () => {
-  it('returns 400 when path is missing', async () => {
+  it('returns global running:false when path is omitted and no previews active', async () => {
     const res = await client.get('/api/preview/status');
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/path/i);
+    expect(res.status).toBe(200);
+    expect(res.body.running).toBe(false);
+    expect(res.body.count).toBe(0);
   });
 
   it('returns running: false when no preview exists', async () => {
