@@ -88,6 +88,11 @@ function serializeFrontmatter(fm: Frontmatter): string {
   return '---\n' + lines.join('\n') + '\n---';
 }
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+/** Frontmatter keys handled by the standard form fields. */
+const STANDARD_KEYS = new Set(['title', 'author', 'date', 'description', 'categories', 'draft']);
+
 // ─── Panel factory ────────────────────────────────────────────────────────────
 
 export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel {
@@ -138,9 +143,37 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
       checkField('Draft', 'draft', fm.draft === true),
     );
 
-    form.querySelectorAll('input, select').forEach(el => {
+    form.querySelectorAll<HTMLInputElement>('input').forEach(el => {
       el.addEventListener('change', save);
     });
+
+    // ── Extra fields section ────────────────────────────────────────────────
+    const separator = document.createElement('hr');
+    separator.className = 'props-separator';
+    form.appendChild(separator);
+
+    const extraLabel = document.createElement('div');
+    extraLabel.className = 'props-label';
+    extraLabel.textContent = 'Extra fields';
+    form.appendChild(extraLabel);
+
+    // Render existing unknown keys from frontmatter
+    for (const key of Object.keys(fm)) {
+      if (STANDARD_KEYS.has(key)) continue;
+      const val = fm[key];
+      const valStr = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+      form.appendChild(makeExtraRow(key, valStr, save));
+    }
+
+    // "+ Add field" button
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'props-add-btn';
+    addBtn.textContent = '+ Add field';
+    addBtn.addEventListener('click', () => {
+      form.insertBefore(makeExtraRow('', '', save), addBtn);
+    });
+    form.appendChild(addBtn);
 
     return form;
   }
@@ -172,6 +205,8 @@ function checkField(label: string, name: string, checked: boolean): HTMLElement 
 
 function readForm(form: HTMLElement): Frontmatter {
   const fm: Frontmatter = {};
+
+  // Standard named fields
   form.querySelectorAll<HTMLInputElement>('input[name]').forEach(input => {
     const name = input.name as keyof Frontmatter;
     if (input.type === 'checkbox') {
@@ -186,7 +221,65 @@ function readForm(form: HTMLElement): Frontmatter {
       }
     }
   });
+
+  // Extra (custom) key/value rows
+  form.querySelectorAll<HTMLElement>('.props-extra-row').forEach(row => {
+    const keyInput = row.querySelector<HTMLInputElement>('.props-extra-key');
+    const valInput = row.querySelector<HTMLInputElement>('.props-extra-val');
+    if (!keyInput || !valInput) return;
+    const k = keyInput.value.trim();
+    const v = valInput.value.trim();
+    if (!k) return;
+    fm[k] = v;
+  });
+
   return fm;
+}
+
+function makeExtraRow(
+  key: string,
+  val: string,
+  save: () => void,
+): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'props-extra-row';
+
+  const head = document.createElement('div');
+  head.className = 'props-extra-head';
+
+  const keyInput = document.createElement('input');
+  keyInput.type = 'text';
+  keyInput.className = 'props-input props-extra-key';
+  keyInput.placeholder = 'key';
+  keyInput.value = key;
+  keyInput.autocomplete = 'off';
+  keyInput.setAttribute('aria-label', 'Field name');
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'props-del-btn';
+  delBtn.title = 'Remove field';
+  delBtn.textContent = '\u00d7';   // ×
+  delBtn.addEventListener('click', () => {
+    row.remove();
+    save();
+  });
+
+  head.append(keyInput, delBtn);
+
+  const valInput = document.createElement('input');
+  valInput.type = 'text';
+  valInput.className = 'props-input props-extra-val';
+  valInput.placeholder = 'value';
+  valInput.value = val;
+  valInput.autocomplete = 'off';
+  valInput.setAttribute('aria-label', 'Field value');
+
+  keyInput.addEventListener('change', save);
+  valInput.addEventListener('change', save);
+
+  row.append(head, valInput);
+  return row;
 }
 
 function escAttr(s: string): string {

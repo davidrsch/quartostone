@@ -432,6 +432,51 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 .props-check { width: 14px; height: 14px; cursor: pointer; }
 .props-empty { color: var(--text-dim); font-size: 12px; padding: 8px; }
 
+.props-separator {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+
+/* Extra key/value rows */
+.props-extra-row { display: flex; flex-direction: column; gap: 4px; }
+
+.props-extra-head {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.props-extra-head .props-input { flex: 1; }
+
+.props-del-btn {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: border-color 0.15s, color 0.15s;
+}
+.props-del-btn:hover { border-color: #f97171; color: #f97171; }
+
+.props-add-btn {
+  margin-top: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s;
+}
+.props-add-btn:hover { border-color: var(--accent); color: var(--text); }
+
 /* ─── Git panel ─── */
 #git-panel {
   flex: 1;
@@ -1192,6 +1237,29 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 .cm-output-empty {
   color: var(--text-dim);
   font-style: italic;
+}
+
+/* ─── Visual editor code block wrapper ───────────────────────────────────── */
+
+.visual-code-block {
+  position: relative;
+  margin: 8px 0;
+}
+
+.visual-code-block pre {
+  margin: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+.visual-code-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 4px;
+  background: #1e1e1e;
+  border-radius: 0 0 4px 4px;
+  border: 1px solid var(--border);
+  border-top: none;
 }
 
 /* ── Branch picker ─────────────────────────────────────────────────────────── */

@@ -4,6 +4,7 @@
 
 import { Editor, Extension, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { VisualRunCodeBlock } from './runExtension.js';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
@@ -210,11 +211,10 @@ export async function createVisualEditor(opts: VisualEditorOptions): Promise<Vis
     element: opts.container,
     extensions: [
       StarterKit.configure({
-        // Disable StarterKit's code_block so we can keep our serializer override
-        codeBlock: {
-          HTMLAttributes: { class: 'qs-code-block' },
-        },
+        // Replaced by VisualRunCodeBlock (adds ▶ Run button for executable cells)
+        codeBlock: false,
       }),
+      VisualRunCodeBlock,
       Table.configure({ resizable: false }),
       TableRow,
       TableCell,
