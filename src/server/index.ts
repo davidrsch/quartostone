@@ -32,6 +32,9 @@ export function createApp(ctx: ServerContext) {
   const app = express();
   app.use(express.json());
 
+  // Health-check endpoint — always returns 200. Used by Playwright webServer readiness probe.
+  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
   // Serve rendered site at /
   const siteDir = join(ctx.cwd, '_site');
   if (existsSync(siteDir)) {
