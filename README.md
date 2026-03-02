@@ -44,6 +44,31 @@ quartostone/
 
 > **Prerequisites:** [Node.js 22+](https://nodejs.org) and [Quarto](https://quarto.org/docs/get-started/)
 
+### Option A — Quarto template (recommended)
+
+Scaffold a new workspace with a single command using the Quarto template:
+
+```bash
+quarto use template davidrsch/quartostone
+```
+
+Quarto will prompt for a directory name, copy all workspace files, and install
+the `quartostone` Quarto extension. Then:
+
+```bash
+cd my-notes
+git init && git add . && git commit -m "init"
+
+# Install the Quartostone server
+npm install -g quartostone
+
+# Start the editor
+quartostone serve
+# → Opens http://localhost:4242
+```
+
+### Option B — npm (manual)
+
 ```bash
 # Install
 npm install -g quartostone
@@ -57,6 +82,20 @@ git init && git add . && git commit -m "init"
 quartostone serve
 # → Opens http://localhost:4242
 ```
+
+### Quarto extension features
+
+The `quartostone` Quarto extension (`_extensions/quartostone/`) provides three
+features that work even without the Quartostone server:
+
+| Feature | Description |
+|---|---|
+| **Custom callouts** | `::: {.callout-todo}` and `::: {.callout-question}` render as styled callout blocks |
+| **Backlinks** | Pages listing `quartostone-backlinks:` in YAML get a linked backlinks section at the bottom |
+| **Page footer** | Each rendered page gets a footer showing the last Git commit message and date |
+
+Disable the footer on a specific page by adding `quartostone-footer: false` to
+its YAML front matter.
 
 ## Development
 

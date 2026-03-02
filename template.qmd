@@ -1,0 +1,51 @@
+---
+title: "My Quartostone Workspace"
+filters:
+  - quartostone
+---
+
+# Welcome to Quartostone
+
+This workspace was scaffolded with `quarto use template davidrsch/quartostone`.
+
+## Getting started
+
+1. **Start the Quartostone server:**
+   ```bash
+   npx quartostone serve
+   ```
+   Then open <http://localhost:4242> in your browser.
+
+2. **Create pages** from the sidebar tree using the **+** button.
+
+3. **Edit pages** in Visual mode (WYSIWYG) or Source mode (raw `.qmd`).
+
+4. **Render** your workspace as a static Quarto website:
+   ```bash
+   quarto render
+   ```
+
+## Custom callouts
+
+The `quartostone` Quarto extension provides two extra callout types:
+
+::: {.callout-todo}
+## Write introduction
+This is an action item.
+:::
+
+::: {.callout-question}
+## Why does this work?
+Space for open questions or research notes.
+:::
+
+## Backlinks
+
+Backlinks to this page from other pages are automatically injected by the
+`quartostone` filter when the `quartostone-backlinks` YAML key is present.
+They appear at the bottom of each page as a linked list.
+
+## Learn more
+
+- [Quarto documentation](https://quarto.org/docs/)
+- [Quartostone repository](https://github.com/davidrsch/quartostone)
