@@ -1,0 +1,222 @@
+// src/server/api/export.ts
+// Multi-format export: spawn `quarto render` and stream the result as a download.
+//
+// POST /api/export              body: { path, format, extraArgs? }
+// GET  /api/export/status?token  →  { token, status, error?, filename? }
+// GET  /api/export/download?token → streams file + deletes temp on complete
+
+import type { Express, Request, Response } from 'express';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, createWriteStream, existsSync, unlinkSync } from 'node:fs';
+import { join, basename, extname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import type { ServerContext } from '../index.js';
+
+// ── Supported formats ─────────────────────────────────────────────────────────
+
+export const SUPPORTED_FORMATS = [
+  'html',
+  'pdf',
+  'typst',
+  'docx',
+  'revealjs',
+  'beamer',
+  'epub',
+] as const;
+
+export type ExportFormat = typeof SUPPORTED_FORMATS[number] | string;
+
+// ── Job store (in-memory) ─────────────────────────────────────────────────────
+
+export type JobStatus = 'pending' | 'running' | 'complete' | 'error';
+
+interface ExportJob {
+  token:     string;
+  status:    JobStatus;
+  outputPath?: string;
+  filename?:   string;
+  error?:      string;
+  stderr:      string;
+}
+
+const jobs = new Map<string, ExportJob>();
+
+// Purge completed/errored jobs older than 10 minutes
+function purgeOldJobs() {
+  // simple approach: keep only the last 100 jobs
+  if (jobs.size > 100) {
+    const oldest = Array.from(jobs.keys()).slice(0, jobs.size - 100);
+    for (const k of oldest) jobs.delete(k);
+  }
+}
+
+// ── Quarto runner ─────────────────────────────────────────────────────────────
+
+function outputExt(format: string): string {
+  switch (format) {
+    case 'html':
+    case 'revealjs': return '.html';
+    case 'pdf':
+    case 'beamer':   return '.pdf';
+    case 'typst':    return '.pdf';
+    case 'docx':     return '.docx';
+    case 'epub':     return '.epub';
+    default:         return '.out';
+  }
+}
+
+function runExport(
+  cwd:      string,
+  filePath: string,
+  format:   string,
+  extraArgs: string[],
+  job:      ExportJob,
+): void {
+  const ext  = outputExt(format);
+  const stem = basename(filePath, extname(filePath));
+  const outDir  = mkdtempSync(join(tmpdir(), 'qs-export-'));
+  const outFile = join(outDir, `${stem}${ext}`);
+
+  const htmlArgs = format === 'html'
+    ? ['--standalone', '--embed-resources']
+    : format === 'revealjs'
+    ? ['--standalone']
+    : [];
+
+  const args = [
+    'render', filePath,
+    '--to', format,
+    '--output', outFile,
+    ...htmlArgs,
+    ...extraArgs,
+  ];
+
+  job.status = 'running';
+
+  const proc = spawn('quarto', args, { cwd, shell: false });
+
+  let stderr = '';
+  proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+  proc.stdout.on('data', () => { /* discard */ });
+
+  proc.on('error', (err) => {
+    const msg = err.message;
+    job.status = 'error';
+    job.stderr = stderr;
+    if (msg.includes('ENOENT') || msg.includes('not found')) {
+      job.error = 'Quarto is not installed or not on PATH. Install from https://quarto.org';
+    } else {
+      job.error = msg;
+    }
+  });
+
+  proc.on('close', (code) => {
+    if (code === 0 && existsSync(outFile)) {
+      job.status   = 'complete';
+      job.outputPath = outFile;
+      job.filename   = `${stem}${ext}`;
+      job.stderr   = stderr;
+    } else {
+      job.status = 'error';
+      job.stderr = stderr;
+      // Detect common missing-dependency messages
+      if (stderr.includes('xelatex') || stderr.includes('pdflatex') || stderr.includes('LaTeX')) {
+        job.error = 'LaTeX is not installed. Install TeX Live or MiKTeX, or choose the "typst" format instead.';
+      } else if (stderr.includes('typst') && stderr.includes('not found')) {
+        job.error = 'typst is not installed. Install from https://typst.app or via `cargo install typst-cli`.';
+      } else {
+        job.error = stderr.trim() || `quarto render exited with code ${String(code)}`;
+      }
+    }
+  });
+}
+
+// ── Register routes ───────────────────────────────────────────────────────────
+
+export function registerExportApi(app: Express, ctx: ServerContext) {
+  const { cwd } = ctx;
+
+  // POST /api/export  body: { path: string; format: string; extraArgs?: string[] }
+  app.post('/api/export', (req: Request, res: Response) => {
+    const { path: filePath, format, extraArgs = [] } = req.body as {
+      path?:      string;
+      format?:    string;
+      extraArgs?: string[];
+    };
+
+    if (!filePath) return res.status(400).json({ error: 'path is required' });
+    if (!format)   return res.status(400).json({ error: 'format is required' });
+
+    const absPath = join(cwd, filePath);
+    if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
+
+    if (!Array.isArray(extraArgs)) {
+      return res.status(400).json({ error: 'extraArgs must be an array' });
+    }
+
+    purgeOldJobs();
+    const token = randomUUID();
+    const job: ExportJob = { token, status: 'pending', stderr: '' };
+    jobs.set(token, job);
+
+    // Start async — respond immediately with token
+    setImmediate(() => runExport(cwd, absPath, format, extraArgs, job));
+
+    res.json({ token, status: 'pending' });
+  });
+
+  // GET /api/export/status?token=
+  app.get('/api/export/status', (req: Request, res: Response) => {
+    const token = req.query['token'] as string | undefined;
+    if (!token) return res.status(400).json({ error: 'token is required' });
+
+    const job = jobs.get(token);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    res.json({
+      token:    job.token,
+      status:   job.status,
+      filename: job.filename,
+      error:    job.error,
+    });
+  });
+
+  // GET /api/export/download?token=
+  // Streams the output file to the client, then deletes it.
+  app.get('/api/export/download', (req: Request, res: Response) => {
+    const token = req.query['token'] as string | undefined;
+    if (!token) return res.status(400).json({ error: 'token is required' });
+
+    const job = jobs.get(token);
+    if (!job)              return res.status(404).json({ error: 'Job not found' });
+    if (job.status !== 'complete' || !job.outputPath || !job.filename) {
+      return res.status(409).json({ error: `Job is not complete (status: ${job.status})` });
+    }
+
+    if (!existsSync(job.outputPath)) {
+      return res.status(410).json({ error: 'Output file no longer exists' });
+    }
+
+    const mimeMap: Record<string, string> = {
+      '.html': 'text/html',
+      '.pdf':  'application/pdf',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.epub': 'application/epub+zip',
+    };
+    const ext  = extname(job.filename);
+    const mime = mimeMap[ext] ?? 'application/octet-stream';
+
+    res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
+    res.setHeader('Content-Type', mime);
+
+    const stream = createReadStream(job.outputPath);
+    const outputPath = job.outputPath;
+    stream.on('end', () => {
+      try { unlinkSync(outputPath); } catch { /* ignore */ }
+      jobs.delete(token);
+    });
+    stream.pipe(res);
+  });
+}

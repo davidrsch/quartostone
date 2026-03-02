@@ -59,13 +59,37 @@
             <button id="btn-mode-source" class="active" title="Source mode">Source</button>
             <button id="btn-mode-visual" title="Visual (WYSIWYG) mode">Visual</button>
             <button id="btn-properties" title="Toggle page properties">Properties</button>
+            <button id="btn-preview" title="Toggle live Quarto preview" disabled>Preview</button>
+            <div id="export-picker" title="Export to another format">
+              <button id="btn-export" disabled>Export ▾</button>
+              <div id="export-dropdown" class="export-dropdown hidden">
+                <div class="export-menu-label">Export as…</div>
+                <button class="export-item" data-format="html">📄 HTML (standalone)</button>
+                <button class="export-item" data-format="typst">📄 PDF (typst)</button>
+                <button class="export-item" data-format="pdf">📄 PDF (LaTeX)</button>
+                <button class="export-item" data-format="docx">📝 Word (.docx)</button>
+                <button class="export-item" data-format="revealjs">📊 RevealJS slides</button>
+                <button class="export-item" data-format="beamer">📊 Beamer slides (PDF)</button>
+                <button class="export-item" data-format="epub">📖 EPUB</button>
+                <hr class="export-sep">
+                <button class="export-item" data-format="custom">⚙ Custom format…</button>
+              </div>
+            </div>
             <button id="btn-save" disabled title="Save (Ctrl+S)">Save</button>
             <button id="btn-commit" disabled title="Commit changes">Commit</button>
           </div>
         </div>
 
         <div id="editor-body">
-          <div id="editor-mount"></div>
+          <div id="editor-split">
+            <div id="editor-mount"></div>
+            <div id="preview-resizer" class="hidden"></div>
+            <div id="preview-pane" class="hidden">
+              <div id="preview-loading" class="hidden">Loading preview…</div>
+              <div id="preview-error" class="hidden"></div>
+              <iframe id="preview-frame" title="Quarto live preview" src="about:blank"></iframe>
+            </div>
+          </div>
 
           <!-- Page properties panel -->
           <aside id="properties-panel" class="hidden">
@@ -115,6 +139,21 @@
         <div class="dialog-actions">
           <button type="submit" id="btn-new-branch-confirm">Create</button>
           <button type="button" id="btn-new-branch-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Custom export dialog -->
+    <dialog id="custom-export-dialog">
+      <form method="dialog">
+        <h3>Custom export format</h3>
+        <label for="custom-format-input">Quarto --to value</label>
+        <input id="custom-format-input" type="text" placeholder="e.g. asciidoc, rst, jats" autocomplete="off" />
+        <label for="custom-args-input">Extra arguments (space-separated, optional)</label>
+        <input id="custom-args-input" type="text" placeholder="e.g. --toc --number-sections" autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="submit" id="btn-custom-export-confirm">Export</button>
+          <button type="button" id="btn-custom-export-cancel">Cancel</button>
         </div>
       </form>
     </dialog>

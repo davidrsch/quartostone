@@ -1,0 +1,186 @@
+/**
+ * Preview panel — manages the split-pane live preview iframe.
+ * Communicates with the server /api/preview/* routes.
+ */
+
+export interface PreviewPanel {
+  /** Call when the active page path changes; starts/updates preview if active. */
+  setPage(path: string | null): void;
+  /** Programmatically stop the preview and hide the pane. */
+  stop(): void;
+  /** Whether the preview pane is currently visible. */
+  readonly isActive: boolean;
+}
+
+interface PreviewStartResponse {
+  port: number;
+  url: string;
+  reused: boolean;
+}
+
+export function initPreviewPanel(): PreviewPanel {
+  const btnPreview  = document.getElementById('btn-preview')    as HTMLButtonElement | null;
+  const pane        = document.getElementById('preview-pane')   as HTMLElement | null;
+  const resizer     = document.getElementById('preview-resizer') as HTMLElement | null;
+  const frame       = document.getElementById('preview-frame')  as HTMLIFrameElement | null;
+  const loadingEl   = document.getElementById('preview-loading') as HTMLElement | null;
+  const errorEl     = document.getElementById('preview-error')  as HTMLElement | null;
+
+  let active       = false;
+  let currentPath: string | null = null;
+  let currentUrl:  string | null = null;
+
+  /* ── Helpers ──────────────────────────────────────────────────────────── */
+
+  function setLoading(v: boolean): void {
+    if (!loadingEl) return;
+    loadingEl.classList.toggle('hidden', !v);
+  }
+
+  function setError(msg: string | null): void {
+    if (!errorEl) return;
+    if (msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+    } else {
+      errorEl.classList.add('hidden');
+    }
+  }
+
+  function showPane(): void {
+    pane?.classList.remove('hidden');
+    resizer?.classList.remove('hidden');
+  }
+
+  function hidePane(): void {
+    pane?.classList.add('hidden');
+    resizer?.classList.add('hidden');
+  }
+
+  /* ── Start preview for a path ─────────────────────────────────────────── */
+
+  async function startPreview(path: string): Promise<void> {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/preview/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error((err as { error?: string }).error ?? res.statusText);
+      }
+
+      const data = await res.json() as PreviewStartResponse;
+      currentUrl = data.url;
+
+      if (frame) frame.src = data.url;
+      showPane();
+    } catch (err) {
+      setError('Preview failed: ' + String(err));
+      showPane();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ── Stop preview ─────────────────────────────────────────────────────── */
+
+  async function stopPreview(path: string): Promise<void> {
+    try {
+      await fetch('/api/preview/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+    } catch { /* best effort */ }
+  }
+
+  /* ── Toggle button ────────────────────────────────────────────────────── */
+
+  btnPreview?.addEventListener('click', async () => {
+    if (!active) {
+      active = true;
+      btnPreview.classList.add('active');
+      if (currentPath) await startPreview(currentPath);
+    } else {
+      active = false;
+      btnPreview.classList.remove('active');
+      hidePane();
+      if (frame) frame.src = 'about:blank';
+      if (currentPath) await stopPreview(currentPath);
+      currentUrl = null;
+    }
+  });
+
+  /* ── Drag-to-resize ───────────────────────────────────────────────────── */
+
+  if (resizer && pane) {
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener('mousedown', (e: MouseEvent) => {
+      dragging = true;
+      startX = e.clientX;
+      startWidth = pane.offsetWidth;
+      resizer.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+      if (!dragging) return;
+      const delta = startX - e.clientX;
+      const newWidth = Math.max(200, Math.min(startWidth + delta, window.innerWidth * 0.75));
+      pane.style.width = newWidth + 'px';
+      pane.style.flex = 'none';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.removeProperty('user-select');
+      document.body.style.removeProperty('cursor');
+    });
+  }
+
+  /* ── Hide loading overlay once iframe actually loads ─────────────────── */
+
+  frame?.addEventListener('load', () => {
+    if (frame.src !== 'about:blank') {
+      setLoading(false);
+    }
+  });
+
+  /* ── Public API ───────────────────────────────────────────────────────── */
+
+  return {
+    get isActive(): boolean { return active; },
+
+    async setPage(path: string | null): Promise<void> {
+      currentPath = path;
+      if (btnPreview) btnPreview.disabled = path === null;
+
+      if (!active || !path) return;
+
+      // If the path changed, start fresh
+      await startPreview(path);
+    },
+
+    async stop(): Promise<void> {
+      if (!active) return;
+      active = false;
+      btnPreview?.classList.remove('active');
+      hidePane();
+      if (frame) frame.src = 'about:blank';
+      if (currentPath) await stopPreview(currentPath);
+      currentUrl = null;
+    },
+  };
+}

@@ -12,6 +12,9 @@ import { createPropertiesPanel } from './properties/index.js';
 import { initBranchPicker } from './branches/index.js';
 import type { BranchPickerResult } from './branches/index.js';
 import { initHistoryPanel } from './history/index.js';
+import { initExportPicker } from './export/index.js';
+import { initPreviewPanel } from './preview/index.js';
+import type { PreviewPanel } from './preview/index.js';
 import type { EditorView } from '@codemirror/view';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
@@ -51,6 +54,7 @@ let refreshSidebar: (() => Promise<void>) | null = null;
 let refreshGit: (() => Promise<void>) | null = null;
 let branchPicker: BranchPickerResult | null = null;
 let historySetPage: ((path: string | null) => void) | null = null;
+let previewPanel: PreviewPanel | null = null;
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -372,6 +376,9 @@ async function openPage(path: string, name: string) {
   // Update history panel with newly opened page
   historySetPage?.(path);
 
+  // Update preview panel with newly opened page
+  previewPanel?.setPage(path);
+
   // Re-mount properties panel if open
   if (!propertiesPanel.classList.contains('hidden')) {
     const getContent = () =>
@@ -417,6 +424,12 @@ branchPicker = initBranchPicker((branch, stashConflict) => {
   // Reload current page on branch switch so content reflects new branch
   if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
 });
+
+// ── Export picker ───────────────────────────────────────────────────────────
+initExportPicker(() => activePath);
+
+// ── Preview panel ────────────────────────────────────────────────────────────
+previewPanel = initPreviewPanel();
 
 const historyPanel = initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page

@@ -13,6 +13,8 @@ import { registerGitApi } from './api/git.js';
 import { registerRenderApi } from './api/render.js';
 import { registerDbApi } from './api/db.js';
 import { registerExecApi } from './api/exec.js';
+import { registerExportApi } from './api/export.js';
+import { registerPreviewApi } from './api/preview.js';
 import { startWatcher } from './watcher.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
@@ -57,6 +59,8 @@ export function createApp(ctx: ServerContext) {
   registerRenderApi(app, ctx);
   registerDbApi(app, ctx);
   registerExecApi(app, ctx);
+  registerExportApi(app, ctx);
+  registerPreviewApi(app, ctx);
 
   return app;
 }

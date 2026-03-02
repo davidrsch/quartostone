@@ -1314,5 +1314,129 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 }
 .history-error { color: #f97171; }
 
+/* ── Export dropdown ─────────────────────────────────────────────────────── */
+
+#export-picker { position: relative; display: inline-flex; }
+
+#btn-export {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#btn-export:disabled { opacity: 0.45; cursor: default; }
+
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  z-index: 200;
+  min-width: 200px;
+  padding: 4px 0;
+}
+.export-menu-label {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.export-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.export-item:hover { background: var(--hover); }
+.export-sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* ── Preview pane ─────────────────────────────────────────────────────────── */
+
+#editor-split {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+#editor-split #editor-mount {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+#preview-resizer {
+  width: 4px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+#preview-resizer:hover,
+#preview-resizer.dragging { background: var(--accent, #7c6af7); }
+
+#preview-pane {
+  width: 45%;
+  min-width: 200px;
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+#preview-pane.hidden { display: none; }
+#preview-resizer.hidden { display: none; }
+
+#preview-frame {
+  flex: 1;
+  border: none;
+  width: 100%;
+  height: 100%;
+}
+
+#preview-loading, #preview-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,.85);
+  font-size: 13px;
+  color: var(--text-dim);
+  z-index: 5;
+}
+#preview-error { color: #f97171; padding: 16px; text-align: center; }
+
+#btn-preview {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#btn-preview.active {
+  background: var(--accent, #7c6af7);
+  color: #fff;
+  border-color: transparent;
+}
+#btn-preview:disabled { opacity: 0.45; cursor: default; }
+
+
 
 
