@@ -283,6 +283,13 @@ test.describe('Editor UI', () => {
     // Wait for CodeMirror editor to mount
     await page.waitForSelector('.cm-editor', { timeout: 10_000 });
 
+    // Click the editable content area so the CodeMirror instance has keyboard focus
+    await page.locator('.cm-content').click();
+
+    // Type a space and backspace so isDirty=true (the global Ctrl+S guard requires it)
+    await page.keyboard.type(' ');
+    await page.keyboard.press('Backspace');
+
     // Press Ctrl+S (save shortcut)
     await page.keyboard.press('Control+s');
 
