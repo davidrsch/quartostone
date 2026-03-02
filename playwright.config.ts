@@ -5,9 +5,9 @@ export default defineConfig({
   fullyParallel: false,
   // Retry twice on CI to absorb flakiness; zero retries locally for fast feedback.
   retries: process.env['CI'] ? 2 : 0,
-  reporter: process.env['CI'] ? 'github' : 'html',
-  // Create missing snapshots and pass on first run; compare on subsequent runs.
-  updateSnapshots: 'missing',
+  // On CI: emit GitHub check annotations + HTML report for artifacts.
+  // Locally: interactive HTML report only.
+  reporter: process.env['CI'] ? [['github'], ['html', { outputFolder: 'playwright-report' }]] : 'html',
   use: {
     baseURL: 'http://localhost:4343',
     trace: 'on-first-retry',
