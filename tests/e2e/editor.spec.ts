@@ -79,9 +79,12 @@ test.describe('Pages API — CRUD', () => {
     expect(res.status()).toBe(404);
   });
 
-  test('path traversal GET /api/pages/../../_quartostone.yml returns 400', async ({ request }) => {
+  test('path traversal GET /api/pages/../../_quartostone.yml is rejected (400 or 404)', async ({ request }) => {
+    // Express normalises URL paths before routing — `..` segments are resolved,
+    // so the request either never matches the /api/pages/* route (→ 404) or hits
+    // our guardPath() check (→ 400). Both mean the traversal is blocked.
     const res = await request.get('/api/pages/../../_quartostone.yml');
-    expect(res.status()).toBe(400);
+    expect([400, 404]).toContain(res.status());
   });
 });
 
@@ -264,6 +267,9 @@ test.describe('Editor UI', () => {
       testInfo.annotations.push({ type: 'skip', description: 'Client not built' });
       return;
     }
+
+    // Wait for the sidebar file tree to render
+    await page.waitForSelector('[data-path]', { timeout: 10_000 });
 
     // Click the index.qmd file in the sidebar
     const fileEntry = page.locator('[data-path="pages/index.qmd"]').first();
