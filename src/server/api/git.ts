@@ -1,12 +1,20 @@
 // src/server/api/git.ts
-// GET  /api/git/log?path=   — commit history (all or per-file)
-// POST /api/git/commit      — commit staged + all .qmd changes
-// GET  /api/git/diff?sha=   — diff for a specific commit
-// GET  /api/git/status      — working tree status + ahead/behind counts
-// GET  /api/git/remote      — remote URL + ahead/behind
-// POST /api/git/push        — push to remote
-// POST /api/git/pull        — pull from remote (fast-forward only)
-// PATCH /api/git/remote     — set remote URL
+// GET  /api/git/log?path=         — commit history (all or per-file)
+// POST /api/git/commit            — commit staged + all .qmd changes
+// GET  /api/git/diff?sha=         — diff for a specific commit
+// GET  /api/git/status            — working tree status + ahead/behind counts
+// GET  /api/git/remote            — remote URL + ahead/behind
+// POST /api/git/push              — push to remote
+// POST /api/git/pull              — pull from remote (fast-forward only)
+// PATCH /api/git/remote           — set remote URL
+// ── Phase 5: Branch management ──────────────────────────────────────────────
+// GET  /api/git/branches          — list all local branches + current
+// POST /api/git/branches          — create a new branch
+// POST /api/git/checkout          — switch to a branch (auto-stash if dirty)
+// POST /api/git/merge             — merge a branch into current (no-FF commit)
+// ── Phase 5: File history ────────────────────────────────────────────────────
+// GET  /api/git/show?sha=&path=   — fetch file content at a specific commit
+// POST /api/git/restore           — restore file to a specific commit state
 
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
@@ -127,6 +135,126 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         await git.addRemote('origin', url);
       }
       res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // ── Phase 5: Branch management ─────────────────────────────────────────────
+
+  // GET /api/git/branches → { current: string; branches: { name, current, sha, date }[] }
+  app.get('/api/git/branches', async (_req: Request, res: Response) => {
+    try {
+      const summary = await git.branchLocal();
+      const branches = summary.all.map(name => ({
+        name,
+        current: name === summary.current,
+        sha:     (summary.branches[name]?.commit ?? '').slice(0, 7),
+        date:    summary.branches[name]?.label ?? '',
+      }));
+      res.json({ current: summary.current, branches });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // POST /api/git/branches  body: { name: string }  → creates branch from HEAD
+  app.post('/api/git/branches', async (req: Request, res: Response) => {
+    try {
+      const { name } = req.body as { name?: string };
+      if (!name || !/^[\w\-./]+$/.test(name)) {
+        return res.status(400).json({ error: 'valid branch name required' });
+      }
+      await git.checkoutLocalBranch(name);
+      res.json({ ok: true, name });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // POST /api/git/checkout  body: { branch: string }
+  // Stashes uncommitted changes, switches branch, re-applies stash if any.
+  app.post('/api/git/checkout', async (req: Request, res: Response) => {
+    try {
+      const { branch } = req.body as { branch?: string };
+      if (!branch) return res.status(400).json({ error: 'branch required' });
+
+      const status = await git.status();
+      const wasStashed = !status.isClean();
+
+      if (wasStashed) {
+        await git.stash(['push', '-m', `qs-autostash before switching to ${branch}`]);
+      }
+
+      await git.checkout(branch);
+
+      if (wasStashed) {
+        try {
+          await git.stash(['pop']);
+        } catch {
+          // Stash pop conflict — leave stash in place, surface warning
+          return res.json({ ok: true, branch, stashConflict: true });
+        }
+      }
+
+      res.json({ ok: true, branch, stashed: wasStashed });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // POST /api/git/merge  body: { branch: string; message?: string }
+  // Merges the given branch into the current branch (--no-ff).
+  app.post('/api/git/merge', async (req: Request, res: Response) => {
+    try {
+      const { branch, message } = req.body as { branch?: string; message?: string };
+      if (!branch) return res.status(400).json({ error: 'branch required' });
+      const mergeMsg = message ?? `Merge branch '${branch}'`;
+      const result = await git.merge([branch, '--no-ff', '-m', mergeMsg]);
+      if (result.failed) {
+        return res.status(409).json({ error: 'Merge conflict — resolve manually', conflicts: result.conflicts });
+      }
+      res.json({ ok: true, commit: result.result });
+    } catch (e) {
+      const msg = String(e);
+      if (msg.includes('CONFLICT') || msg.includes('conflict')) {
+        return res.status(409).json({ error: 'Merge conflict', details: msg });
+      }
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ── Phase 5: File history ──────────────────────────────────────────────────
+
+  // GET /api/git/show?sha=<hash>&path=<file>
+  // Returns the content of `path` at commit `sha`.
+  app.get('/api/git/show', async (req: Request, res: Response) => {
+    try {
+      const sha  = req.query['sha']  as string | undefined;
+      const path = req.query['path'] as string | undefined;
+      if (!sha)  return res.status(400).json({ error: 'sha required' });
+      if (!path) return res.status(400).json({ error: 'path required' });
+      // git show sha:path
+      const content = await git.show([`${sha}:${path}`]);
+      res.json({ content, sha, path });
+    } catch (e) {
+      const msg = String(e);
+      if (msg.includes('does not exist') || msg.includes('bad object') || msg.includes('not found')) {
+        return res.status(404).json({ error: 'File not found at that commit' });
+      }
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // POST /api/git/restore  body: { sha: string; path: string }
+  // Checks out `path` from commit `sha` into the working tree (HEAD unchanged).
+  app.post('/api/git/restore', async (req: Request, res: Response) => {
+    try {
+      const { sha, path } = req.body as { sha?: string; path?: string };
+      if (!sha)  return res.status(400).json({ error: 'sha required' });
+      if (!path) return res.status(400).json({ error: 'path required' });
+      await git.checkout([sha, '--', path]);
+      res.json({ ok: true, sha, path });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }

@@ -20,10 +20,12 @@ export default defineConfig({
       ],
       reporter: ['text', 'lcov', 'html'],
       thresholds: {
-        lines: 60,
-        functions: 65,
-        branches: 45,
-        statements: 60,
+        lines:      85,
+        functions:  88,
+        statements: 85,
+        // branches are harder to reach — error catch paths in createServer/fetch
+        // and unreachable `else` branches require full E2E infrastructure.
+        branches:   70,
       },
     },
   },

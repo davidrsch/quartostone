@@ -17,6 +17,7 @@
         <div id="sidebar-tabs">
           <button class="stab active" data-tab="pages">Pages</button>
           <button class="stab" data-tab="git">Git</button>
+          <button class="stab" data-tab="history">History</button>
         </div>
 
         <!-- Pages tab -->
@@ -32,6 +33,14 @@
         <div id="tab-git" class="stab-panel hidden">
           <div id="git-panel"></div>
         </div>
+
+        <!-- History tab (per-page timeline) -->
+        <div id="tab-history" class="stab-panel hidden">
+          <div id="history-panel">
+            <div id="history-empty" class="history-empty">Open a page to see its history.</div>
+            <div id="history-list" class="hidden"></div>
+          </div>
+        </div>
       </aside>
 
       <!-- ── Editor area ── -->
@@ -39,6 +48,14 @@
         <div id="editor-toolbar">
           <span id="current-page-title"></span>
           <div id="toolbar-actions">
+            <div id="branch-picker" title="Current branch — click to switch">
+              <button id="btn-branch-picker" class="branch-btn">⎇ <span id="branch-picker-label">main</span></button>
+              <div id="branch-dropdown" class="branch-dropdown hidden">
+                <div id="branch-list"></div>
+                <hr>
+                <button id="btn-new-branch">+ New branch</button>
+              </div>
+            </div>
             <button id="btn-mode-source" class="active" title="Source mode">Source</button>
             <button id="btn-mode-visual" title="Visual (WYSIWYG) mode">Visual</button>
             <button id="btn-properties" title="Toggle page properties">Properties</button>
@@ -85,6 +102,19 @@
         <div class="dialog-actions">
           <button type="submit" id="btn-commit-confirm">Commit</button>
           <button type="button" id="btn-commit-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- New branch dialog -->
+    <dialog id="new-branch-dialog">
+      <form method="dialog">
+        <h3>Create new branch</h3>
+        <label for="new-branch-name">Branch name</label>
+        <input id="new-branch-name" type="text" placeholder="feature/my-branch" autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="submit" id="btn-new-branch-confirm">Create</button>
+          <button type="button" id="btn-new-branch-cancel">Cancel</button>
         </div>
       </form>
     </dialog>

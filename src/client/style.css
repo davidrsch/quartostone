@@ -1194,5 +1194,125 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
   font-style: italic;
 }
 
+/* ── Branch picker ─────────────────────────────────────────────────────────── */
+
+#branch-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.branch-btn {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-btn:hover { background: var(--bg-hover, #2a2a2a); }
+
+.branch-dropdown {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  min-width: 200px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.branch-dropdown hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+.branch-dropdown #btn-new-branch {
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--accent, #7aa2f7);
+  cursor: pointer;
+  font-size: 12px;
+}
+.branch-dropdown #btn-new-branch:hover { background: var(--bg-hover, #2a2a2a); }
+
+.branch-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.branch-item:hover { background: var(--bg-hover, #2a2a2a); }
+.branch-item.current { color: var(--accent, #7aa2f7); font-weight: 600; }
+.branch-item .branch-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.branch-item.dirty-badge::after { content: '~'; margin-left: auto; color: var(--text-dim); }
+
+/* ── History panel ─────────────────────────────────────────────────────────── */
+
+#history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.history-empty {
+  padding: 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+#history-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.history-commit {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 12px;
+}
+.history-commit:hover { background: var(--bg-hover, #2a2a2a); }
+.history-commit-msg {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-commit-meta {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.history-commit .restore-btn {
+  float: right;
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.history-commit .restore-btn:hover { color: var(--text); border-color: var(--text); }
+
+.history-loading, .history-error {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.history-error { color: #f97171; }
+
 
 

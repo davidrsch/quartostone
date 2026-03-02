@@ -9,6 +9,9 @@ import type { DbInstance } from './database/index.js';
 import { initSidebar } from './sidebar/index.js';
 import { initGitPanel } from './git/index.js';
 import { createPropertiesPanel } from './properties/index.js';
+import { initBranchPicker } from './branches/index.js';
+import type { BranchPickerResult } from './branches/index.js';
+import { initHistoryPanel } from './history/index.js';
 import type { EditorView } from '@codemirror/view';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
@@ -27,6 +30,7 @@ const btnCloseProps    = document.getElementById('btn-close-props') as HTMLButto
 const propertiesPanel  = document.getElementById('properties-panel')!;
 const propertiesBody   = document.getElementById('properties-body')!;
 const gitPanelEl       = document.getElementById('git-panel')!;
+const historyPanelEl   = document.getElementById('history-panel')!;
 const toastContainer   = document.getElementById('toast-container')!;
 const commitDialog     = document.getElementById('commit-dialog') as HTMLDialogElement;
 const commitMsgInput   = document.getElementById('commit-msg') as HTMLInputElement;
@@ -45,6 +49,8 @@ let isDirty = false;
 let editorMode: 'source' | 'visual' = 'source';
 let refreshSidebar: (() => Promise<void>) | null = null;
 let refreshGit: (() => Promise<void>) | null = null;
+let branchPicker: BranchPickerResult | null = null;
+let historySetPage: ((path: string | null) => void) | null = null;
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -98,7 +104,12 @@ btnCommitConfirm.addEventListener('click', async () => {
     if (!res.ok) throw new Error((await res.json() as { error: string }).error);
     showToast(`Committed: ${message}`, 'success');
     await refreshGit?.();
+    await branchPicker?.refresh();
     updateBranchStatus();
+    if (activePath) {
+      const panel = historyPanelEl as HTMLElement & { refreshHistory?: () => void };
+      panel.refreshHistory?.();
+    }
   } catch (e) {
     showToast(`Commit failed: ${String(e)}`, 'error');
   }
@@ -358,6 +369,9 @@ async function openPage(path: string, name: string) {
     });
   }
 
+  // Update history panel with newly opened page
+  historySetPage?.(path);
+
   // Re-mount properties panel if open
   if (!propertiesPanel.classList.contains('hidden')) {
     const getContent = () =>
@@ -386,6 +400,7 @@ connectLiveReload((event, data) => {
   }
   if (event === 'git:committed') {
     refreshGit?.();
+    branchPicker?.refresh();
     updateBranchStatus();
   }
 });
@@ -394,6 +409,21 @@ connectLiveReload((event, data) => {
 initSidebar(fileTreeEl, openPage).then(refresh => { refreshSidebar = refresh; });
 
 initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; });
+
+branchPicker = initBranchPicker((branch, stashConflict) => {
+  updateBranchStatus();
+  showToast(`Switched to branch "${branch}"`, 'success');
+  if (stashConflict) showToast('Stash re-apply had conflicts — check your files', 'error', 6000);
+  // Reload current page on branch switch so content reflects new branch
+  if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
+});
+
+const historyPanel = initHistoryPanel(historyPanelEl, () => {
+  // After a restore, reload the current page
+  if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
+  showToast('File restored to selected commit', 'success');
+});
+historySetPage = historyPanel.setPage;
 
 updateBranchStatus();
 
