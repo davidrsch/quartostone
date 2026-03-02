@@ -10,6 +10,7 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:net';
 import type { ServerContext } from '../index.js';
 
 // ── Process registry ──────────────────────────────────────────────────────────
@@ -27,10 +28,22 @@ const previews = new Map<string, PreviewProcess>();
 // Guard: only register the process.on('exit') cleanup once per process lifetime
 let _exitListenerRegistered = false;
 
-// Pick a free-ish port starting at 4400
-let nextPort = 4400;
-function allocatePort(): number {
-  return nextPort++;
+// ── Port allocation — find the next actually-free TCP port starting at 4400 ────
+
+/** Returns a promise that resolves to a free local port ≥ startFrom. */
+function findFreePort(startFrom = 4400): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on('error', () => {
+      // Port in use — try the next one
+      server.close(() => findFreePort(startFrom + 1).then(resolve, reject));
+    });
+    server.listen(startFrom, '127.0.0.1', () => {
+      const { port } = server.address() as { port: number };
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 // ── Spawn quarto preview ──────────────────────────────────────────────────────
@@ -81,7 +94,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
 
   // POST /api/preview/start  body: { path: string; format?: string }
-  app.post('/api/preview/start', (req: Request, res: Response) => {
+  app.post('/api/preview/start', async (req: Request, res: Response) => {
     const { path: filePath, format = 'html' } = req.body as {
       path?:   string;
       format?: string;
@@ -104,7 +117,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
       previews.delete(filePath);
     }
 
-    const port   = allocatePort();
+    const port   = await findFreePort();
     const entry  = startPreview(cwd, absPath, filePath, port, format);
 
     res.json({ port: entry.port, url: entry.url, reused: false });

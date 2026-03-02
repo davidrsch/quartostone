@@ -1,6 +1,7 @@
 // src/cli/commands/init.ts
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 
 const QUARTO_YML = `project:
   type: website
@@ -62,8 +63,19 @@ export async function init(name: string | undefined, options: { dir?: string }) 
   writeFileSync(join(targetDir, '.gitignore'), GITIGNORE);
 
   console.log(`\n✓ Quartostone workspace "${workspaceName}" created at ${targetDir}`);
+
+  // Initialise a git repository so all git APIs work immediately
+  try {
+    execSync('git init', { cwd: targetDir, stdio: 'ignore' });
+    execSync('git add .', { cwd: targetDir, stdio: 'ignore' });
+    execSync('git commit -m "init: quartostone workspace"', { cwd: targetDir, stdio: 'ignore' });
+    console.log(`✓ Git repository initialised with initial commit`);
+  } catch {
+    console.warn(`⚠  Could not run git init. Make sure git is installed and run manually:`);
+    console.warn(`    git init && git add . && git commit -m "init"`);
+  }
+
   console.log(`\nNext steps:`);
   console.log(`  cd ${targetDir}`);
-  console.log(`  git init && git add . && git commit -m "init"`);
   console.log(`  quartostone serve\n`);
 }

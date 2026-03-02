@@ -7,7 +7,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
-import { join, relative, extname, dirname } from 'node:path';
+import { join, relative, extname, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
@@ -37,6 +37,19 @@ function buildTree(dir: string, rootDir: string): PageNode[] {
 export function registerPagesApi(app: Express, ctx: ServerContext) {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
 
+  /** Returns the resolved absolute path, or null after sending 400. */
+  function guardPath(rawSuffix: string, res: Response): string | null {
+    const pagesDirResolved = resolve(pagesDir);
+    const pagePath = join(pagesDir, rawSuffix);
+    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
+    const abs = resolve(filePath);
+    if (!abs.startsWith(pagesDirResolved + sep) && abs !== pagesDirResolved) {
+      res.status(400).json({ error: 'Path traversal not allowed' });
+      return null;
+    }
+    return abs;
+  }
+
   app.get('/api/pages', (_req: Request, res: Response) => {
     try {
       const tree = buildTree(pagesDir, pagesDir);
@@ -47,23 +60,23 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   });
 
   app.get('/api/pages/*', (req: Request, res: Response) => {
-    const pagePath = join(pagesDir, req.params[0] as string);
-    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
+    const filePath = guardPath(req.params[0] as string, res);
+    if (!filePath) return;
     if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
     res.json({ path: req.params[0], content: readFileSync(filePath, 'utf-8') });
   });
 
   app.put('/api/pages/*', (req: Request, res: Response) => {
-    const pagePath = join(pagesDir, req.params[0] as string);
-    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
+    const filePath = guardPath(req.params[0] as string, res);
+    if (!filePath) return;
     const { content } = req.body as { content: string };
     if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, 'utf-8');
     // Keep link and search indexes in sync
-    const relPath = (req.params[0] as string) + (pagePath.endsWith('.qmd') ? '' : '.qmd');
-    updateLinkIndexForFile(pagesDir, relPath.endsWith('.qmd') ? relPath : relPath + '.qmd');
-    updateSearchIndexForFile(pagesDir, relPath.endsWith('.qmd') ? relPath : relPath + '.qmd');
+    const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
+    updateLinkIndexForFile(pagesDir, relPath);
+    updateSearchIndexForFile(pagesDir, relPath);
     res.json({ ok: true });
   });
 
@@ -82,8 +95,8 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   });
 
   app.delete('/api/pages/*', (req: Request, res: Response) => {
-    const pagePath = join(pagesDir, req.params[0] as string);
-    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
+    const filePath = guardPath(req.params[0] as string, res);
+    if (!filePath) return;
     if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
     rmSync(filePath);
     const relPath = ((req.params[0] as string).endsWith('.qmd')

@@ -1,7 +1,7 @@
 // src/server/api/exec.ts
 // Single code-cell execution — stateless subprocess execution
-// MVP: Python via `python` / `python3` subprocess, stdout+stderr captured
-// R and Julia endpoints registered but return 501 until kernel bridges are added
+// Supports: Python (python / python3), R (Rscript), Julia (julia)
+// Each language runs as a sandboxed subprocess; stdout+stderr captured, 30 s timeout
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';

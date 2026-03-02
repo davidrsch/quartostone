@@ -68,8 +68,8 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
   const dialog   = document.getElementById('custom-export-dialog') as HTMLDialogElement | null;
   const fmtInput = document.getElementById('custom-format-input')  as HTMLInputElement | null;
   const argsInput = document.getElementById('custom-args-input')   as HTMLInputElement | null;
-  const confirmBtn = document.getElementById('custom-export-confirm') as HTMLButtonElement | null;
-  const cancelBtn  = document.getElementById('custom-export-cancel')  as HTMLButtonElement | null;
+  const confirmBtn = document.getElementById('btn-custom-export-confirm') as HTMLButtonElement | null;
+  const cancelBtn  = document.getElementById('btn-custom-export-cancel')  as HTMLButtonElement | null;
 
   function openCustomDialog(): void {
     if (!dialog) return;

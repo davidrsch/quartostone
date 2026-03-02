@@ -99,14 +99,34 @@ export function initBranchPicker(
       for (const b of data.branches) {
         const item = document.createElement('div');
         item.className = `branch-item${b.current ? ' current' : ''}`;
-        item.innerHTML = `<span class="branch-dot"></span><span>${b.name}</span>`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'branch-name';
+        nameSpan.innerHTML = `<span class="branch-dot"></span>${b.name}`;
+
+        item.appendChild(nameSpan);
 
         if (!b.current) {
-          item.addEventListener('click', async () => {
+          // Switch button (whole left side)
+          nameSpan.style.cursor = 'pointer';
+          nameSpan.addEventListener('click', async () => {
             dropdown.classList.add('hidden');
             dropdownOpen = false;
             await switchBranch(b.name);
           });
+
+          // Merge button
+          const mergeBtn = document.createElement('button');
+          mergeBtn.className = 'branch-merge-btn';
+          mergeBtn.title = `Merge ${b.name} into current branch`;
+          mergeBtn.textContent = '⤵ Merge';
+          mergeBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            dropdown.classList.add('hidden');
+            dropdownOpen = false;
+            await mergeBranch(b.name);
+          });
+          item.appendChild(mergeBtn);
         }
 
         branchListEl.appendChild(item);
@@ -132,6 +152,25 @@ export function initBranchPicker(
       onSwitched(branch, data.stashConflict);
     } catch {
       alert(`Could not switch branch: network error`);
+    }
+  }
+
+  async function mergeBranch(branch: string) {
+    if (!confirm(`Merge "${branch}" into the current branch?`)) return;
+    try {
+      const res = await fetch('/api/git/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch }),
+      });
+      const data = await res.json() as { ok?: boolean; commit?: string; error?: string };
+      if (!res.ok) {
+        alert(`Merge failed: ${data.error ?? 'unknown error'}`);
+        return;
+      }
+      alert(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`);
+    } catch {
+      alert('Merge failed: network error');
     }
   }
 

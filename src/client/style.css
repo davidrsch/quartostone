@@ -1256,6 +1256,22 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 .branch-item.current { color: var(--accent, #7aa2f7); font-weight: 600; }
 .branch-item .branch-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .branch-item.dirty-badge::after { content: '~'; margin-left: auto; color: var(--text-dim); }
+.branch-item .branch-name { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.branch-merge-btn {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 4px;
+  color: var(--text-dim, #888);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.branch-item:hover .branch-merge-btn { opacity: 1; }
+.branch-merge-btn:hover { background: var(--bg-hover2, #333); color: var(--accent, #7aa2f7); border-color: var(--accent, #7aa2f7); }
 
 /* ── History panel ─────────────────────────────────────────────────────────── */
 
