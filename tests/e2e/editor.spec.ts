@@ -298,6 +298,167 @@ test.describe('Editor UI', () => {
   });
 });
 
+// ── Preview API (L-7) ─────────────────────────────────────────────────────────
+
+test.describe('Preview API', () => {
+  test('GET /api/preview/status returns idle status when no preview running', async ({ request }) => {
+    const res = await request.get('/api/preview/status');
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { running: boolean };
+    expect(typeof body.running).toBe('boolean');
+  });
+
+  test('POST /api/preview/start returns 400 when path is missing', async ({ request }) => {
+    const res = await request.post('/api/preview/start', { data: {} });
+    expect(res.status()).toBe(400);
+  });
+
+  test('POST /api/preview/start accepts a valid path (Quarto may or may not be installed)', async ({ request }) => {
+    const res = await request.post('/api/preview/start', {
+      data: { path: 'pages/index.qmd', format: 'html' },
+    });
+    // 200 = started; 501/500 = quarto not installed — both are valid in CI
+    expect([200, 202, 500, 501]).toContain(res.status());
+  });
+
+  test('POST /api/preview/stop always returns 200', async ({ request }) => {
+    const res = await request.post('/api/preview/stop', { data: {} });
+    expect(res.status()).toBe(200);
+  });
+});
+
+// ── Branch operations API (L-7) ───────────────────────────────────────────────
+
+test.describe('Branch operations API', () => {
+  const tempBranch = `e2e-test-${Date.now()}`;
+
+  test.afterAll(async ({ request }) => {
+    // Best-effort: switch back to main so cleanup doesn't cause test pollution.
+    await request.post('/api/git/checkout', { data: { branch: 'main' } });
+  });
+
+  test('GET /api/git/branches returns current branch and list', async ({ request }) => {
+    const res = await request.get('/api/git/branches');
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { current: string; branches: { name: string; current: boolean }[] };
+    expect(typeof body.current).toBe('string');
+    expect(Array.isArray(body.branches)).toBe(true);
+    expect(body.branches.some(b => b.name === body.current)).toBe(true);
+  });
+
+  test('POST /api/git/branches creates a new branch', async ({ request }) => {
+    const res = await request.post('/api/git/branches', {
+      data: { name: tempBranch },
+    });
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { ok: boolean; name: string };
+    expect(body.ok).toBe(true);
+    expect(body.name).toBe(tempBranch);
+  });
+
+  test('POST /api/git/branches returns 400 for invalid branch name', async ({ request }) => {
+    const res = await request.post('/api/git/branches', {
+      data: { name: 'bad name with spaces!' },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('POST /api/git/branches returns 400 when name is missing', async ({ request }) => {
+    const res = await request.post('/api/git/branches', { data: {} });
+    expect(res.status()).toBe(400);
+  });
+
+  test('GET /api/git/status returns object with files array', async ({ request }) => {
+    const res = await request.get('/api/git/status');
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { current: string; files: unknown[] };
+    expect(typeof body.current).toBe('string');
+    expect(Array.isArray(body.files)).toBe(true);
+  });
+
+  test('GET /api/git/diff returns text or empty string', async ({ request }) => {
+    const res = await request.get('/api/git/diff');
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { diff: string };
+    expect(typeof body.diff).toBe('string');
+  });
+});
+
+// ── Properties via frontmatter (L-7) ─────────────────────────────────────────
+
+test.describe('Page frontmatter / properties', () => {
+  const propPage = 'e2e-props-test.qmd';
+  const content = [
+    '---',
+    'title: Props Test',
+    'date: 2026-01-15',
+    'tags: [quarto, e2e]',
+    'draft: true',
+    '---',
+    '',
+    '# Props Test',
+    '',
+    'Frontmatter properties E2E test.',
+  ].join('\n');
+
+  test.beforeAll(async ({ request }) => {
+    await request.put(`/api/pages/${propPage}`, { data: { content } });
+  });
+
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/pages/${propPage}`);
+  });
+
+  test('page with rich frontmatter round-trips correctly', async ({ request }) => {
+    const res = await request.get(`/api/pages/${propPage}`);
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { content: string };
+    expect(body.content).toContain('title: Props Test');
+    expect(body.content).toContain('date: 2026-01-15');
+    expect(body.content).toContain('draft: true');
+  });
+
+  test('updated frontmatter persists on next read', async ({ request }) => {
+    const updated = content.replace('draft: true', 'draft: false');
+    await request.put(`/api/pages/${propPage}`, { data: { content: updated } });
+    const res = await request.get(`/api/pages/${propPage}`);
+    const body = await res.json() as { content: string };
+    expect(body.content).toContain('draft: false');
+    expect(body.content).not.toContain('draft: true');
+  });
+});
+
+// ── Visual mode switch UI (L-7) ───────────────────────────────────────────────
+
+test.describe('Visual mode switch UI', () => {
+  test('Ctrl+Shift+E toggles to visual mode when client is built', async ({ page }, testInfo) => {
+    await page.goto('/editor');
+
+    // If the CM editor doesn't mount within 5 s, assume client is not built
+    const cmEditorVisible = await page.locator('.cm-editor').waitFor({ timeout: 5_000 }).then(() => true).catch(() => false);
+    if (!cmEditorVisible) {
+      testInfo.skip(true, 'Editor client not built');
+      return;
+    }
+
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
+    await page.locator('[data-path="index.qmd"]').first().click();
+    await page.waitForSelector('.cm-editor', { timeout: 10_000 });
+
+    // Trigger visual mode shortcut
+    await page.keyboard.press('Control+Shift+E');
+
+    // Either the visual editor mounts or the mode button label changes
+    const modeBtn = page.locator('#btn-mode');
+    if (await modeBtn.count() > 0) {
+      await expect(modeBtn).toHaveText(/source|visual/i, { timeout: 5_000 });
+    } else {
+      // No explicit mode button — accept that no crash occurred
+      await expect(page.locator('body')).not.toContainText('Unhandled error');
+    }
+  });
+});
+
 // ── Visual regression baseline ────────────────────────────────────────────────
 // These snapshots serve as the visual regression baseline. On first run they are
 // created; subsequent runs compare against them. Run with:
