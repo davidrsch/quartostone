@@ -6,96 +6,191 @@
 
 **The core insight:** Notion is powerful but your data is locked in the cloud, can't run code, and has no real version history. Obsidian is local-first but can't execute code. Quartostone fills the gap.
 
-| Feature                               | Notion | Obsidian | Quartostone   |
-| ------------------------------------- | ------ | -------- | ------------- |
-| Execute code (R/Python/Julia)         | ❌     | ❌       | ✅            |
-| Git-native version control            | ❌     | Plugin   | ✅            |
-| Self-hosted / local-first             | ❌     | ✅       | ✅            |
-| Visual (WYSIWYG) editor               | ✅     | ✅       | ✅ (Phase 2)  |
-| Plain-text source                     | ❌     | ✅       | ✅ `.qmd`     |
-| Multi-format output (HTML/PDF/Slides) | ❌     | Limited  | ✅ via Quarto |
-| Auto-commit on save                   | ❌     | ❌       | ✅            |
-| No account / no cloud required        | ❌     | ✅       | ✅            |
-| Structured data views (table/kanban)  | ✅     | ❌       | ✅ (Phase 3)  |
+| Feature                               | Notion | Obsidian | Quartostone |
+| ------------------------------------- | ------ | -------- | ----------- |
+| Execute code (R/Python/Julia)         |      |        |           |
+| Git-native version control            |      | Plugin   |           |
+| Self-hosted / local-first             |      |        |           |
+| Visual (WYSIWYG) editor               |      |        |           |
+| Plain-text source                     |      |        |  `.qmd`   |
+| Multi-format export (HTML/PDF/Slides) |      | Limited  |           |
+| Live split-pane preview               |      |        |           |
+| Branch picker + checkout              |      |        |           |
+| Wiki-style `[[links]]` + backlinks    |      |        |           |
+| Full-text search                      |      |        |           |
+| Structured data views                 |      |        |           |
+| No account / no cloud required        |      |        |           |
+
+---
 
 ## Architecture
 
-Quartostone is a **local web app** — a thin Node.js server you run on your machine, accessed through your browser. No Electron, no cloud, no database.
+Quartostone is a **local web app**  a thin Node.js/Express server you run on your machine, accessed through your browser. No Electron, no cloud, no database.
 
 ```
 quartostone/
-├── _quarto.yml          # Quarto project config
-├── _quartostone.yml     # Quartostone app config
-├── pages/               # Your .qmd note files
-│   └── index.qmd
-├── _site/               # Quarto render output (auto-generated)
-└── .github/             # CI + issue templates
+ _quartostone.yml      # App config (port, commit mode, render scope )
+ _quarto.yml           # Quarto project config
+ pages/                # Your .qmd note files (configurable via pages_dir)
+    index.qmd
+ _site/                # Quarto render output (auto-generated, gitignored)
+ src/
+    server/           # Express API + file watcher
+       api/          # pages, git, exec, export, preview, links, search, db
+    client/           # Browser app (CodeMirror + Tiptap, bundled by Vite)
+ tests/
+    unit/             # Vitest + Supertest API tests
+    e2e/              # Playwright end-to-end tests
+ docs/
+     api-reference.md  # REST API & WebSocket reference
+     adr/              # Architecture Decision Records
 ```
 
 **Runtime stack:**
 
-- **Quarto** — rendering engine (user's existing install)
-- **Node.js** — thin local server, file watch, Git ops
-- **CodeMirror 6** — source mode editor (~500KB, MIT)
-- **panmirror / ProseMirror** — visual WYSIWYG editor (Phase 2, adapted from Quarto VS Code)
-- **simple-git** — Git operations, no native compilation
+| Layer | Technology |
+| --- | --- |
+| Server | Node.js 22 LTS, Express, `simple-git`, `chokidar`, `ws` |
+| Source editor | CodeMirror 6 |
+| Visual editor | Tiptap (ProseMirror-based)  see [ADR 002](docs/adr/002-visual-editor-approach.md) |
+| Bundler | Vite |
+| Tests | Vitest (unit + Supertest)  Playwright (E2E + visual regression) |
+| Quarto | User's installed `quarto` CLI  rendering, export, preview |
+
+---
 
 ## Getting Started
 
 > **Prerequisites:** [Node.js 22+](https://nodejs.org) and [Quarto](https://quarto.org/docs/get-started/)
 
-### Option A — Quarto template (recommended)
-
-Scaffold a new workspace with a single command using the Quarto template:
+### Option A  Quarto template (recommended)
 
 ```bash
 quarto use template davidrsch/quartostone
-```
-
-Quarto will prompt for a directory name, copy all workspace files, and install
-the `quartostone` Quarto extension. Then:
-
-```bash
 cd my-notes
 git init && git add . && git commit -m "init"
 
-# Install the Quartostone server
 npm install -g quartostone
-
-# Start the editor
-quartostone serve
-# → Opens http://localhost:4242
+quartostone serve          #  http://localhost:4242
 ```
 
-### Option B — npm (manual)
+### Option B  npm (manual setup)
 
 ```bash
-# Install
 npm install -g quartostone
-
-# Create a new workspace
 quartostone init my-notes
 cd my-notes
 git init && git add . && git commit -m "init"
-
-# Start the editor
 quartostone serve
-# → Opens http://localhost:4242
 ```
 
-### Quarto extension features
+---
 
-The `quartostone` Quarto extension (`_extensions/quartostone/`) provides three
-features that work even without the Quartostone server:
+## Editor  what you can do
 
-| Feature             | Description                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| **Custom callouts** | `::: {.callout-todo}` and `::: {.callout-question}` render as styled callout blocks         |
-| **Backlinks**       | Pages listing `quartostone-backlinks:` in YAML get a linked backlinks section at the bottom |
-| **Page footer**     | Each rendered page gets a footer showing the last Git commit message and date               |
+### Pages
 
-Disable the footer on a specific page by adding `quartostone-footer: false` to
-its YAML front matter.
+| Action | How |
+| --- | --- |
+| **Create page** | Click **+ New page** in the sidebar  enter a name  Create |
+| **Create database** | Click ** Database**  enter a name  Create |
+| **Open page** | Click any file in the sidebar |
+| **Delete page** | Right-click  Delete (or `DELETE /api/pages/:path`) |
+| **Rename** | Edit the YAML `title:` field in the properties panel |
+
+### Editing modes
+
+| Mode | How to activate |
+| --- | --- |
+| **Source** (CodeMirror) | Default, or click the **Source** toolbar button |
+| **Visual** (Tiptap WYSIWYG) | Click the **Visual** toolbar button, or **Ctrl+Shift+E** |
+| **Properties** | Click the **Properties** toolbar button  edit YAML front matter fields via a form |
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+S` / `S` | Save current page |
+| `Ctrl+Shift+E` / `E` | Toggle source  visual editor mode |
+| `Ctrl+Shift+G` / `G` | Open commit dialog |
+| `Ctrl+Shift+P` / `P` | Toggle preview panel |
+
+### Git workflow
+
+| Action | Where |
+| --- | --- |
+| **Commit** | Click **Commit** in the toolbar, or `Ctrl+Shift+G`  enter a message and confirm. If ignored for 30 s the server auto-commits with a generated slug. |
+| **Branch picker** | Click the branch name in the status bar  switch branches (uncommitted changes are stashed and re-applied automatically) |
+| **Create branch** | Click **+ New branch** in the Git panel |
+| **View history** | Click the **History** panel  lists commits with diffs |
+
+### Export & Preview
+
+| Action | Where |
+| --- | --- |
+| **Live preview** | Click **Preview** or `Ctrl+Shift+P`  starts `quarto preview` and opens a split pane |
+| **Export** | Click **Export**  choose format (HTML/PDF/DOCX/RevealJS/EPUB/Typst)  runs async, downloads on completion |
+
+### Code execution
+
+Any `.qmd` page with a fenced code cell (`python`, `r`, `julia`). Click ** Run** in the cell toolbar to execute against the local interpreter and see stdout/stderr inline.
+
+---
+
+## Config reference (`_quartostone.yml`)
+
+Full JSON Schema: [`docs/config.schema.json`](docs/config.schema.json).
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `port` | `4242` | TCP port for the dev server |
+| `pages_dir` | `pages` | Directory (relative to workspace root) where `.qmd` files live |
+| `render_on_save` | `true` | Run `quarto render` automatically on every save |
+| `render_scope` | `file` | `file` = render only the changed file; `project` = render everything |
+| `watch_interval_ms` | `500` | Debounce window in milliseconds for the file watcher |
+| `commit_mode` | `prompt` | `auto` = commit immediately; `prompt` = show confirm toast; `manual` = never auto-commit |
+| `commit_message_auto` | `qs-{alphanum8}` | Template for auto-generated commit messages |
+| `open_browser` | `true` | Open the browser automatically on `quartostone serve` |
+
+---
+
+## Quarto extension
+
+The `quartostone` Quarto extension (`_extensions/quartostone/`) provides three features that work in plain `quarto render` even without the Quartostone server:
+
+| Feature | Description |
+| --- | --- |
+| **Custom callouts** | `::: {.callout-todo}` and `::: {.callout-question}` render as styled callout blocks |
+| **Backlinks** | Pages with `quartostone-backlinks: true` in YAML get a linked backlinks section at the bottom |
+| **Page footer** | Each rendered page gets a footer showing the last Git commit message and date |
+
+Disable the footer on a specific page:
+
+```yaml
+---
+title: My Page
+quartostone-footer: false
+---
+```
+
+---
+
+## API
+
+Full REST API and WebSocket event reference: [`docs/api-reference.md`](docs/api-reference.md).
+
+| Group | Endpoints |
+| --- | --- |
+| Pages | `GET/PUT/POST/DELETE /api/pages` |
+| Git | `/api/git/status`, `/log`, `/diff`, `/commit`, `/branches`, `/checkout` |
+| Exec | `POST /api/exec`  run Python / R / Julia cells |
+| Export | `POST /api/export`, `GET /api/export/status`, `GET /api/export/download` |
+| Preview | `POST /api/preview/start`, `/stop`, `GET /api/preview/status` |
+| Search | `GET /api/search` |
+| Links | `GET /api/links/graph`, `/forward`, `/backlinks`, `/search` |
+| Database | `GET/PUT/DELETE /api/db`, `POST /api/db/create` |
+
+---
 
 ## Development
 
@@ -103,22 +198,43 @@ its YAML front matter.
 git clone https://github.com/davidrsch/quartostone
 cd quartostone
 npm install
-npm run dev:server
+
+npm run dev:server       # Start server with hot-reload (tsx watch)
+npm run build:client     # Build the browser client
+npm test                 # Unit + integration tests (Vitest + Supertest)
+npm run test:e2e         # E2E tests (requires built client)
+npm run test:coverage    # Generate coverage report
 ```
+
+---
+
+## Architecture Decision Records
+
+| ADR | Decision |
+| --- | --- |
+| [001](docs/adr/001-runtime-node-vs-deno.md) | Node.js 22 LTS over Deno 2 |
+| [002](docs/adr/002-visual-editor-approach.md) | Tiptap over extracting panmirror from quarto-vscode |
+| [003](docs/adr/003-structured-data-file-schema.md) | YAML front matter + Markdown table for database pages |
+
+---
 
 ## Project Board
 
-Issues and planned work are tracked on the [GitHub Project board](https://github.com/users/davidrsch/projects/15).
+Issues and planned work: [GitHub Project board](https://github.com/users/davidrsch/projects/15).
 
-**Phases:**
+**Implementation status:**
 
-- **Phase 1 – Core MVP:** CLI, local server, file watcher, CodeMirror editor, sidebar
-- **Phase 2 – Polish:** Visual/WYSIWYG mode, Git history panel, page properties, commit UI
-- **Phase 3 – Power Features:** Database views, remote push/pull, Quarto template distribution, single-cell execution
-- **Phase 4 – Testing Infrastructure:** Vitest unit + integration tests (Supertest), Playwright E2E + visual-regression baseline, CI coverage gate ≥ 80 %
-- **Phase 5 – Git-Native Versioning:** Branch picker in the toolbar (create / switch / merge), per-page commit timeline with side-by-side diff, one-click file restore at any commit
-- **Phase 6 – Quarto Export & Preview:** Async export to HTML, PDF, DOCX, RevealJS, EPUB, Typst; live split-pane preview via `quarto preview` with hot-reload on save
-- **Phase 7 – Knowledge Graph & Discovery:** Wiki-style `[[page]]` links + backlinks panel, full-text search (⌘K palette), force-directed graph view of the page link network
+| Phase | Description | Status |
+| --- | --- | --- |
+| 1 | CLI, local server, file watcher, CodeMirror editor, sidebar |  Done |
+| 2 | Visual/WYSIWYG mode, Git history panel, page properties, commit UI |  Done |
+| 3 | Database views, single-cell execution, Quarto template distribution |  Done |
+| 4 | Vitest unit + Supertest integration tests, Playwright E2E, CI coverage gate |  Done |
+| 5 | Branch picker (create / switch), per-page commit timeline with diff |  Done |
+| 6 | Async export (HTML/PDF/DOCX/RevealJS/EPUB/Typst), live split-pane preview |  Done |
+| 7 | Wiki `[[links]]` + backlinks panel, full-text search, force-directed graph view |  Done |
+
+---
 
 ## Contributing
 
