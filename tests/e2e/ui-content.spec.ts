@@ -25,11 +25,13 @@ test.describe('App shell loads', () => {
 
   test('file tree renders at least one page', async ({ page }) => {
     await page.goto('/');
-    // Wait for the sidebar fetch to complete and tree to render
-    await expect(page.locator('#file-tree .tree-item.file')).toHaveCount(
-      1,
-      { timeout: 10_000 },
-    );
+    // Wait for the sidebar fetch to complete and tree to render.
+    // The fixture workspace has one page, but parallel test runs may have
+    // created additional pages, so we assert ≥1 rather than exactly 1.
+    await expect(async () => {
+      const count = await page.locator('#file-tree .tree-item.file').count();
+      expect(count).toBeGreaterThanOrEqual(1);
+    }).toPass({ timeout: 10_000 });
   });
 
   test('#no-page-message is visible before any page is selected', async ({ page }) => {
@@ -55,7 +57,9 @@ test.describe('Opening a page from the sidebar', () => {
 
   test('editor contains page content text', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#file-tree .tree-item.file').first().click();
+    // Click specifically on index.qmd (the fixture page with known content).
+    // Using data-path avoids depending on sort order when multiple pages exist.
+    await page.locator('#file-tree .tree-item.file[data-path="index.qmd"]').click();
     // The fixture index page contains "Welcome to Quartostone"
     await expect(page.locator('.cm-content')).toContainText(
       'Welcome to Quartostone',
