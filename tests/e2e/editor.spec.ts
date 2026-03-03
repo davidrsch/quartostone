@@ -479,3 +479,192 @@ test.describe('Visual regression', () => {
     });
   });
 });
+
+// ── Panmirror visual editor — round-trip tests (#90) ─────────────────────────
+//
+// These tests:
+//   1. Create a page with known markdown via API
+//   2. Open it in the editor browser UI
+//   3. Switch to Visual mode (panmirror via pandoc)
+//   4. Switch back to Source mode
+//   5. Assert that key structural elements survive the pandoc round-trip
+//
+// Prerequisites:
+//   - Editor client built (npm run build:client)
+//   - pandoc installed (checked via GET /api/pandoc/capabilities)
+//   - panmirror UMD bundle built (src/client/public/panmirror.js)
+
+const ROUNDTRIP_PAGE = 'e2e-visual-roundtrip.qmd';
+
+const ROUNDTRIP_MARKDOWN = [
+  '---',
+  'title: Round Trip Test',
+  '---',
+  '',
+  '# Header One',
+  '',
+  'A paragraph with **bold** and *italic* text.',
+  '',
+  '- item one',
+  '- item two',
+  '',
+  '```python',
+  'print("hello")',
+  '```',
+  '',
+  '> A blockquote here.',
+  '',
+].join('\n');
+
+test.describe('Panmirror visual editor round-trip', () => {
+  // Create the fixture page once and clean up after
+  test.beforeAll(async ({ request }) => {
+    await request.put(`/api/pages/${ROUNDTRIP_PAGE}`, {
+      data: { content: ROUNDTRIP_MARKDOWN },
+    });
+  });
+
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/pages/${ROUNDTRIP_PAGE}`);
+  });
+
+  // Helper: skip test if preconditions aren't met
+  async function checkPreconditions(
+    page: import('@playwright/test').Page,
+    request: import('@playwright/test').APIRequestContext,
+    testInfo: import('@playwright/test').TestInfo,
+  ): Promise<boolean> {
+    // Skip if client not built
+    await page.goto('/editor');
+    const cmVisible = await page.locator('.cm-editor').waitFor({ timeout: 5_000 }).then(() => true).catch(() => false);
+    if (!cmVisible) {
+      testInfo.skip(true, 'Editor client not built — run npm run build:client first');
+      return false;
+    }
+
+    // Skip if pandoc not installed
+    const capRes = await request.post('/api/pandoc/capabilities');
+    if (!capRes.ok()) {
+      testInfo.skip(true, 'pandoc not installed — visual editor requires pandoc');
+      return false;
+    }
+
+    // Skip if panmirror bundle not built
+    const pmRes = await request.get('/panmirror.js');
+    if (!pmRes.ok()) {
+      testInfo.skip(true, 'panmirror.js not built — run: cd quarto-fork && yarn workspace panmirror build');
+      return false;
+    }
+
+    return true;
+  }
+
+  test('switching to Visual mode does not crash and shows ProseMirror', async ({ page, request }, testInfo) => {
+    if (!await checkPreconditions(page, request, testInfo)) return;
+
+    // Wait for sidebar and open the round-trip fixture
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
+    await page.locator(`[data-path="${ROUNDTRIP_PAGE}"]`).first().click();
+    await page.waitForSelector('.cm-editor', { timeout: 10_000 });
+
+    // Click the Visual mode button
+    await page.locator('#btn-mode-visual').click();
+
+    // panmirror loads /panmirror.js (lazy) and then calls pandoc — allow up to 30 s
+    await expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 30_000 });
+
+    // No crash messages
+    await expect(page.locator('body')).not.toContainText('Unhandled error');
+    await expect(page.locator('body')).not.toContainText('panmirror.js loaded but');
+  });
+
+  test('switching visual → source preserves heading and bold text', async ({ page, request }, testInfo) => {
+    if (!await checkPreconditions(page, request, testInfo)) return;
+
+    // Open file
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
+    await page.locator(`[data-path="${ROUNDTRIP_PAGE}"]`).first().click();
+    await page.waitForSelector('.cm-editor', { timeout: 10_000 });
+
+    // Switch to visual
+    await page.locator('#btn-mode-visual').click();
+    await expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 30_000 });
+
+    // Switch back to source
+    await page.locator('#btn-mode-source').click();
+    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 10_000 });
+
+    // Read the source text from CodeMirror DOM
+    const sourceText = await page.evaluate(() =>
+      [...document.querySelectorAll('.cm-line')]
+        .map((l: Element) => l.textContent ?? '')
+        .join('\n')
+    );
+
+    // ATX heading must survive (panmirror uses atxHeaders:true)
+    expect(sourceText).toMatch(/^# Header One/m);
+    // Bold must survive
+    expect(sourceText).toMatch(/\*\*bold\*\*/);
+  });
+
+  test('switching visual → source preserves list items and code block', async ({ page, request }, testInfo) => {
+    if (!await checkPreconditions(page, request, testInfo)) return;
+
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
+    await page.locator(`[data-path="${ROUNDTRIP_PAGE}"]`).first().click();
+    await page.waitForSelector('.cm-editor', { timeout: 10_000 });
+
+    await page.locator('#btn-mode-visual').click();
+    await expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 30_000 });
+
+    await page.locator('#btn-mode-source').click();
+    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 10_000 });
+
+    const sourceText = await page.evaluate(() =>
+      [...document.querySelectorAll('.cm-line')]
+        .map((l: Element) => l.textContent ?? '')
+        .join('\n')
+    );
+
+    // List items must survive
+    expect(sourceText).toMatch(/item one/);
+    expect(sourceText).toMatch(/item two/);
+
+    // Fenced code block with language tag must survive
+    expect(sourceText).toMatch(/```python/);
+    expect(sourceText).toMatch(/print\("hello"\)/);
+  });
+
+  test('round-tripped content can be saved and re-read via API', async ({ page, request }, testInfo) => {
+    if (!await checkPreconditions(page, request, testInfo)) return;
+
+    await page.waitForSelector('[data-path]', { timeout: 20_000 });
+    await page.locator(`[data-path="${ROUNDTRIP_PAGE}"]`).first().click();
+    await page.waitForSelector('.cm-editor', { timeout: 10_000 });
+
+    await page.locator('#btn-mode-visual').click();
+    await expect(page.locator('.ProseMirror')).toBeVisible({ timeout: 30_000 });
+
+    await page.locator('#btn-mode-source').click();
+    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 10_000 });
+
+    // Make dirty (type + backspace) so Ctrl+S actually saves
+    await page.locator('.cm-content').click();
+    await page.keyboard.type(' ');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Control+s');
+
+    // Wait for "Saved" confirmation
+    await expect(page.locator('#sb-save-status')).toContainText('Saved', { timeout: 5_000 });
+
+    // Read back via API and verify structural elements survive
+    const res = await request.get(`/api/pages/${ROUNDTRIP_PAGE}`);
+    expect(res.status()).toBe(200);
+    const body = await res.json() as { content: string };
+
+    expect(body.content).toMatch(/^# Header One/m);
+    expect(body.content).toMatch(/\*\*bold\*\*/);
+    expect(body.content).toMatch(/item one/);
+    expect(body.content).toMatch(/```python/);
+  });
+});
