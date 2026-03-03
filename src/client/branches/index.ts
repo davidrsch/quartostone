@@ -163,7 +163,12 @@ export function initBranchPicker(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch }),
       });
-      const data = await res.json() as { ok?: boolean; commit?: string; error?: string };
+      const data = await res.json() as { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+      if (res.status === 409) {
+        // Conflict — show resolution modal (#100)
+        await showConflictModal(data.conflicts ?? []);
+        return;
+      }
       if (!res.ok) {
         alert(`Merge failed: ${data.error ?? 'unknown error'}`);
         return;
@@ -172,6 +177,111 @@ export function initBranchPicker(
     } catch {
       alert('Merge failed: network error');
     }
+  }
+
+  async function showConflictModal(initialConflicts: string[]): Promise<void> {
+    // Fetch fresh conflict list if not provided
+    let conflicts = initialConflicts;
+    if (conflicts.length === 0) {
+      try {
+        const r = await fetch('/api/git/conflicts');
+        const d = await r.json() as { conflicted: string[] };
+        conflicts = d.conflicted;
+      } catch { /* ignore */ }
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-box conflict-modal';
+    modal.innerHTML = `
+      <h3 class="modal-title">⚠ Merge Conflict</h3>
+      <p class="modal-desc">The following files have conflicts. Edit each file to resolve them, then click <strong>Complete Merge</strong>.</p>
+    `;
+
+    // Conflict file list
+    const fileList = document.createElement('ul');
+    fileList.className = 'conflict-file-list';
+    for (const f of (conflicts.length > 0 ? conflicts : ['(no specific files reported)'])) {
+      const li = document.createElement('li');
+      li.className = 'conflict-file-item';
+      const name = document.createElement('span');
+      name.className = 'conflict-file-name';
+      name.textContent = f;
+      const resolvedBtn = document.createElement('button');
+      resolvedBtn.type = 'button';
+      resolvedBtn.className = 'conflict-resolved-btn';
+      resolvedBtn.textContent = 'Resolved';
+      resolvedBtn.addEventListener('click', () => {
+        li.classList.add('resolved');
+        resolvedBtn.disabled = true;
+        resolvedBtn.textContent = '✓ Done';
+      });
+      li.append(name, resolvedBtn);
+      fileList.appendChild(li);
+    }
+    modal.appendChild(fileList);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+
+    const completeBtn = document.createElement('button');
+    completeBtn.type = 'button';
+    completeBtn.className = 'modal-btn modal-btn-primary';
+    completeBtn.textContent = '✓ Complete Merge';
+    completeBtn.addEventListener('click', async () => {
+      completeBtn.disabled = true;
+      completeBtn.textContent = 'Completing…';
+      try {
+        const r = await fetch('/api/git/merge-complete', { method: 'POST' });
+        const d = await r.json() as { ok?: boolean; commit?: string; error?: string };
+        if (r.ok) {
+          overlay.remove();
+          alert(`Merge completed (${d.commit?.slice(0, 7) ?? '?'})`);
+        } else {
+          alert(`Could not complete merge: ${d.error ?? 'unknown error'}`);
+          completeBtn.disabled = false;
+          completeBtn.textContent = '✓ Complete Merge';
+        }
+      } catch {
+        alert('Network error');
+        completeBtn.disabled = false;
+        completeBtn.textContent = '✓ Complete Merge';
+      }
+    });
+
+    const abortBtn = document.createElement('button');
+    abortBtn.type = 'button';
+    abortBtn.className = 'modal-btn modal-btn-danger';
+    abortBtn.textContent = '✕ Abort Merge';
+    abortBtn.addEventListener('click', async () => {
+      if (!confirm('Abort the merge? All merge changes will be discarded.')) return;
+      abortBtn.disabled = true;
+      abortBtn.textContent = 'Aborting…';
+      try {
+        const r = await fetch('/api/git/merge-abort', { method: 'POST' });
+        if (r.ok) {
+          overlay.remove();
+          alert('Merge aborted — working tree restored.');
+        } else {
+          const d = await r.json() as { error?: string };
+          alert(`Abort failed: ${d.error ?? 'unknown error'}`);
+          abortBtn.disabled = false;
+          abortBtn.textContent = '✕ Abort Merge';
+        }
+      } catch {
+        alert('Network error');
+        abortBtn.disabled = false;
+        abortBtn.textContent = '✕ Abort Merge';
+      }
+    });
+
+    actions.append(completeBtn, abortBtn);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   async function refresh() {

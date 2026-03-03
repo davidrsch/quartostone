@@ -12,6 +12,9 @@
 // POST /api/git/branches          — create a new branch
 // POST /api/git/checkout          — switch to a branch (auto-stash if dirty)
 // POST /api/git/merge             — merge a branch into current (no-FF commit)
+// POST /api/git/merge-abort       — abort an in-progress merge (#100)
+// GET  /api/git/conflicts         — list conflicted files (#100)
+// POST /api/git/merge-complete    — stage + commit after manual resolution (#100)
 // ── Phase 5: File history ────────────────────────────────────────────────────
 // GET  /api/git/show?sha=&path=   — fetch file content at a specific commit
 // POST /api/git/restore           — restore file to a specific commit state
@@ -219,9 +222,48 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     } catch (e) {
       const msg = String(e);
       if (msg.includes('CONFLICT') || msg.includes('conflict')) {
-        return res.status(409).json({ error: 'Merge conflict', details: msg });
+        // Extract conflict file names from git output
+        const conflicts: string[] = [];
+        for (const line of msg.split('\n')) {
+          const m = /CONFLICT.*:\s*(.+)$/.exec(line);
+          if (m) conflicts.push(m[1].trim());
+        }
+        return res.status(409).json({ error: 'Merge conflict', conflicts, details: msg });
       }
       res.status(500).json({ error: msg });
+    }
+  });
+
+  // POST /api/git/merge-abort — abort an in-progress merge (#100)
+  app.post('/api/git/merge-abort', async (_req: Request, res: Response) => {
+    try {
+      await git.raw(['merge', '--abort']);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // GET /api/git/conflicts — list currently conflicted files (#100)
+  app.get('/api/git/conflicts', async (_req: Request, res: Response) => {
+    try {
+      const status = await git.status();
+      const conflicted = status.conflicted.map(f => f);
+      res.json({ conflicted });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  // POST /api/git/merge-complete — finish a merge after manual resolution (#100)
+  // Stages all resolved files and creates the merge commit.
+  app.post('/api/git/merge-complete', async (_req: Request, res: Response) => {
+    try {
+      await git.add('.');
+      const result = await git.commit('Merge conflict resolved by quartostone');
+      res.json({ ok: true, commit: result.commit });
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
     }
   });
 
