@@ -85,7 +85,9 @@ describe('GET /api/pages', () => {
 
     const res = await client.get('/api/pages');
     expect(res.status).toBe(200);
-    expect(res.body[0].icon).toBe('house');
+    const homeNode = (res.body as { name: string; icon?: string }[]).find(n => n.name === 'home');
+    expect(homeNode).toBeDefined();
+    expect(homeNode!.icon).toBe('house');
   });
 
   it('does not set icon when frontmatter has none', async () => {
@@ -100,8 +102,9 @@ describe('GET /api/pages', () => {
     writePage('quoted.qmd', "---\ntitle: Q\nicon: 'pencil'\n---\n");
 
     const res = await client.get('/api/pages');
-    const node = res.body[0];
-    expect(node.icon).toBe('pencil');
+    const node = (res.body as { name: string; icon?: string }[]).find(n => n.name === 'quoted');
+    expect(node).toBeDefined();
+    expect(node!.icon).toBe('pencil');
   });
 
   it('returns a folder node for a subdirectory', async () => {
