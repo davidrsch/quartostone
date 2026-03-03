@@ -13,3 +13,6 @@ test-results/
 # E2E fixture workspace git repo (initialised at runtime, not tracked)
 tests/e2e/fixtures/workspace/.git/
 .env
+# Pre-built panmirror UMD bundle — generated locally via:
+#   cd quarto-fork && $env:PANMIRROR_OUTDIR="<abs-path>/quartostone/src/client/public" ; yarn workspace panmirror build
+src/client/public/panmirror.js

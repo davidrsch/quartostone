@@ -136,12 +136,11 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     form.append(
       field('Title', 'text', 'title', String(fm.title ?? '')),
       field('Author', 'text', 'author', String(fm.author ?? '')),
-      dateField(String(fm.date ?? '')),
       field('Description', 'text', 'description', String(fm.description ?? '')),
       field('Categories', 'text', 'categories',
         Array.isArray(fm.categories) ? fm.categories.join(', ') : String(fm.categories ?? '')),
-      checkField('Draft', 'draft', fm.draft === true),
       dateField(String(fm.date ?? '')),
+      checkField('Draft', 'draft', fm.draft === true),
     );
 
     form.querySelectorAll<HTMLInputElement>('input').forEach(el => {

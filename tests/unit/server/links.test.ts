@@ -45,7 +45,7 @@ beforeEach(() => {
   forwardLinks.clear();
   pageMeta.clear();
 
-  const app = createApp({ cwd: workspace, config: DEFAULT_CONFIG });
+  const app = createApp({ cwd: workspace, config: DEFAULT_CONFIG, port: 0 });
   client = supertest(app);
 });
 

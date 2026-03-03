@@ -112,7 +112,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       return;
     }
 
-    btnExport.disabled = true;
+    btnExport!.disabled = true;
     showToast(`Exporting as ${format}…`);
 
     let token: string;
@@ -130,7 +130,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       token = data.token;
     } catch (err) {
       showToast('Export failed: ' + String(err), true);
-      btnExport.disabled = false;
+      btnExport!.disabled = false;
       return;
     }
 
@@ -147,7 +147,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       if (count > MAX_POLLS) {
         clearInterval(id);
         showToast('Export timed out.', true);
-        btnExport.disabled = false;
+        btnExport!.disabled = false;
         return;
       }
 
@@ -161,11 +161,11 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
 
       if (job.status === 'complete') {
         clearInterval(id);
-        btnExport.disabled = false;
+        btnExport!.disabled = false;
         triggerDownload(token, job.filename ?? 'export');
       } else if (job.status === 'error') {
         clearInterval(id);
-        btnExport.disabled = false;
+        btnExport!.disabled = false;
         showToast('Export error: ' + (job.error ?? 'unknown'), true);
       }
     }, INTERVAL);

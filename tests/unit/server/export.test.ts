@@ -161,7 +161,7 @@ describe('POST /api/export — success', () => {
     // writes to the outFile argument passed to spawn.
 
     let capturedOutFile = '';
-    spawnMock.mockImplementationOnce((_cmd: string, args: string[]) => {
+    spawnMock.mockImplementationOnce((_cmd: string, args: readonly string[]) => {
       // --output <outFile> is in the args list
       const outIdx = args.indexOf('--output');
       if (outIdx >= 0) { capturedOutFile = args[outIdx + 1] as string; }
@@ -253,7 +253,7 @@ describe('GET /api/export/download', () => {
 
   it('streams the file and removes job on download', async () => {
     let capturedOutFile = '';
-    spawnMock.mockImplementationOnce((_cmd: string, args: string[]) => {
+    spawnMock.mockImplementationOnce((_cmd: string, args: readonly string[]) => {
       const outIdx = args.indexOf('--output');
       if (outIdx >= 0) { capturedOutFile = args[outIdx + 1] as string; }
       return makeFakeProcess({
