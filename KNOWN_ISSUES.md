@@ -20,29 +20,28 @@ See [docs/technical-review.md](docs/technical-review.md) for the full analysis a
 ## Broken Features
 
 ### Preview Pane
-**Status**: Available but unreliable  
-**Symptoms**:
-- "Quarto not found" error when Quarto is installed but not on the system PATH used by the Node.js process
-- Preview iframe shows blank or partially rendered page immediately after start (Quarto hasn't finished rendering yet)
-- Hot-reload after save is not wired to the preview iframe; you must manually reload
-
-**Workaround**: Run `quarto preview <file>` manually in a terminal and open the resulting URL in a browser.  
-**Plan**: `docs/technical-review.md §3 Phase B`
+**Status**: Stable — resolved in Phase 9  
+Automatic PATH detection, readiness polling, and hot-reload after save are all implemented.
+The workaround (manual `quarto preview`) is no longer needed.
 
 ---
 
 ## Missing Features
 
 ### File Management
-The sidebar is **read-only**. Missing:
-- Create folder
-- Rename file or folder
-- Delete file or folder
-- Move file (drag-and-drop or cut/paste)
-- Right-click context menu
+**Status**: Implemented — resolved in Phase 11  
+The sidebar now supports:
+- Create page (toolbar button or context menu → "New page here")
+- Create folder (toolbar button or context menu → "New folder here")
+- Rename file or folder (double-click, F2, or context menu → ✎ Rename)
+- Delete file to trash (context menu → 🗑 Delete; can be restored from the Trash tray)
+- Permanently delete folder (context menu → 🗑 Delete folder)
+- Move file or folder via drag-and-drop to any folder in the tree
+- Move file or folder via context menu → 📁 Move to… (keyboard-accessible)
+- Duplicate page (context menu → ⧉ Duplicate, creates a `-copy` variant)
+- Right-click context menu on all tree items
 
-**Workaround**: Use the terminal or your OS file manager. The sidebar will refresh on next page load.  
-**Plan**: `docs/technical-review.md §3 Phase C`
+No workaround needed.
 
 ### Split Editor Pane
 Only a single editor and preview pane are shown at one time. Side-by-side editing of two files is not yet implemented.  
@@ -63,6 +62,10 @@ Only a single editor and preview pane are shown at one time. Side-by-side editin
 ## Resolved Issues (recently fixed)
 
 | Issue | Fix |
+|-------|-----|
+| Preview pane showed "Quarto not found" when Quarto was on a non-default PATH | Automatic PATH detection + readiness polling added (Phase 9) |
+| Preview iframe went blank until manual reload | Hot-reload after save wired to iframe (Phase 9) |
+| Sidebar was fully read-only (no rename/move/delete/context menu) | Full file management UI with context menus, inline rename, DnD, Move-to dialog, Duplicate, Trash tray (Phase 11) |
 |-------|-----|
 | Visual editor (Tiptap) silently corrupted content on round-trip | Replaced with panmirror (Phase 10) |
 | Sidebar width was fixed at 260 px | Resizable via drag handle (Phase 8) |

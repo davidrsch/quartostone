@@ -184,6 +184,10 @@ function buildSection(title: string, content: HTMLElement, startCollapsed = fals
 let _dragPath: string | null = null;
 let _dragName: string | null = null;
 
+/** Module-level snapshot of the full page tree — updated on every refresh so that
+ *  the "Move to…" dialog can enumerate available folders without prop-drilling. */
+let _allNodes: PageNode[] = [];
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function initSidebar(
@@ -207,6 +211,7 @@ export async function initSidebar(
       const res = await fetch('/api/pages');
       if (!res.ok) throw new Error('Server error');
       allNodes = (await res.json()) as PageNode[];
+      _allNodes = allNodes; // keep module-level in sync for Move-to dialog
     } catch {
       containerEl.innerHTML = '<p class="sidebar-error">Failed to load pages.</p>';
       return;
@@ -395,6 +400,8 @@ function buildFileNode(
       { label: '+ New folder here', action: () => opts?.onNewFolder?.(parentFolder) },
       'separator',
       { label: '✎ Rename',          action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
+      { label: '📁 Move to\u2026',    action: () => openMoveDialog(node, onRefresh) },
+      { label: '\u29c9 Duplicate',   action: () => void duplicatePage(node, onRefresh) },
       { label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
         action: () => { toggleFavorite(node.path); void onRefresh(); } },
       'separator',
@@ -509,6 +516,7 @@ function buildFolderNode(
       { label: '+ New folder here', action: () => opts?.onNewFolder?.(node.path) },
       'separator',
       { label: '✎ Rename',          action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
+      { label: '📁 Move to\u2026',    action: () => openMoveDialog(node, onRefresh) },
       { label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
         action: () => { toggleFavorite(node.path); void onRefresh(); } },
       'separator',
@@ -586,6 +594,96 @@ async function movePage(
     await onRefresh();
   } catch (err) {
     sidebarToast(`Move failed: ${String(err)}`);
+  }
+}
+
+// ── Move-to dialog (#ph11) ────────────────────────────────────────────────────
+
+/** Collect all folder-path/label pairs from the tree, excluding `excludePath` itself. */
+export function collectFolderChoices(
+  nodes: PageNode[],
+  excludePath: string,
+  indent = 0,
+  acc: Array<{ path: string; label: string }> = [],
+): Array<{ path: string; label: string }> {
+  for (const n of nodes) {
+    if (n.type === 'folder' && n.path !== excludePath) {
+      acc.push({ path: n.path, label: '\u00a0'.repeat(indent * 3) + n.name });
+      collectFolderChoices(n.children ?? [], excludePath, indent + 1, acc);
+    }
+  }
+  return acc;
+}
+
+function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
+  const folders: Array<{ path: string; label: string }> = [
+    { path: '', label: '(root)' },
+    ...collectFolderChoices(_allNodes, node.path),
+  ];
+
+  const currentFolder = node.path.includes('/')
+    ? node.path.split('/').slice(0, -1).join('/')
+    : '';
+
+  const dlg = document.createElement('dialog');
+  dlg.className = 'qs-dialog';
+  dlg.innerHTML = `
+    <form method="dialog">
+      <h3>Move \u201c${node.name}\u201d to\u2026</h3>
+      <label for="qs-move-target">Destination folder</label>
+      <select id="qs-move-target"></select>
+      <div class="dialog-actions">
+        <button type="submit" id="btn-move-confirm">Move</button>
+        <button type="button" id="btn-move-cancel">Cancel</button>
+      </div>
+    </form>`;
+
+  const select = dlg.querySelector<HTMLSelectElement>('#qs-move-target')!;
+  for (const folder of folders) {
+    const opt = document.createElement('option');
+    opt.value = folder.path;
+    opt.textContent = folder.label;
+    if (folder.path === currentFolder) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  dlg.querySelector('#btn-move-cancel')!.addEventListener('click', () => dlg.close());
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.querySelector('form')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const targetFolder = select.value;
+    dlg.close();
+    void movePage(node.path, node.name, targetFolder, onRefresh);
+  });
+
+  document.body.appendChild(dlg);
+  (dlg as HTMLDialogElement).showModal();
+}
+
+// ── Duplicate page (#ph11) ────────────────────────────────────────────────────
+
+async function duplicatePage(node: PageNode, onRefresh: () => Promise<void>): Promise<void> {
+  try {
+    const encoded = node.path.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/api/pages/${encoded}`);
+    if (!res.ok) throw new Error('Failed to read page');
+    const { content } = await res.json() as { content: string };
+
+    const folder = node.path.includes('/') ? node.path.split('/').slice(0, -1).join('/') : '';
+    const baseName = node.path.includes('/') ? node.path.split('/').at(-1)! : node.path;
+    const nameNoExt = baseName.replace(/\.qmd$/i, '');
+    const copyPath = folder ? `${folder}/${nameNoExt}-copy` : `${nameNoExt}-copy`;
+
+    const copyEncoded = copyPath.split('/').map(encodeURIComponent).join('/');
+    const putRes = await fetch(`/api/pages/${copyEncoded}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    if (!putRes.ok) throw new Error('Failed to create copy');
+    await onRefresh();
+  } catch (err) {
+    sidebarToast(`Duplicate failed: ${String(err)}`);
   }
 }
 
@@ -744,7 +842,7 @@ function buildRecentList(
 
 /** Recursively keep only file nodes whose path is in `paths`, and folders
  *  that have at least one such descendant. */
-function filterNodesByPaths(nodes: PageNode[], paths: Set<string>): PageNode[] {
+export function filterNodesByPaths(nodes: PageNode[], paths: Set<string>): PageNode[] {
   const out: PageNode[] = [];
   for (const node of nodes) {
     if (node.type === 'file') {
@@ -757,7 +855,7 @@ function filterNodesByPaths(nodes: PageNode[], paths: Set<string>): PageNode[] {
   return out;
 }
 
-function findNodeByPath(nodes: PageNode[], targetPath: string): PageNode | null {
+export function findNodeByPath(nodes: PageNode[], targetPath: string): PageNode | null {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
     if (node.children) {
@@ -768,7 +866,7 @@ function findNodeByPath(nodes: PageNode[], targetPath: string): PageNode | null 
   return null;
 }
 
-function sortNodes(a: PageNode, b: PageNode): number {
+export function sortNodes(a: PageNode, b: PageNode): number {
   if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
   return a.name.localeCompare(b.name);
 }
