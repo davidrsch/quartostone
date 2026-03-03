@@ -14,6 +14,7 @@ interface Frontmatter {
   categories?: string[];
   description?: string;
   draft?: boolean;
+  icon?: string;
 }
 
 // ─── Frontmatter parsing ──────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ function coerce(val: string): unknown {
 
 function serializeFrontmatter(fm: Frontmatter): string {
   const lines: string[] = [];
-  const order = ['title', 'author', 'date', 'description', 'categories', 'draft'];
+  const order = ['title', 'author', 'date', 'description', 'categories', 'draft', 'icon'];
   const sorted = [...order.filter(k => k in fm), ...Object.keys(fm).filter(k => !order.includes(k))];
 
   for (const key of sorted) {
@@ -91,7 +92,7 @@ function serializeFrontmatter(fm: Frontmatter): string {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Frontmatter keys handled by the standard form fields. */
-const STANDARD_KEYS = new Set(['title', 'author', 'date', 'description', 'categories', 'draft']);
+const STANDARD_KEYS = new Set(['title', 'author', 'date', 'description', 'categories', 'draft', 'icon']);
 
 // ─── Panel factory ────────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     };
 
     form.append(
+      iconField(String(fm.icon ?? '')),
       field('Title', 'text', 'title', String(fm.title ?? '')),
       field('Author', 'text', 'author', String(fm.author ?? '')),
       field('Description', 'text', 'description', String(fm.description ?? '')),
@@ -296,3 +298,93 @@ function makeExtraRow(
 function escAttr(s: string): string {
   return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+
+// ─── Icon field (#95) ─────────────────────────────────────────────────────────
+
+const PROPS_EMOJIS = [
+  '📄','📝','📋','📌','📎','📃','📜','📑','🗒','🗓',
+  '📅','📆','📊','📈','📉','🗃','🗂','📁','📂','🗄',
+  '💡','⚡','🔧','🔨','⚙️','🛠','🔍','🔎','🔑','🗝',
+  '🎯','🚀','✅','⭐','🌟','💎','🏆','💬','📰','📚',
+  '🌍','🔗','💻','🎨','🎮','🌱','🌿','🍀','🦋','🐾',
+];
+
+function iconField(currentIcon: string): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'props-field props-field-icon';
+
+  const label = document.createElement('label');
+  label.className = 'props-label';
+  label.textContent = 'Icon';
+
+  const row = document.createElement('div');
+  row.className = 'props-icon-row';
+
+  const preview = document.createElement('button');
+  preview.type = 'button';
+  preview.className = 'props-icon-preview';
+  preview.title = 'Click to change icon';
+  preview.textContent = currentIcon || '📄';
+
+  // Hidden input so readForm() picks up the value
+  const hidden = document.createElement('input');
+  hidden.type = 'text';
+  hidden.name = 'icon';
+  hidden.value = currentIcon;
+  hidden.style.display = 'none';
+  hidden.autocomplete = 'off';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'props-icon-clear';
+  clearBtn.title = 'Clear icon';
+  clearBtn.textContent = '✕';
+  clearBtn.addEventListener('click', () => {
+    preview.textContent = '📄';
+    hidden.value = '';
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  preview.addEventListener('click', () => {
+    // Close any existing
+    document.querySelector('.props-emoji-popover')?.remove();
+
+    const popover = document.createElement('div');
+    popover.className = 'emoji-picker-popover props-emoji-popover';
+
+    const grid = document.createElement('div');
+    grid.className = 'emoji-picker-grid';
+    for (const e of PROPS_EMOJIS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'emoji-picker-btn';
+      btn.textContent = e;
+      btn.addEventListener('click', () => {
+        preview.textContent = e;
+        hidden.value = e;
+        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        popover.remove();
+      });
+      grid.appendChild(btn);
+    }
+    popover.appendChild(grid);
+    document.body.appendChild(popover);
+
+    const rect = preview.getBoundingClientRect();
+    popover.style.left = `${rect.left}px`;
+    popover.style.top  = `${rect.bottom + 4}px`;
+
+    const close = (ev: MouseEvent) => {
+      if (!popover.contains(ev.target as Node)) {
+        popover.remove();
+        document.removeEventListener('mousedown', close, { capture: true });
+      }
+    };
+    setTimeout(() => document.addEventListener('mousedown', close, { capture: true }), 0);
+  });
+
+  row.append(preview, clearBtn, hidden);
+  wrap.append(label, row);
+  return wrap;
+}
+

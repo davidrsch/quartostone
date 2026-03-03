@@ -16,7 +16,20 @@ interface PageNode {
   name: string;
   path: string;
   type: 'file' | 'folder';
+  icon?: string;
   children?: PageNode[];
+}
+
+/** Extract a single YAML scalar from a QMD frontmatter string without a full YAML parse. */
+function extractFrontmatterKey(content: string, key: string): string | undefined {
+  // Match only inside the leading `---` block
+  const fmMatch = /^---\r?\n([\s\S]*?)\n---/.exec(content);
+  if (!fmMatch) return undefined;
+  const re = new RegExp(`^${key}:\\s*(.+)$`, 'm');
+  const m = re.exec(fmMatch[1]);
+  if (!m) return undefined;
+  // Strip surrounding quotes if present
+  return m[1].replace(/^['"]|['"]$/g, '').trim();
 }
 
 function buildTree(dir: string, rootDir: string): PageNode[] {
@@ -24,11 +37,18 @@ function buildTree(dir: string, rootDir: string): PageNode[] {
   const nodes: PageNode[] = [];
   for (const entry of entries) {
     const full = join(dir, entry.name);
-    const rel = relative(rootDir, full);
+    const rel = relative(rootDir, full).replace(/\\/g, '/');
     if (entry.isDirectory()) {
       nodes.push({ name: entry.name, path: rel, type: 'folder', children: buildTree(full, rootDir) });
     } else if (entry.isFile() && extname(entry.name) === '.qmd') {
-      nodes.push({ name: entry.name.replace(/\.qmd$/, ''), path: rel, type: 'file' });
+      let icon: string | undefined;
+      try {
+        const content = readFileSync(full, 'utf-8');
+        icon = extractFrontmatterKey(content, 'icon');
+      } catch { /* ignore */ }
+      const node: PageNode = { name: entry.name.replace(/\.qmd$/, ''), path: rel, type: 'file' };
+      if (icon) node.icon = icon;
+      nodes.push(node);
     }
   }
   return nodes;

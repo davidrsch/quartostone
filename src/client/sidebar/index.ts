@@ -6,6 +6,7 @@ export interface PageNode {
   name: string;
   path: string;
   type: 'file' | 'folder';
+  icon?: string;
   children?: PageNode[];
 }
 
@@ -190,6 +191,10 @@ export async function initSidebar(
 ): Promise<() => Promise<void>> {
   let allNodes: PageNode[] = [];
 
+  // #99 — Tag filter state
+  let activeTagFilter: string | null = null;
+  let taggedPaths: Set<string> = new Set();
+
   const wrappedSelect: SelectCallback = (path, name) => {
     addRecentPage(path, name);
     onSelect(path, name);
@@ -211,6 +216,23 @@ export async function initSidebar(
     containerEl.innerHTML = '';
     const activePath = options?.getActivePath?.() ?? null;
 
+    // #99 — Tag filter banner
+    if (activeTagFilter !== null) {
+      const banner = document.createElement('div');
+      banner.className = 'sidebar-tag-filter-banner';
+      banner.innerHTML = `<span>Tag: <strong>${activeTagFilter}</strong></span>`;
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'sidebar-tag-filter-clear';
+      clearBtn.textContent = '✕ Clear';
+      clearBtn.addEventListener('click', () => {
+        activeTagFilter = null;
+        taggedPaths = new Set();
+        render();
+      });
+      banner.appendChild(clearBtn);
+      containerEl.appendChild(banner);
+    }
+
     // Favorites section
     const favPaths = getFavorites();
     const favNodes = favPaths
@@ -226,7 +248,11 @@ export async function initSidebar(
       containerEl.appendChild(buildSection('Recent', buildRecentList(recent, wrappedSelect, activePath), true));
     }
 
-    // Pages tree
+    // Pages tree (filtered by tag if active)
+    const nodesToShow = activeTagFilter !== null
+      ? filterNodesByPaths(allNodes, taggedPaths)
+      : allNodes;
+
     const treeEl = document.createElement('div');
     treeEl.className = 'tree-root';
 
@@ -250,10 +276,17 @@ export async function initSidebar(
       await movePage(p, n, '', refresh);
     });
 
-    for (const node of [...allNodes].sort(sortNodes)) {
+    for (const node of [...nodesToShow].sort(sortNodes)) {
       treeEl.appendChild(buildNode(node, wrappedSelect, options, refresh, activePath, 0));
     }
     containerEl.appendChild(treeEl);
+
+    // Tags section (#99, async, appends itself when ready)
+    void buildTagsSection(containerEl, activeTagFilter, (tag, paths) => {
+      activeTagFilter = tag;
+      taggedPaths = paths;
+      render();
+    });
 
     // Trash tray (async, appends itself when ready)
     void buildTrashSection(containerEl, refresh);
@@ -293,8 +326,16 @@ function buildFileNode(
   item.style.paddingLeft = `${16 + depth * 14}px`;
 
   const icon = document.createElement('span');
-  icon.className = 'icon';
-  icon.textContent = '○';
+  icon.className = 'page-icon';
+  icon.title = 'Click to change icon';
+  icon.textContent = node.icon ?? '📄';
+  icon.addEventListener('click', e => {
+    e.stopPropagation();
+    openEmojiPicker(icon, node.path, (emoji) => {
+      icon.textContent = emoji;
+      node.icon = emoji;
+    });
+  });
 
   const label = document.createElement('span');
   label.className = 'label';
@@ -304,6 +345,7 @@ function buildFileNode(
 
   item.addEventListener('click', e => {
     if ((e.target as HTMLElement).tagName === 'INPUT') return;
+    if ((e.target as HTMLElement).closest('.page-icon')) return;
     document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
     item.classList.add('active');
     onSelect(node.path, node.name);
@@ -490,6 +532,53 @@ async function movePage(
   }
 }
 
+// ── Tags section (#99) ────────────────────────────────────────────────────────
+
+async function buildTagsSection(
+  container: HTMLElement,
+  activeTag: string | null,
+  onTagClick: (tag: string | null, paths: Set<string>) => void,
+): Promise<void> {
+  try {
+    const res = await fetch('/api/links/graph');
+    if (!res.ok) return;
+    const { nodes } = await res.json() as { nodes: Array<{ id: string; tags: string[] }> };
+
+    // Aggregate: tag → set of page paths
+    const tagMap = new Map<string, string[]>();
+    for (const node of nodes) {
+      for (const tag of (node.tags ?? [])) {
+        if (!tagMap.has(tag)) tagMap.set(tag, []);
+        tagMap.get(tag)!.push(node.id);
+      }
+    }
+
+    if (tagMap.size === 0) return;
+
+    const body = document.createElement('div');
+    body.className = 'sidebar-tags-list';
+
+    const sorted = [...tagMap.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [tag, pages] of sorted) {
+      const chip = document.createElement('button');
+      chip.className = `sidebar-tag-chip${activeTag === tag ? ' active' : ''}`;
+      chip.type = 'button';
+      chip.innerHTML = `<span class="tag-label">${tag}</span><span class="tag-count">${pages.length}</span>`;
+      chip.addEventListener('click', () => {
+        if (activeTag === tag) {
+          // Clicking the active tag clears the filter
+          onTagClick(null, new Set());
+        } else {
+          onTagClick(tag, new Set(pages));
+        }
+      });
+      body.appendChild(chip);
+    }
+
+    container.appendChild(buildSection(`Tags (${tagMap.size})`, body, true));
+  } catch { /* silent */ }
+}
+
 // ── Trash tray ────────────────────────────────────────────────────────────────
 
 async function buildTrashSection(
@@ -596,6 +685,21 @@ function buildRecentList(
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+/** Recursively keep only file nodes whose path is in `paths`, and folders
+ *  that have at least one such descendant. */
+function filterNodesByPaths(nodes: PageNode[], paths: Set<string>): PageNode[] {
+  const out: PageNode[] = [];
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      if (paths.has(node.path)) out.push(node);
+    } else {
+      const children = filterNodesByPaths(node.children ?? [], paths);
+      if (children.length > 0) out.push({ ...node, children });
+    }
+  }
+  return out;
+}
+
 function findNodeByPath(nodes: PageNode[], targetPath: string): PageNode | null {
   for (const node of nodes) {
     if (node.path === targetPath) return node;
@@ -610,4 +714,93 @@ function findNodeByPath(nodes: PageNode[], targetPath: string): PageNode | null 
 function sortNodes(a: PageNode, b: PageNode): number {
   if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
   return a.name.localeCompare(b.name);
+}
+
+// ── Emoji picker (#95) ────────────────────────────────────────────────────────
+
+const COMMON_EMOJIS = [
+  '📄','📝','📋','📌','📎','📃','📜','📑','🗒','🗓',
+  '📅','📆','📊','📈','📉','🗃','🗂','📁','📂','🗄',
+  '💡','⚡','🔧','🔨','⚙️','🛠','🔍','🔎','🔑','🗝',
+  '🎯','🚀','✅','❌','⭐','🌟','💎','🏅','🎖','🏆',
+  '💬','📢','📣','ℹ️','⚠️','❓','❗','📰','📖','📚',
+  '🌍','🌐','🔗','📡','💻','🖥','🖨','⌨️','🖱','📱',
+  '🎨','🎭','🎬','🎵','🎸','🎹','🎮','🕹','🃏','🎲',
+  '🌱','🌿','🍀','🌸','🌺','🦋','🐾','🦊','🐶','🐱',
+];
+
+function openEmojiPicker(
+  anchor: HTMLElement,
+  pagePath: string,
+  onPick: (emoji: string) => void,
+): void {
+  // Close existing picker
+  document.querySelector('.emoji-picker-popover')?.remove();
+
+  const popover = document.createElement('div');
+  popover.className = 'emoji-picker-popover';
+
+  const grid = document.createElement('div');
+  grid.className = 'emoji-picker-grid';
+
+  for (const emoji of COMMON_EMOJIS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'emoji-picker-btn';
+    btn.textContent = emoji;
+    btn.addEventListener('click', () => {
+      onPick(emoji);
+      popover.remove();
+      // Persist icon to frontmatter via PATCH-like PUT
+      void updatePageIcon(pagePath, emoji);
+    });
+    grid.appendChild(btn);
+  }
+
+  popover.appendChild(grid);
+  document.body.appendChild(popover);
+
+  // Position below anchor
+  const rect = anchor.getBoundingClientRect();
+  popover.style.left = `${rect.left}px`;
+  popover.style.top  = `${rect.bottom + 4}px`;
+
+  // Close on outside click
+  const close = (e: MouseEvent) => {
+    if (!popover.contains(e.target as Node) && !(e.target as Node).isEqualNode(anchor)) {
+      popover.remove();
+      document.removeEventListener('mousedown', close, { capture: true });
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', close, { capture: true }), 0);
+}
+
+async function updatePageIcon(path: string, icon: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/pages/${path}`);
+    if (!res.ok) return;
+    const { content } = await res.json() as { content: string };
+
+    let updated: string;
+    const fmMatch = /^(---\r?\n)([\s\S]*?)(\n---)/.exec(content);
+    if (fmMatch) {
+      const fmBody = fmMatch[2];
+      if (/^icon:/m.test(fmBody)) {
+        // Replace existing icon key
+        updated = content.replace(/^icon:.*$/m, `icon: "${icon}"`);
+      } else {
+        // Insert after the opening ---
+        updated = content.replace(/^(---\r?\n)/, `$1icon: "${icon}"\n`);
+      }
+    } else {
+      // No frontmatter — prepend one
+      updated = `---\nicon: "${icon}"\n---\n${content}`;
+    }
+
+    await fetch(`/api/pages/${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: updated }),
+    });
+  } catch { /* silent */ }
 }
