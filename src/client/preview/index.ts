@@ -78,18 +78,12 @@ export function initPreviewPanel(): PreviewPanel {
       const data = await res.json() as PreviewStartResponse;
       currentUrl = data.url;
 
-      // Poll until Quarto is ready (up to 15 × 500ms = 7.5 s) before loading the iframe.
-      // Without this, the iframe shows a connection-refused error because Quarto
-      // needs a few seconds to start accepting connections.
-      let ready = false;
-      for (let attempt = 0; attempt < 15; attempt++) {
-        try {
-          await fetch(data.url, { mode: 'no-cors' });
-          ready = true;
-          break;
-        } catch {
-          await new Promise(r => setTimeout(r, 500));
-        }
+      // #118 — Use server-side TCP readiness poll instead of client-side fetch polling.
+      // The server checks the TCP port directly which is more reliable than a CORS fetch.
+      const readyRes = await fetch(`/api/preview/ready?port=${data.port}&timeout=20000`);
+      const readyData = await readyRes.json().catch(() => ({ ready: false })) as { ready: boolean };
+      if (!readyData.ready) {
+        console.warn('[preview] quarto server did not become ready in 20 s');
       }
 
       if (frame) frame.src = data.url; // set regardless; best-effort

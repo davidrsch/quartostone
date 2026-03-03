@@ -12,22 +12,23 @@
       <aside id="sidebar">
         <div id="sidebar-header">
           <span class="logo">&#x1F4D0; QuartoStone</span>
+          <button id="btn-theme" title="Toggle light/dark theme" aria-label="Toggle theme" class="sidebar-icon-btn">☀</button>
         </div>
 
         <div id="sidebar-tabs">
-          <button class="stab active" data-tab="pages">Pages</button>
-          <button class="stab" data-tab="git">Git</button>
-          <button class="stab" data-tab="history">History</button>
-          <button class="stab" data-tab="links">Links</button>
+          <button class="stab active" data-tab="pages" title="Pages">Pages</button>
+          <button class="stab" data-tab="git" title="Git status and history">Git</button>
+          <button class="stab" data-tab="history" title="Page version history">History</button>
+          <button class="stab" data-tab="links" title="Backlinks to current page">Links</button>
         </div>
 
         <!-- Pages tab -->
         <div id="tab-pages" class="stab-panel">
-          <nav id="file-tree"></nav>
+          <nav id="file-tree" role="tree" aria-label="Pages"></nav>
           <div id="sidebar-footer">
-            <button id="btn-new-page">+ New page</button>
-            <button id="btn-new-db">⊞ Database</button>
-            <button id="btn-new-folder" title="Create folder">📁 Folder</button>
+            <button id="btn-new-page" title="Create a new page">+ New page</button>
+            <button id="btn-new-db" title="Create a new database">⊞ Database</button>
+            <button id="btn-new-folder" title="Create folder (no keyboard shortcut)">📁 Folder</button>
             <button id="btn-graph" title="Open page-link graph">&#x25c8; Graph</button>
           </div>
         </div>
@@ -51,6 +52,7 @@
             <p class="bl-empty">Open a page to see backlinks.</p>
           </div>
         </div>
+        <div id="sidebar-resizer" aria-hidden="true" title="Drag to resize sidebar"></div>
       </aside>
 
       <!-- ── Editor area ── -->
@@ -58,20 +60,20 @@
         <div id="editor-toolbar">
           <span id="current-page-title"></span>
           <div id="toolbar-actions">
-            <div id="branch-picker" title="Current branch — click to switch">
-              <button id="btn-branch-picker" class="branch-btn">⎇ <span id="branch-picker-label">main</span></button>
+            <div id="branch-picker">
+              <button id="btn-branch-picker" class="branch-btn" title="Current branch — click to switch" aria-haspopup="true">⎇ <span id="branch-picker-label">main</span></button>
               <div id="branch-dropdown" class="branch-dropdown hidden">
                 <div id="branch-list"></div>
                 <hr>
                 <button id="btn-new-branch">+ New branch</button>
               </div>
             </div>
-            <button id="btn-mode-source" class="active" title="Source mode">Source</button>
-            <button id="btn-mode-visual" title="Visual editor (panmirror)">Visual</button>
-            <button id="btn-properties" title="Toggle page properties">Properties</button>
-            <button id="btn-preview" title="Toggle live Quarto preview" disabled>Preview</button>
-            <div id="export-picker" title="Export to another format">
-              <button id="btn-export" disabled>Export ▾</button>
+            <button id="btn-mode-source" class="active" title="Source editor (Ctrl+Shift+E)">Source</button>
+            <button id="btn-mode-visual" title="Visual WYSIWYG editor (Ctrl+Shift+E)">Visual</button>
+            <button id="btn-properties" title="Toggle page properties (Ctrl+Shift+B)" aria-expanded="false">Properties</button>
+            <button id="btn-preview" title="Toggle live Quarto preview (Ctrl+Shift+P)" disabled aria-expanded="false">Preview</button>
+            <div id="export-picker">
+              <button id="btn-export" disabled title="Export to another format" aria-haspopup="true">Export ▾</button>
               <div id="export-dropdown" class="export-dropdown hidden">
                 <div class="export-menu-label">Export as…</div>
                 <button class="export-item" data-format="html">📄 HTML (standalone)</button>
@@ -85,10 +87,14 @@
                 <button class="export-item" data-format="custom">⚙ Custom format…</button>
               </div>
             </div>
-            <button id="btn-save" disabled title="Save (Ctrl+S)">Save</button>
-            <button id="btn-commit" disabled title="Commit changes">Commit</button>
+            <button id="btn-save" disabled title="Save (Ctrl+S)" aria-label="Save page">Save</button>
+            <button id="btn-commit" disabled title="Commit changes (Ctrl+Shift+G)" aria-label="Open commit dialog">Commit</button>
+            <button id="btn-kbd" title="Keyboard shortcuts reference" aria-label="Show keyboard shortcuts" class="toolbar-icon-btn">?</button>
           </div>
         </div>
+
+        <!-- Tab bar (#112) -->
+        <div id="tab-bar"></div>
 
         <div id="editor-body">
           <div id="editor-split">
@@ -121,10 +127,42 @@
 
     <!-- Status bar -->
     <div id="statusbar">
-      <span id="sb-branch"></span>
+      <button id="sb-branch" class="sb-btn" title="Click to switch branch" aria-label="Current branch"></button>
+      <span id="sb-sync" class="sb-btn" title="Ahead/behind remote — click to push or pull"></span>
       <span id="sb-render-status"></span>
-      <span id="sb-save-status"></span>
+      <span id="sb-save-status" class="sb-btn clickable" title="Click to open git log"></span>
     </div>
+
+    <!-- Command palette (#113) -->
+    <div id="cmd-palette" class="hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div id="cmd-palette-backdrop"></div>
+      <div id="cmd-palette-box">
+        <input id="cmd-palette-input" type="text" placeholder="Search pages and commands…" autocomplete="off" spellcheck="false" aria-label="Search"/>
+        <ul id="cmd-palette-list" role="listbox"></ul>
+      </div>
+    </div>
+
+    <!-- Keyboard shortcuts dialog -->
+    <dialog id="kbd-dialog">
+      <form method="dialog">
+        <h3>Keyboard shortcuts</h3>
+        <dl class="kbd-list">
+          <dt><kbd>Ctrl+S</kbd></dt><dd>Save</dd>
+          <dt><kbd>Ctrl+Shift+E</kbd></dt><dd>Toggle source / visual editor</dd>
+          <dt><kbd>Ctrl+Shift+G</kbd></dt><dd>Open commit dialog</dd>
+          <dt><kbd>Ctrl+Shift+P</kbd></dt><dd>Toggle preview pane</dd>
+          <dt><kbd>Ctrl+Shift+B</kbd></dt><dd>Toggle properties panel</dd>
+          <dt><kbd>Ctrl+K</kbd></dt><dd>Command palette</dd>
+          <dt><kbd>F2</kbd></dt><dd>Rename focused sidebar item</dd>
+          <dt><kbd>Delete</kbd></dt><dd>Delete focused sidebar item</dd>
+          <dt><kbd>↑ ↓</kbd></dt><dd>Navigate sidebar items</dd>
+          <dt><kbd>→ ←</kbd></dt><dd>Expand / collapse folder</dd>
+        </dl>
+        <div class="dialog-actions">
+          <button type="submit">Close</button>
+        </div>
+      </form>
+    </dialog>
 
     <!-- Graph panel -->
     <div id="graph-panel" class="hidden"></div>

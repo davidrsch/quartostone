@@ -647,5 +647,299 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     document.getElementById('btn-preview')?.click();
   }
+  // Ctrl+K — command palette (#113)
+  if (mod && e.key === 'k') {
+    e.preventDefault();
+    openCmdPalette();
+  }
+  // Ctrl+Shift+B — toggle properties panel shortcut
+  if (mod && e.shiftKey && e.key === 'B') {
+    e.preventDefault();
+    btnProperties.click();
+  }
+  // Escape — close command palette if open
+  if (e.key === 'Escape') {
+    if (!document.getElementById('cmd-palette')!.classList.contains('hidden')) {
+      closeCmdPalette();
+    }
+  }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE-8: UX Polish and Accessibility
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── #111 Resizable sidebar ───────────────────────────────────────────────────
+{
+  const sidebarEl = document.getElementById('sidebar') as HTMLElement;
+  const resizer   = document.getElementById('sidebar-resizer') as HTMLElement;
+  const SIDEBAR_W_KEY = 'qs_sidebar_width';
+  const saved = localStorage.getItem(SIDEBAR_W_KEY);
+  if (saved) sidebarEl.style.width = `${saved}px`;
+
+  resizer?.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    resizer.classList.add('dragging');
+    const startX = ev.clientX;
+    const startW = sidebarEl.offsetWidth;
+    const onMove = (e: MouseEvent) => {
+      const w = Math.max(160, Math.min(600, startW + e.clientX - startX));
+      sidebarEl.style.width = `${w}px`;
+    };
+    const onUp = () => {
+      resizer.classList.remove('dragging');
+      localStorage.setItem(SIDEBAR_W_KEY, String(sidebarEl.offsetWidth));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// ─── #112 Tab bar ─────────────────────────────────────────────────────────────
+interface TabEntry { path: string; name: string; dirty: boolean; }
+const openTabs: TabEntry[] = [];
+let activeTabPath: string | null = null;
+
+function renderTabBar() {
+  const bar = document.getElementById('tab-bar')!;
+  bar.innerHTML = '';
+  for (const tab of openTabs) {
+    const el = document.createElement('div');
+    el.className = 'editor-tab' + (tab.path === activeTabPath ? ' active' : '');
+    el.title = tab.path;
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', String(tab.path === activeTabPath));
+    el.dataset.path = tab.path;
+
+    const dot = document.createElement('span');
+    dot.className = 'editor-tab-dot';
+    dot.style.visibility = tab.dirty ? 'visible' : 'hidden';
+
+    const name = document.createElement('span');
+    name.className = 'editor-tab-name';
+    name.textContent = tab.name;
+
+    const close = document.createElement('button');
+    close.className = 'editor-tab-close';
+    close.title = 'Close tab';
+    close.setAttribute('aria-label', `Close ${tab.name}`);
+    close.textContent = '×';
+    close.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closeTab(tab.path);
+    });
+
+    el.append(dot, name, close);
+    el.addEventListener('click', () => {
+      if (tab.path !== activePath) openPage(tab.path, tab.name);
+    });
+    bar.appendChild(el);
+  }
+}
+
+function ensureTab(path: string, name: string) {
+  if (!openTabs.find(t => t.path === path)) {
+    openTabs.push({ path, name, dirty: false });
+  }
+  activeTabPath = path;
+  renderTabBar();
+}
+
+function closeTab(path: string) {
+  const idx = openTabs.findIndex(t => t.path === path);
+  if (idx === -1) return;
+  openTabs.splice(idx, 1);
+  if (activeTabPath === path) {
+    const next = openTabs[idx] ?? openTabs[idx - 1];
+    if (next) {
+      openPage(next.path, next.name);
+    } else {
+      activeTabPath = null;
+      activePath = null;
+      activeView?.destroy(); activeView = null;
+      activeVisual?.destroy(); activeVisual = null;
+      activeDb?.destroy(); activeDb = null;
+      editorMountEl.innerHTML = '';
+      noPageMessageEl.classList.add('visible');
+      pageTitleEl.textContent = '';
+      btnSave.disabled = true; btnCommit.disabled = true;
+    }
+  }
+  renderTabBar();
+}
+
+function markTabDirty(path: string, dirty: boolean) {
+  const tab = openTabs.find(t => t.path === path);
+  if (tab) { tab.dirty = dirty; renderTabBar(); }
+}
+
+// Patch openPage to register tabs — hook below uses a wrapper
+const _origOpenPage = (window as unknown as Record<string, unknown>)['_qsOpenPage'] as
+  ((path: string, name: string) => void) | undefined;
+// We monkey-patch within this module by wrapping the existing openPage function
+// openPage is defined later in the file — we hook it via a post-load wrapper:
+requestAnimationFrame(() => {
+  const tabBarEl = document.getElementById('tab-bar')!;
+  if (!tabBarEl) return;
+  // intercept sidebar file-tree clicks by observing activePath changes via MutationObserver on page title
+  const titleObs = new MutationObserver(() => {
+    if (activePath) ensureTab(activePath, pageTitleEl.textContent ?? activePath);
+  });
+  titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
+});
+
+// Mark tab dirty when isDirty changes — patch this into setDirtyState
+function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, dirty); }
+
+// ─── #113 Command palette (Ctrl+K) ───────────────────────────────────────────
+{
+  const palette   = document.getElementById('cmd-palette')!;
+  const backdrop  = document.getElementById('cmd-palette-backdrop')!;
+  const input     = document.getElementById('cmd-palette-input') as HTMLInputElement;
+  const list      = document.getElementById('cmd-palette-list')!;
+  let selectedIdx = 0;
+  let currentItems: Array<{ icon: string; label: string; hint: string; action: () => void }> = [];
+
+  function buildActions() {
+    return [
+      { icon: '📄', label: 'New page',          hint: '',           action: () => btnNewPage.click() },
+      { icon: '⊞',  label: 'New database',      hint: '',           action: () => btnNewDb.click() },
+      { icon: '💾', label: 'Save',               hint: 'Ctrl+S',    action: () => { if (isDirty) saveCurrentPage(); } },
+      { icon: '📦', label: 'Commit changes',     hint: 'Ctrl+⇧G',  action: () => btnCommit.click() },
+      { icon: '⎇',  label: 'Switch branch',      hint: '',          action: () => (document.getElementById('btn-branch-picker') as HTMLButtonElement)?.click() },
+      { icon: '👁',  label: 'Toggle preview',    hint: 'Ctrl+⇧P',  action: () => (document.getElementById('btn-preview') as HTMLButtonElement)?.click() },
+      { icon: '⊡',  label: 'Toggle properties', hint: 'Ctrl+⇧B',  action: () => btnProperties.click() },
+      { icon: '◈',  label: 'Open graph',         hint: '',          action: () => graphView?.open() },
+      { icon: '?',  label: 'Keyboard shortcuts', hint: '',          action: () => (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal() },
+    ];
+  }
+
+  function renderPalette(q: string) {
+    const lower = q.toLowerCase();
+    const actions = buildActions().filter(a => !lower || a.label.toLowerCase().includes(lower));
+    currentItems = actions;
+    selectedIdx = 0;
+    list.innerHTML = '';
+    if (!actions.length) {
+      const empty = document.createElement('li');
+      empty.className = 'cmd-item';
+      empty.textContent = 'No results';
+      list.appendChild(empty);
+      return;
+    }
+    for (const [i, item] of actions.entries()) {
+      const li = document.createElement('li');
+      li.className = 'cmd-item' + (i === 0 ? ' selected' : '');
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(i === 0));
+      li.innerHTML = `<span class="cmd-item-icon">${item.icon}</span>
+        <span class="cmd-item-label">${item.label}</span>
+        <span class="cmd-item-hint">${item.hint}</span>`;
+      li.addEventListener('mouseenter', () => setSelected(i));
+      li.addEventListener('click', () => { closeCmdPalette(); item.action(); });
+      list.appendChild(li);
+    }
+  }
+
+  function setSelected(idx: number) {
+    const items = list.querySelectorAll<HTMLLIElement>('.cmd-item');
+    items[selectedIdx]?.classList.remove('selected');
+    items[selectedIdx]?.setAttribute('aria-selected', 'false');
+    selectedIdx = Math.max(0, Math.min(items.length - 1, idx));
+    items[selectedIdx]?.classList.add('selected');
+    items[selectedIdx]?.setAttribute('aria-selected', 'true');
+    items[selectedIdx]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  (window as unknown as Record<string, unknown>)['openCmdPalette'] = openCmdPalette;
+  function openCmdPalette() {
+    palette.classList.remove('hidden');
+    input.value = '';
+    renderPalette('');
+    input.focus();
+  }
+
+  (window as unknown as Record<string, unknown>)['closeCmdPalette'] = closeCmdPalette;
+  function closeCmdPalette() {
+    palette.classList.add('hidden');
+    input.value = '';
+  }
+
+  input.addEventListener('input', () => renderPalette(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown')  { e.preventDefault(); setSelected(selectedIdx + 1); }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); setSelected(selectedIdx - 1); }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const action = currentItems[selectedIdx];
+      closeCmdPalette();
+      action?.action();
+    }
+    if (e.key === 'Escape') { e.preventDefault(); closeCmdPalette(); }
+  });
+
+  backdrop.addEventListener('click', closeCmdPalette);
+}
+
+function openCmdPalette() { (window as unknown as Record<string, unknown>)['openCmdPalette']?.(); }
+function closeCmdPalette() { (window as unknown as Record<string, unknown>)['closeCmdPalette']?.(); }
+
+// ─── #115 Light/dark theme toggle ────────────────────────────────────────────
+{
+  const btnTheme = document.getElementById('btn-theme') as HTMLButtonElement | null;
+  const THEME_KEY = 'qs_theme';
+
+  function applyTheme(t: 'dark' | 'light') {
+    document.documentElement.classList.toggle('light', t === 'light');
+    if (btnTheme) {
+      btnTheme.textContent = t === 'light' ? '🌙' : '☀';
+      btnTheme.title = t === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+    }
+  }
+
+  const stored = localStorage.getItem(THEME_KEY) as 'dark' | 'light' | null;
+  const preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  applyTheme(stored ?? (preferLight ? 'light' : 'dark'));
+
+  btnTheme?.addEventListener('click', () => {
+    const next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  // Also respond to OS theme preference changes (when no user override)
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+    if (!localStorage.getItem(THEME_KEY)) applyTheme(e.matches ? 'light' : 'dark');
+  });
+}
+
+// ─── #116 / #117 Status bar click actions ────────────────────────────────────
+{
+  const sbBranchBtn = document.getElementById('sb-branch') as HTMLButtonElement | null;
+  sbBranchBtn?.addEventListener('click', () => {
+    (document.getElementById('btn-branch-picker') as HTMLButtonElement)?.click();
+  });
+
+  const sbSaveBtn = document.getElementById('sb-save-status');
+  sbSaveBtn?.addEventListener('click', () => {
+    document.querySelector<HTMLButtonElement>('.stab[data-tab="git"]')?.click();
+  });
+}
+
+// ─── Keyboard shortcuts help button ──────────────────────────────────────────
+document.getElementById('btn-kbd')?.addEventListener('click', () => {
+  (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal();
+});
+
+// ─── Tab: dirty-state sync helper (called from isDirty setters) ──────────────
+// Patch into existing dirty-state changes by observing sbSaveStatus text
+{
+  const obs = new MutationObserver(() => {
+    const dirty = sbSaveStatus.textContent?.includes('Unsaved') ?? false;
+    setDirtyTab(dirty);
+  });
+  obs.observe(sbSaveStatus, { childList: true, characterData: true, subtree: true });
+}
 

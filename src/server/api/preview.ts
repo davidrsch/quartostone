@@ -4,14 +4,53 @@
 // POST /api/preview/start   body: { path, format? }  → { port, url }
 // POST /api/preview/stop    body: { path }            → { ok }
 // GET  /api/preview/status?path=                      → { running, url, port? }
+// GET  /api/preview/ready?port=                       → { ready } (polls until port accepts connections)
 
 import type { Express, Request, Response } from 'express';
-import { spawn } from 'node:child_process';
+import { spawn, execSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { createServer, createConnection } from 'node:net';
 import type { ServerContext } from '../index.js';
+
+// ─── #118 Quarto PATH detection ───────────────────────────────────────────────
+
+function resolveQuartoPath(): string | null {
+  // 1. Try the PATH-aware `which` / `where`
+  const cmd = process.platform === 'win32' ? 'where quarto' : 'which quarto';
+  try {
+    const out = execSync(cmd, { encoding: 'utf-8', timeout: 3000 }).trim();
+    const first = out.split(/\r?\n/)[0].trim();
+    if (first && existsSync(first)) return first;
+  } catch { /* not in PATH */ }
+
+  // 2. Common install paths
+  const candidates: string[] = process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\Quarto\\bin\\quarto.cmd',
+        'C:\\Program Files\\Quarto\\bin\\quarto.exe',
+        join(process.env['LOCALAPPDATA'] ?? '', 'Programs\\Quarto\\bin\\quarto.cmd'),
+      ]
+    : [
+        '/usr/local/bin/quarto',
+        '/usr/bin/quarto',
+        `${process.env['HOME'] ?? ''}/bin/quarto`,
+        `${process.env['HOME'] ?? ''}/.local/bin/quarto`,
+      ];
+
+  for (const c of candidates) {
+    try { if (existsSync(c)) return c; } catch { /* continue */ }
+  }
+  return null;
+}
+
+const quartoExecutable: string | null = resolveQuartoPath();
+if (!quartoExecutable) {
+  console.warn('[preview] quarto not found in PATH — preview feature will be unavailable.');
+} else {
+  console.info(`[preview] quarto detected at: ${quartoExecutable}`);
+}
 
 // ── Process registry ──────────────────────────────────────────────────────────
 
@@ -21,6 +60,7 @@ interface PreviewProcess {
   url:    string;
   path:   string;
   format: string;
+  logs:   string[];
 }
 
 const previews = new Map<string, PreviewProcess>();
@@ -62,17 +102,28 @@ function startPreview(
     '--to', format,
   ];
 
-  const proc = spawn('quarto', args, { cwd, shell: false });
+  // Use resolved executable path for reliability (#118)
+  const exe = quartoExecutable ?? 'quarto';
+  const proc = spawn(exe, args, { cwd, shell: process.platform === 'win32' && !quartoExecutable });
+  const logs: string[] = [];
+
+  const captureLog = (data: Buffer) => {
+    const line = data.toString().trimEnd();
+    logs.push(line);
+    if (logs.length > 200) logs.shift(); // keep last 200 lines
+  };
 
   // Drain stdout/stderr to avoid blocking
-  proc.stdout?.on('data', () => { /* consume */ });
-  proc.stderr?.on('data', () => { /* consume */ });
+  proc.stdout?.on('data', captureLog);
+  proc.stderr?.on('data', captureLog);
 
-  proc.on('exit', () => {
+  proc.on('exit', (code) => {
+    console.info(`[preview] quarto exited with code ${code} for ${relPath}`);
     previews.delete(relPath);
   });
 
-  proc.on('error', () => {
+  proc.on('error', (err) => {
+    console.error(`[preview] spawn error for ${relPath}: ${err.message}`);
     previews.delete(relPath);
   });
 
@@ -82,6 +133,7 @@ function startPreview(
     url: `http://localhost:${port}`,
     path: relPath,
     format,
+    logs,
   };
 
   previews.set(relPath, entry);
@@ -95,6 +147,14 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 
   // POST /api/preview/start  body: { path: string; format?: string }
   app.post('/api/preview/start', async (req: Request, res: Response) => {
+    // #118 — fail fast if quarto is not available
+    if (!quartoExecutable) {
+      return res.status(503).json({
+        error: 'Quarto not found',
+        detail: 'quarto is not installed or not on the system PATH.  ' +
+                'Install Quarto from https://quarto.org and restart the server.',
+      });
+    }
     const { path: filePath, format = 'html' } = req.body as {
       path?:   string;
       format?: string;
@@ -158,13 +218,42 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     const filePath = req.query['path'] as string | undefined;
 
     if (!filePath) {
-      return res.json({ running: previews.size > 0, count: previews.size });
+      return res.json({ running: previews.size > 0, count: previews.size, quartoAvailable: !!quartoExecutable });
     }
 
     const entry = previews.get(filePath);
-    if (!entry) return res.json({ running: false });
+    if (!entry) return res.json({ running: false, quartoAvailable: !!quartoExecutable });
 
     res.json({ running: true, url: entry.url, port: entry.port, format: entry.format });
+  });
+
+  // GET /api/preview/ready?port=<n>&timeout=<ms>
+  // Polls until the Quarto preview server at <port> accepts a TCP connection.
+  // Returns { ready: true } when up, { ready: false, timedOut: true } on timeout.
+  app.get('/api/preview/ready', async (req: Request, res: Response) => {
+    const port    = parseInt(req.query['port'] as string ?? '', 10);
+    const timeout = Math.min(parseInt(req.query['timeout'] as string ?? '15000', 10), 30_000);
+    if (isNaN(port)) return res.status(400).json({ error: 'port is required' });
+
+    const deadline = Date.now() + timeout;
+    const poll = (): Promise<boolean> => new Promise(resolve => {
+      if (Date.now() >= deadline) { resolve(false); return; }
+      const sock = createConnection({ port, host: '127.0.0.1' });
+      sock.once('connect', () => { sock.destroy(); resolve(true); });
+      sock.once('error',   () => { sock.destroy(); setTimeout(() => poll().then(resolve), 300); });
+    });
+
+    const ready = await poll();
+    res.json({ ready, timedOut: !ready });
+  });
+
+  // GET /api/preview/logs?path=
+  app.get('/api/preview/logs', (req: Request, res: Response) => {
+    const filePath = req.query['path'] as string | undefined;
+    if (!filePath) return res.status(400).json({ error: 'path is required' });
+    const entry = previews.get(filePath);
+    if (!entry) return res.json({ logs: [] });
+    res.json({ logs: entry.logs });
   });
 
   // Clean up all previews when the server shuts down (register at most once)

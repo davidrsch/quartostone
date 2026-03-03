@@ -311,6 +311,19 @@ function buildNode(
     : buildFileNode(node, onSelect, opts, onRefresh, activePath, depth);
 }
 
+// ─── #114 Keyboard tree navigation helper ────────────────────────────────────
+function focusAdjacentTreeItem(current: HTMLElement, direction: 1 | -1) {
+  const tree = document.getElementById('file-tree');
+  if (!tree) return;
+  const all = Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]')).filter(
+    el => el.offsetParent !== null, // only visible items
+  );
+  const idx = all.indexOf(current);
+  if (idx === -1) return;
+  const next = all[idx + direction];
+  next?.focus();
+}
+
 function buildFileNode(
   node: PageNode,
   onSelect: SelectCallback,
@@ -324,6 +337,31 @@ function buildFileNode(
   item.dataset.path = node.path;
   item.draggable = true;
   item.style.paddingLeft = `${16 + depth * 14}px`;
+  item.tabIndex = 0;
+  item.setAttribute('role', 'treeitem');
+  item.setAttribute('aria-label', node.name);
+  item.setAttribute('aria-selected', String(activePath === node.path));
+
+  // Keyboard navigation (#114)
+  item.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      item.click();
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      const lbl = item.querySelector<HTMLSpanElement>('.label');
+      if (lbl) startRename(lbl, node, onRefresh);
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      void deleteItem(node, opts, onRefresh);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusAdjacentTreeItem(item, -1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusAdjacentTreeItem(item, 1);
+    }
+  });
 
   const icon = document.createElement('span');
   icon.className = 'page-icon';
@@ -403,6 +441,34 @@ function buildFolderNode(
   const item = document.createElement('div');
   item.className = 'tree-item folder';
   item.style.paddingLeft = `${16 + depth * 14}px`;
+  item.tabIndex = 0;
+  item.setAttribute('role', 'treeitem');
+  item.setAttribute('aria-label', node.name);
+  item.setAttribute('aria-expanded', 'false');
+
+  // Keyboard navigation (#114)
+  item.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      item.click();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (open) item.click(); // collapse
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      const lbl = item.querySelector<HTMLSpanElement>('.label');
+      if (lbl) startRename(lbl, node, onRefresh);
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      void deleteItem(node, opts, onRefresh);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusAdjacentTreeItem(item, -1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusAdjacentTreeItem(item, 1);
+    }
+  });
 
   const icon = document.createElement('span');
   icon.className = 'icon';
@@ -437,6 +503,7 @@ function buildFolderNode(
     open = !open;
     childrenEl.style.display = open ? 'block' : 'none';
     icon.textContent = open ? '▼' : '▶';
+    item.setAttribute('aria-expanded', String(open));
   });
 
   item.addEventListener('dblclick', e => {
