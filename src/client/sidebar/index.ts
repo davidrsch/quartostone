@@ -2,6 +2,8 @@
 // Sidebar: Favorites, Recent, page tree with context menu, inline rename,
 // drag-and-drop move, and Trash tray.
 
+import { focusAdjacentTreeItem } from '../treeNav.js';
+
 export interface PageNode {
   name: string;
   path: string;
@@ -311,19 +313,7 @@ function buildNode(
     : buildFileNode(node, onSelect, opts, onRefresh, activePath, depth);
 }
 
-// ─── #114 Keyboard tree navigation helper ────────────────────────────────────
-function focusAdjacentTreeItem(current: HTMLElement, direction: 1 | -1) {
-  const tree = document.getElementById('file-tree');
-  if (!tree) return;
-  const all = Array.from(tree.querySelectorAll<HTMLElement>('[role="treeitem"]')).filter(
-    el => el.offsetParent !== null, // only visible items
-  );
-  const idx = all.indexOf(current);
-  if (idx === -1) return;
-  const next = all[idx + direction];
-  next?.focus();
-}
-
+// ─── Build a single tree node ─────────────────────────────────────────────────
 function buildFileNode(
   node: PageNode,
   onSelect: SelectCallback,

@@ -7,8 +7,13 @@ export default defineConfig({
     alias: [{ find: /^(\.{1,2}\/.*?)\.js$/, replacement: '$1' }],
   },
   test: {
+    // Default environment for server tests.  Client unit tests opt-in via
+    // the `// @vitest-environment happy-dom` comment at the top of the file.
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'tests/integration/**/*.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/server/**/*.ts'],

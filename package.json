@@ -56,6 +56,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "codemirror": "^6.0.1",
     "eslint": "^9.0.0",
+    "happy-dom": "^20.8.3",
     "prettier": "^3.5.0",
     "prosemirror-markdown": "^1.13.4",
     "supertest": "^7.2.2",

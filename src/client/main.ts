@@ -20,6 +20,9 @@ import type { BacklinksPanel } from './backlinks/index.js';
 import { initSearchOverlay } from './search/index.js';
 import { initGraphPanel } from './graph/index.js';
 import type { EditorView } from '@codemirror/view';
+import { applyTheme, toggleTheme, storeTheme, resolveInitialTheme } from './theme.js';
+import { filterEntries, moveIdx } from './cmdpalette/filter.js';
+import type { PaletteEntry } from './cmdpalette/filter.js';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 const fileTreeEl       = document.getElementById('file-tree')!;
@@ -800,7 +803,7 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
   const input     = document.getElementById('cmd-palette-input') as HTMLInputElement;
   const list      = document.getElementById('cmd-palette-list')!;
   let selectedIdx = 0;
-  let currentItems: Array<{ icon: string; label: string; hint: string; action: () => void }> = [];
+  let currentItems: PaletteEntry[] = [];
 
   function buildActions() {
     return [
@@ -817,8 +820,7 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
   }
 
   function renderPalette(q: string) {
-    const lower = q.toLowerCase();
-    const actions = buildActions().filter(a => !lower || a.label.toLowerCase().includes(lower));
+    const actions = filterEntries(buildActions(), q);
     currentItems = actions;
     selectedIdx = 0;
     list.innerHTML = '';
@@ -869,8 +871,8 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
 
   input.addEventListener('input', () => renderPalette(input.value));
   input.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown')  { e.preventDefault(); setSelected(selectedIdx + 1); }
-    if (e.key === 'ArrowUp')    { e.preventDefault(); setSelected(selectedIdx - 1); }
+    if (e.key === 'ArrowDown')  { e.preventDefault(); setSelected(moveIdx(selectedIdx, 1, currentItems.length)); }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); setSelected(moveIdx(selectedIdx, -1, currentItems.length)); }
     if (e.key === 'Enter') {
       e.preventDefault();
       const action = currentItems[selectedIdx];
@@ -889,29 +891,20 @@ function closeCmdPalette() { (window as unknown as Record<string, unknown>)['clo
 // ─── #115 Light/dark theme toggle ────────────────────────────────────────────
 {
   const btnTheme = document.getElementById('btn-theme') as HTMLButtonElement | null;
-  const THEME_KEY = 'qs_theme';
 
-  function applyTheme(t: 'dark' | 'light') {
-    document.documentElement.classList.toggle('light', t === 'light');
-    if (btnTheme) {
-      btnTheme.textContent = t === 'light' ? '🌙' : '☀';
-      btnTheme.title = t === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
-    }
-  }
-
-  const stored = localStorage.getItem(THEME_KEY) as 'dark' | 'light' | null;
-  const preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-  applyTheme(stored ?? (preferLight ? 'light' : 'dark'));
+  // Apply initial theme (stored pref → OS pref → dark)
+  applyTheme(resolveInitialTheme(), document.documentElement, btnTheme);
 
   btnTheme?.addEventListener('click', () => {
-    const next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
-    localStorage.setItem(THEME_KEY, next);
-    applyTheme(next);
+    const next = toggleTheme(document.documentElement);
+    storeTheme(next);
+    applyTheme(next, document.documentElement, btnTheme);
   });
 
-  // Also respond to OS theme preference changes (when no user override)
+  // Respond to OS theme preference changes (only when user has no override)
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
-    if (!localStorage.getItem(THEME_KEY)) applyTheme(e.matches ? 'light' : 'dark');
+    const stored = localStorage.getItem('qs_theme');
+    if (!stored) applyTheme(e.matches ? 'light' : 'dark', document.documentElement, btnTheme);
   });
 }
 

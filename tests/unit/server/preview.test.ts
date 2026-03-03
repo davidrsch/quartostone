@@ -297,3 +297,122 @@ describe('GET /api/preview/status', () => {
     expect(after.body.running).toBe(false);
   });
 });
+
+// ── GET /api/preview/status — quartoAvailable field (#118) ───────────────────
+
+describe('GET /api/preview/status — quartoAvailable field', () => {
+  it('includes quartoAvailable boolean in global status response', async () => {
+    const res = await client.get('/api/preview/status');
+    expect(res.status).toBe(200);
+    expect(typeof res.body.quartoAvailable).toBe('boolean');
+  });
+});
+
+// ── GET /api/preview/logs (#118) ─────────────────────────────────────────────
+
+describe('GET /api/preview/logs', () => {
+  it('returns 400 when path query param is missing', async () => {
+    const res = await client.get('/api/preview/logs');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/path/i);
+  });
+
+  it('returns empty logs array when no preview is running for that path', async () => {
+    const res = await client.get('/api/preview/logs?path=pages/slide.qmd');
+    expect(res.status).toBe(200);
+    expect(res.body.logs).toEqual([]);
+  });
+
+  it('returns captured stdout/stderr lines after process emits data', async () => {
+    // Build a process that emits known log lines via stdout
+    const proc = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: ReturnType<typeof vi.fn>;
+    };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.kill = vi.fn();
+    spawnMock.mockImplementationOnce(() => proc as never);
+
+    await client
+      .post('/api/preview/start')
+      .send({ path: 'pages/slide.qmd', format: 'html' });
+
+    // Emit some log data from stdout and stderr
+    proc.stdout.emit('data', Buffer.from('Preparing to render...\n'));
+    proc.stderr.emit('data', Buffer.from('Quarto 1.5.0 ready\n'));
+
+    // Brief settle — logs are captured synchronously in the data handler
+    await new Promise(r => setTimeout(r, 20));
+
+    const res = await client.get('/api/preview/logs?path=pages/slide.qmd');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.logs)).toBe(true);
+    expect(res.body.logs).toContain('Preparing to render...');
+    expect(res.body.logs).toContain('Quarto 1.5.0 ready');
+  });
+
+  it('caps logs at 200 entries and discards oldest', async () => {
+    const proc = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: ReturnType<typeof vi.fn>;
+    };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.kill = vi.fn();
+    spawnMock.mockImplementationOnce(() => proc as never);
+
+    await client
+      .post('/api/preview/start')
+      .send({ path: 'pages/slide.qmd', format: 'html' });
+
+    // Emit 250 lines
+    for (let i = 0; i < 250; i++) {
+      proc.stdout.emit('data', Buffer.from(`line-${i}\n`));
+    }
+    await new Promise(r => setTimeout(r, 20));
+
+    const res = await client.get('/api/preview/logs?path=pages/slide.qmd');
+    expect(res.body.logs.length).toBeLessThanOrEqual(200);
+    // Most recent lines should be present; oldest dropped
+    expect(res.body.logs).toContain('line-249');
+  });
+});
+
+// ── GET /api/preview/ready (#118) ────────────────────────────────────────────
+
+describe('GET /api/preview/ready', () => {
+  it('returns 400 when port param is missing', async () => {
+    const res = await client.get('/api/preview/ready');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/port/i);
+  });
+
+  it('returns { ready: true } when a server is actually listening on the port', async () => {
+    // Spin up a real TCP server to listen on a random port
+    const { createServer } = await import('node:net');
+    const tempServer = createServer();
+    await new Promise<void>(resolve => tempServer.listen(0, '127.0.0.1', resolve));
+    const { port } = tempServer.address() as { port: number };
+
+    try {
+      const res = await client.get(`/api/preview/ready?port=${port}&timeout=3000`);
+      expect(res.status).toBe(200);
+      expect(res.body.ready).toBe(true);
+      expect(res.body.timedOut).toBe(false);
+    } finally {
+      await new Promise<void>(resolve => tempServer.close(() => resolve()));
+    }
+  });
+
+  it('returns { ready: false, timedOut: true } when nothing listens on the port', async () => {
+    // Port 1 is privileged and will always refuse connection on localhost
+    // Use a very short timeout to make the test fast
+    const res = await client.get('/api/preview/ready?port=1&timeout=400');
+    expect(res.status).toBe(200);
+    expect(res.body.ready).toBe(false);
+    expect(res.body.timedOut).toBe(true);
+  }, 5000);
+});
