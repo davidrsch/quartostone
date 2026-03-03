@@ -1,6 +1,7 @@
 // tests/unit/server/preview.test.ts
 // Unit tests for the preview API endpoints.
-// Mocks node:child_process.spawn so no real Quarto installation is needed.
+// Mocks node:child_process.spawn AND execSync so no real Quarto installation
+// is needed (resolveQuartoPath is bypassed with a fake path that exists).
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
@@ -13,9 +14,32 @@ import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
 
 // ── Mock child_process BEFORE importing app ───────────────────────────────────
+// We mock both spawn (used by the preview runner) and execSync (used by
+// resolveQuartoPath to locate the quarto binary).  When execSync is called
+// with a quarto-detection command we return a path that actually exists on
+// disk so that existsSync(path) === true and quartoExecutable is non-null,
+// thereby bypassing the 503 "quarto not installed" guard in the route handler.
 vi.mock('node:child_process', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:child_process')>();
-  return { ...original, spawn: vi.fn() };
+
+  // A fake quarto binary path that exists on every platform so that
+  // existsSync(fakePath) returns true inside resolveQuartoPath().
+  const fakePath = process.platform === 'win32'
+    ? 'C:\\Windows\\System32\\cmd.exe'
+    : '/usr/bin/env';
+
+  const mockedExecSync = (cmd: string, opts?: unknown): Buffer | string => {
+    // Intercept quarto PATH-detection commands
+    if (typeof cmd === 'string' &&
+        (cmd.startsWith('which ') || cmd.startsWith('where ')) &&
+        cmd.includes('quarto')) {
+      return fakePath;
+    }
+    // Everything else (git init, git config …) — call through to the real impl
+    return (original.execSync as (c: string, o?: unknown) => Buffer)(cmd, opts);
+  };
+
+  return { ...original, spawn: vi.fn(), execSync: mockedExecSync };
 });
 
 const { spawn } = await import('node:child_process');

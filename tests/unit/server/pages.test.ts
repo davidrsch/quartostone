@@ -81,11 +81,11 @@ describe('GET /api/pages', () => {
   });
 
   it('reads the icon from frontmatter', async () => {
-    writePage('home.qmd', '---\ntitle: Home\nicon: 🏠\n---\n');
+    writePage('home.qmd', '---\ntitle: Home\nicon: house\n---\n');
 
     const res = await client.get('/api/pages');
     expect(res.status).toBe(200);
-    expect(res.body[0].icon).toBe('🏠');
+    expect(res.body[0].icon).toBe('house');
   });
 
   it('does not set icon when frontmatter has none', async () => {
@@ -97,11 +97,11 @@ describe('GET /api/pages', () => {
   });
 
   it('reads icon with single-quoted value', async () => {
-    writePage('quoted.qmd', "---\ntitle: Q\nicon: '📝'\n---\n");
+    writePage('quoted.qmd', "---\ntitle: Q\nicon: 'pencil'\n---\n");
 
     const res = await client.get('/api/pages');
     const node = res.body[0];
-    expect(node.icon).toBe('📝');
+    expect(node.icon).toBe('pencil');
   });
 
   it('returns a folder node for a subdirectory', async () => {
