@@ -13,6 +13,75 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { runCellExtension } from './runWidget.js';
 
+// ── Image drag-drop upload (#96) ──────────────────────────────────────────────
+
+/** Uploads a File to /api/assets and returns the URL, or null on failure. */
+async function uploadImageFile(file: File): Promise<string | null> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  try {
+    const res = await fetch('/api/assets', { method: 'POST', body: form });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { url: string };
+    return data.url;
+  } catch {
+    return null;
+  }
+}
+
+/** CodeMirror extension: handle drop / paste of image files → upload + insert markdown */
+function imageDragDropExtension(): Extension {
+  return EditorView.domEventHandlers({
+    dragover(event) {
+      const types = event.dataTransfer?.types ?? [];
+      if ([...types].includes('Files')) {
+        event.preventDefault(); // allow drop
+      }
+    },
+    async drop(event, view) {
+      const files = [...(event.dataTransfer?.files ?? [])].filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) return;
+      event.preventDefault();
+      // Determine drop position in document
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+      let insertAt = pos ?? view.state.doc.length;
+      for (const file of files) {
+        const url = await uploadImageFile(file);
+        if (!url) continue;
+        const alt   = file.name.replace(/\.[^.]+$/, '');
+        const md    = `![${alt}](${url})`;
+        view.dispatch({
+          changes: { from: insertAt, insert: md },
+          selection: { anchor: insertAt + md.length },
+        });
+        insertAt += md.length;
+      }
+    },
+    paste(event, view) {
+      const items = [...(event.clipboardData?.items ?? [])];
+      const imageItems = items.filter(i => i.type.startsWith('image/'));
+      if (imageItems.length === 0) return;
+      event.preventDefault();
+      const insertAt = view.state.selection.main.from;
+      let offset = 0;
+      for (const item of imageItems) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        void uploadImageFile(file).then(url => {
+          if (!url) return;
+          const alt = 'image';
+          const md  = `![${alt}](${url})`;
+          view.dispatch({
+            changes: { from: insertAt + offset, insert: md },
+            selection: { anchor: insertAt + offset + md.length },
+          });
+          offset += md.length;
+        });
+      }
+    },
+  });
+}
+
 export interface EditorOptions {
   container: HTMLElement;
   pagePath: string;
@@ -150,6 +219,7 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
       wikiLinkTheme,
       autocompletion({ override: [wikiLinkCompletions] }),
       darkTheme,
+      imageDragDropExtension(),
       ...runCellExtension,
     ],
   });

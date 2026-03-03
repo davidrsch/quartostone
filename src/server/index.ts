@@ -19,6 +19,7 @@ import { registerLinksApi, rebuildLinkIndex } from './api/links.js';
 import { registerSearchApi, rebuildSearchIndex } from './api/search.js';
 import { registerTrashApi } from './api/trash.js';
 import { registerPandocApi } from './api/pandoc.js';
+import { registerAssetsApi } from './api/assets.js';
 import { startWatcher } from './watcher.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
@@ -75,6 +76,7 @@ export function createApp(ctx: ServerContext) {
   registerSearchApi(app, ctx);
   registerTrashApi(app, ctx);
   registerPandocApi(app, ctx);
+  registerAssetsApi(app, ctx);
 
   // Build in-memory indexes on startup
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
