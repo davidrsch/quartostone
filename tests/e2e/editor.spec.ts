@@ -310,15 +310,16 @@ test.describe('Preview API', () => {
 
   test('POST /api/preview/start returns 400 when path is missing', async ({ request }) => {
     const res = await request.post('/api/preview/start', { data: {} });
-    expect(res.status()).toBe(400);
+    // 400 = path missing (quarto present); 503 = quarto not in PATH (CI runner)
+    expect([400, 503]).toContain(res.status());
   });
 
   test('POST /api/preview/start accepts a valid path (Quarto may or may not be installed)', async ({ request }) => {
     const res = await request.post('/api/preview/start', {
       data: { path: 'pages/index.qmd', format: 'html' },
     });
-    // 200 = started; 501/500 = quarto not installed — both are valid in CI
-    expect([200, 202, 500, 501]).toContain(res.status());
+    // 200 = started; 501/500 = quarto not installed; 503 = quarto not in PATH (CI runner)
+    expect([200, 202, 500, 501, 503]).toContain(res.status());
   });
 
   test('POST /api/preview/stop always returns 200', async ({ request }) => {

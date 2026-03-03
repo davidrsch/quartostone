@@ -58,6 +58,11 @@ export function createApp(ctx: ServerContext) {
   const editorDist = ctx.clientDist ?? join(__dirname, '../client');
   if (existsSync(editorDist)) {
     app.use('/editor', express.static(editorDist));
+    // When no rendered site exists at /, serve the editor as the root app.
+    // This covers fresh workspaces (no _site/ yet) and the E2E test fixture.
+    if (!existsSync(siteDir)) {
+      app.use('/', express.static(editorDist));
+    }
   } else {
     app.get('/editor', (_req, res) =>
       res.send('<h2>Editor not built yet — run <code>npm run build:client</code></h2>')
