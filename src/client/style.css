@@ -1285,6 +1285,7 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 
 .branch-btn:hover { background: var(--bg-hover, #2a2a2a); }
 
+.branch-dropdown.hidden { display: none; }
 .branch-dropdown {
   position: absolute;
   top: 110%;
@@ -1413,6 +1414,7 @@ dialog input[type="text"]:focus { border-color: var(--accent); }
 }
 #btn-export:disabled { opacity: 0.45; cursor: default; }
 
+.export-dropdown.hidden { display: none; }
 .export-dropdown {
   position: absolute;
   top: calc(100% + 4px);

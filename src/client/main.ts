@@ -157,6 +157,11 @@ btnCommitCancel.addEventListener('click', () => commitDialog.close());
 
 // ─── Editor mode toggle ──────────────────────────────────────────────────────
 async function switchMode(mode: 'source' | 'visual') {
+  if (mode === 'visual') {
+    // Visual editor is being rebuilt; block until it is ready.
+    showToast('Visual editor is not available in this release — see docs/technical-review.md', 'error', 5000);
+    return;
+  }
   if (mode === editorMode) return;
   if (!activePath) return;
   // M-4: prevent concurrent mode switches spawning duplicate editors
@@ -565,10 +570,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (activePath) openCommitDialog(`qs-${Math.random().toString(36).slice(2, 10)}`);
   }
-  // Ctrl+Shift+E — toggle source/visual mode (L-1)
+  // Ctrl+Shift+E — reserved for source/visual mode toggle (disabled until visual editor rebuilt)
   if (mod && e.shiftKey && e.key === 'E') {
     e.preventDefault();
-    if (activePath && !activeDb) switchMode(editorMode === 'source' ? 'visual' : 'source');
+    showToast('Visual editor is not available in this release', 'error', 3500);
   }
   // Ctrl+Shift+P — toggle preview panel (L-1)
   if (mod && e.shiftKey && e.key === 'P') {

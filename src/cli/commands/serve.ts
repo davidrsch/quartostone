@@ -19,7 +19,11 @@ export async function serve(options: { port: string; open: boolean }) {
   const config = await loadConfig(configPath);
   const port = parseInt(options.port) || config.port || 4242;
 
-  const server = await createServer({ cwd, config, port });
+  // When running from source via tsx, __dirname in the server module resolves
+  // to src/server/ instead of dist/server/, so ../client would be wrong.
+  // Explicitly resolve the built client directory from the workspace root.
+  const clientDist = resolve(cwd, 'dist', 'client');
+  const server = await createServer({ cwd, config, port, clientDist });
   server.listen(port, () => {
     console.log(`\n✓ Quartostone running at http://localhost:${port}`);
     const shouldOpen = options.open !== undefined ? options.open : config.open_browser;
