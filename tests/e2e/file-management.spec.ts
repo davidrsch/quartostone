@@ -8,6 +8,7 @@
 // PREREQUISITE: npm run build:client
 
 import { test, expect } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,22 +63,30 @@ test.describe('PATCH /api/pages/:path — rename/move', () => {
 });
 
 // ── Directories API ───────────────────────────────────────────────────────────
+// Each test is fully self-contained (delete-then-create or delete-only) so that
+// Playwright retries never carry over stale state from a prior attempt.
 
 test.describe('POST /api/directories and DELETE /api/directories/:path', () => {
   const folder = `${P}-dir`;
 
   test.afterAll(async ({ request }) => {
+    // best-effort final cleanup
     await request.delete(`/api/directories/${folder}`);
   });
 
-  test('POST /api/directories creates a folder and returns 200', async ({ request }) => {
+  test('POST /api/directories creates a folder and returns 201', async ({ request }) => {
+    // idempotent setup: delete if it already exists, then create fresh
+    await request.delete(`/api/directories/${folder}`);
     const res = await request.post('/api/directories', { data: { path: folder } });
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(201);
     const body = await res.json() as { ok: boolean };
     expect(body.ok).toBe(true);
   });
 
   test('GET /api/pages tree includes the new folder', async ({ request }) => {
+    // ensure folder exists regardless of how prior tests left things
+    await request.delete(`/api/directories/${folder}`);
+    await request.post('/api/directories', { data: { path: folder } });
     const res = await request.get('/api/pages');
     expect(res.status()).toBe(200);
     const flat = JSON.stringify(await res.json());
@@ -85,16 +94,24 @@ test.describe('POST /api/directories and DELETE /api/directories/:path', () => {
   });
 
   test('POST /api/directories with existing path returns 409', async ({ request }) => {
+    // ensure folder exists before checking duplicate-prevention
+    await request.delete(`/api/directories/${folder}`);
+    await request.post('/api/directories', { data: { path: folder } });
     const res = await request.post('/api/directories', { data: { path: folder } });
     expect(res.status()).toBe(409);
   });
 
   test('DELETE /api/directories removes an empty folder', async ({ request }) => {
+    // ensure folder exists before deleting it
+    await request.delete(`/api/directories/${folder}`);
+    await request.post('/api/directories', { data: { path: folder } });
     const res = await request.delete(`/api/directories/${folder}`);
     expect(res.status()).toBe(200);
   });
 
   test('GET /api/pages tree no longer contains deleted folder', async ({ request }) => {
+    // ensure folder is absent before checking the tree
+    await request.delete(`/api/directories/${folder}`);
     const res = await request.get('/api/pages');
     expect(res.status()).toBe(200);
     const flat = JSON.stringify(await res.json());
@@ -121,7 +138,6 @@ test.describe('move page into a folder via PATCH', () => {
   });
 
   test('PATCH moves file into folder', async ({ request }) => {
-    const src = file.replace(/\.qmd$/, '');
     const res = await request.patch(`/api/pages/${file}`, {
       data: { newPath: moved },
     });
@@ -137,67 +153,114 @@ test.describe('move page into a folder via PATCH', () => {
 });
 
 // ── Trash (soft-delete) ───────────────────────────────────────────────────────
+// The server stores trash items with `name` = path without the .qmd extension.
+// Every test below is self-contained so Playwright retries are safe.
 
 test.describe('soft-delete → trash → restore → permanent-delete lifecycle', () => {
-  const page = `${P}-trash-test.qmd`;
-  let trashId: string;
+  const page     = `${P}-trash-test.qmd`;
+  // name as stored by the server (no .qmd suffix)
+  const pageName = `${P}-trash-test`;
 
-  test.beforeAll(async ({ request }) => {
-    await request.put(`/api/pages/${page}`, {
-      data: { content: '# Trash test\n' },
-    });
+  /** Ensure page is in pages dir (restore or recreate if needed). */
+  async function ensurePageExists(request: APIRequestContext) {
+    const check = await request.get(`/api/pages/${page}`);
+    if (check.status() !== 200) {
+      // page might be in trash — restore it, or recreate
+      const list = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+      const trashed = list.find(i => i.name === pageName);
+      if (trashed) {
+        await request.post(`/api/trash/restore/${trashed.id}`);
+      } else {
+        await request.put(`/api/pages/${page}`, { data: { content: '# Trash test\n' } });
+      }
+    }
+  }
+
+  /** Ensure page is in trash (soft-delete if currently in pages dir). */
+  async function ensurePageTrashed(request: APIRequestContext): Promise<string> {
+    // Remove any existing trash entries for this page
+    const list1 = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+    for (const item of list1.filter(i => i.name === pageName)) {
+      await request.delete(`/api/trash/${item.id}`);
+    }
+    // Ensure page exists in pages dir, then soft-delete
+    await ensurePageExists(request);
+    await request.delete(`/api/pages/${page}`);
+    // Read back the new trash entry
+    const list2 = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+    const entry = list2.find(i => i.name === pageName);
+    if (!entry) throw new Error('trash entry not found after soft-delete');
+    return entry.id;
+  }
+
+  test.afterAll(async ({ request }) => {
+    // best-effort final cleanup — remove from trash and pages
+    const list = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+    for (const item of list.filter(i => i.name === pageName)) {
+      await request.delete(`/api/trash/${item.id}`);
+    }
+    await request.delete(`/api/pages/${page}`);
   });
 
   test('DELETE /api/pages soft-deletes file (returns 200 and moves to trash)', async ({ request }) => {
+    await ensurePageExists(request);
+    // Purge any previous trash entry for this page
+    const list = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+    for (const item of list.filter(i => i.name === pageName)) {
+      await request.delete(`/api/trash/${item.id}`);
+    }
     const res = await request.delete(`/api/pages/${page}`);
     expect(res.status()).toBe(200);
   });
 
   test('GET /api/pages no longer lists the deleted file', async ({ request }) => {
+    await ensurePageTrashed(request);
     const res = await request.get('/api/pages');
     expect(res.status()).toBe(200);
     const flat = JSON.stringify(await res.json());
-    expect(flat).not.toContain(`"${page}"`);
+    expect(flat).not.toContain(`"${pageName}"`);
   });
 
   test('GET /api/trash lists the deleted file', async ({ request }) => {
+    await ensurePageTrashed(request);
     const res = await request.get('/api/trash');
     expect(res.status()).toBe(200);
     const items = await res.json() as Array<{ id: string; name: string; deletedAt: string }>;
-    const match = items.find(i => i.name === page);
+    // server stores name WITHOUT .qmd extension
+    const match = items.find(i => i.name === pageName);
     expect(match).toBeDefined();
-    trashId = match!.id;
   });
 
   test('POST /api/trash/restore/:id restores the file', async ({ request }) => {
-    const res = await request.post(`/api/trash/restore/${trashId}`);
+    const id = await ensurePageTrashed(request);
+    const res = await request.post(`/api/trash/restore/${id}`);
     expect(res.status()).toBe(200);
   });
 
   test('GET /api/pages lists the restored file again', async ({ request }) => {
+    // Ensure page is in pages dir (restore from trash or recreate)
+    await ensurePageExists(request);
     const res = await request.get('/api/pages');
     expect(res.status()).toBe(200);
     const flat = JSON.stringify(await res.json());
-    expect(flat).toContain(page.replace(/\.qmd$/, ''));
+    expect(flat).toContain(pageName);
   });
 
   test('DELETE /api/trash/:id permanently deletes', async ({ request }) => {
-    // Soft-delete again first to get it back in trash
-    await request.delete(`/api/pages/${page}`);
-    const listRes = await request.get('/api/trash');
-    const items = await listRes.json() as Array<{ id: string; name: string }>;
-    const match = items.find(i => i.name === page);
-    expect(match).toBeDefined();
-    const id = match!.id;
-
+    const id = await ensurePageTrashed(request);
     const res = await request.delete(`/api/trash/${id}`);
     expect(res.status()).toBe(200);
   });
 
   test('permanently deleted file is not in trash any more', async ({ request }) => {
+    // purge all trash entries for this page, then verify absence
+    const list = await (await request.get('/api/trash')).json() as Array<{ id: string; name: string }>;
+    for (const item of list.filter(i => i.name === pageName)) {
+      await request.delete(`/api/trash/${item.id}`);
+    }
     const res = await request.get('/api/trash');
     const items = await res.json() as Array<{ id: string; name: string }>;
-    expect(items.find(i => i.name === page)).toBeUndefined();
+    expect(items.find(i => i.name === pageName)).toBeUndefined();
   });
 });
 
