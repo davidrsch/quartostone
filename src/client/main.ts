@@ -23,6 +23,7 @@ import type { EditorView } from '@codemirror/view';
 import { applyTheme, toggleTheme, storeTheme, resolveInitialTheme } from './theme.js';
 import { filterEntries, moveIdx } from './cmdpalette/filter.js';
 import type { PaletteEntry } from './cmdpalette/filter.js';
+import { renderBreadcrumb as _renderBreadcrumb } from './breadcrumb.js';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 const fileTreeEl       = document.getElementById('file-tree')!;
@@ -427,7 +428,23 @@ async function updateBranchStatus() {
   }
 }
 
-// ─── Editor load ──────────────────────────────────────────────────────────────
+// ─── Breadcrumb navigation (#139) ────────────────────────────────────────────
+// Thin wrapper that binds the module-level DOM element and sidebar reference
+// to the pure renderBreadcrumb function from breadcrumb.ts.
+function renderBreadcrumb(path: string | null): void {
+  const el = document.getElementById('editor-breadcrumb') as HTMLElement | null;
+  if (!el) return;
+  _renderBreadcrumb(path, el, (segPath) => {
+    const target = fileTreeEl.querySelector<HTMLElement>(`[data-path="${segPath}"]`);
+    if (target) {
+      target.scrollIntoView({ block: 'nearest' });
+      target.focus();
+      target.click();
+    }
+  });
+}
+
+// ─── Editor load ────────────────────────────────────────────────────────────── 
 async function openPage(path: string, name: string) {  // M-1: guard against silently discarding unsaved changes
   if (isDirty) {
     const discard = confirm('You have unsaved changes. Discard them?');
@@ -440,6 +457,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   editorMountEl.innerHTML = '';
 
   activePath = path;
+  renderBreadcrumb(path);
   isDirty = false;
   pageTitleEl.textContent = name;
   noPageMessageEl.classList.remove('visible');
@@ -480,6 +498,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       showToast(`Failed to load page: ${String(e)}`, 'error');
       noPageMessageEl.classList.add('visible');
       activePath = null;
+      renderBreadcrumb(null);
     }
   } else {
     activeView = await createEditor({
@@ -570,6 +589,7 @@ initSidebar(fileTreeEl, (path, name) => { addRecentPage(path, name); openPage(pa
     const cleanPath = path.endsWith('.qmd') ? path : `${path}.qmd`;
     if (activePath && (activePath === path || activePath === cleanPath)) {
       activePath = null;
+      renderBreadcrumb(null);
       activeView?.destroy(); activeView = null;
       activeVisual?.destroy(); activeVisual = null;
       activeDb?.destroy(); activeDb = null;
@@ -761,6 +781,7 @@ function closeTab(path: string) {
     } else {
       activeTabPath = null;
       activePath = null;
+      renderBreadcrumb(null);
       activeView?.destroy(); activeView = null;
       activeVisual?.destroy(); activeVisual = null;
       activeDb?.destroy(); activeDb = null;

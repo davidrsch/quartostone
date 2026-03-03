@@ -54,8 +54,6 @@ Only a single editor and preview pane are shown at one time. Side-by-side editin
 | Issue | Workaround |
 |-------|-----------|
 | No split editor pane | Open two browser tabs |
-| No breadcrumb navigation in editor header | Check status bar for current file path |
-| Branch picker opens a native browser prompt | Type branch name directly |
 
 ---
 
@@ -66,7 +64,8 @@ Only a single editor and preview pane are shown at one time. Side-by-side editin
 | Preview pane showed "Quarto not found" when Quarto was on a non-default PATH | Automatic PATH detection + readiness polling added (Phase 9) |
 | Preview iframe went blank until manual reload | Hot-reload after save wired to iframe (Phase 9) |
 | Sidebar was fully read-only (no rename/move/delete/context menu) | Full file management UI with context menus, inline rename, DnD, Move-to dialog, Duplicate, Trash tray (Phase 11) |
-|-------|-----|
+| Branch picker opened a native browser prompt | Replaced with in-page `<dialog>`-based dropdown (Phase 8) |
+| Editor header had no breadcrumb navigation | Breadcrumb bar added below tab bar; folder segments navigate the sidebar tree (Phase 12) |
 | Visual editor (Tiptap) silently corrupted content on round-trip | Replaced with panmirror (Phase 10) |
 | Sidebar width was fixed at 260 px | Resizable via drag handle (Phase 8) |
 | No light/dark theme toggle | Theme toggle added in toolbar (Phase 8) |
