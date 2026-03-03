@@ -93,6 +93,87 @@ html, body {
   padding-left: 14px;
 }
 
+/* ─── Sidebar: extra tree styles ─── */
+.tree-rename-input {
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg-input, #1e1e1e);
+  color: var(--text);
+  border: 1px solid var(--accent, #007acc);
+  border-radius: 3px;
+  padding: 1px 4px;
+  width: calc(100% - 32px);
+  outline: none;
+}
+
+.tree-item.dragging { opacity: 0.4; }
+.tree-item.drag-over,
+.tree-item.folder.drag-over { outline: 1px dashed var(--accent, #007acc); background: var(--bg-hover); }
+.tree-root.drag-over-root { outline: 1px dashed var(--accent, #007acc); }
+.tree-empty-folder { font-size: 11px; color: var(--text-dim); font-style: italic; padding: 2px 0; }
+.sidebar-error { padding: 12px; color: #f44747; font-size: 12px; }
+
+/* ─── Collapsible sidebar sections ─── */
+.sidebar-section { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
+.sidebar-section-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); cursor: pointer; user-select: none;
+}
+.sidebar-section-header:hover { color: var(--text); }
+.section-chevron { font-size: 9px; }
+.sidebar-section-body { overflow: hidden; }
+.sidebar-section-body.hidden { display: none; }
+
+/* ─── Context menu ─── */
+.ctx-menu {
+  background: var(--bg-sidebar, #252526);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.45);
+  z-index: 9999;
+}
+.ctx-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; padding: 6px 14px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+}
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-item.danger { color: #f44747; }
+.ctx-item.danger:hover { background: rgba(244,71,71,.12); }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* ─── Trash tray ─── */
+.trash-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; font-size: 12px;
+}
+.trash-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.trash-actions { display: flex; gap: 4px; }
+.trash-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 3px; padding: 1px 5px; cursor: pointer; font-size: 11px;
+}
+.trash-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.trash-btn.danger:hover { color: #f44747; border-color: #f44747; }
+
+/* ─── New-folder button in sidebar footer ─── */
+#btn-new-folder {
+  flex: 1;
+  padding: 5px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.1s, border-color 0.1s;
+}
+#btn-new-folder:hover { background: var(--bg-hover); border-color: var(--text-dim); }
+
 #sidebar-footer {
   padding: 8px 12px;
   border-top: 1px solid var(--border);

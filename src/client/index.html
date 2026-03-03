@@ -27,6 +27,7 @@
           <div id="sidebar-footer">
             <button id="btn-new-page">+ New page</button>
             <button id="btn-new-db">⊞ Database</button>
+            <button id="btn-new-folder" title="Create folder">📁 Folder</button>
             <button id="btn-graph" title="Open page-link graph">&#x25c8; Graph</button>
           </div>
         </div>
@@ -66,7 +67,7 @@
               </div>
             </div>
             <button id="btn-mode-source" class="active" title="Source mode">Source</button>
-            <button id="btn-mode-visual" title="Visual editor is being rebuilt — not available in this release" disabled>Visual</button>
+            <button id="btn-mode-visual" title="Visual editor (panmirror)">Visual</button>
             <button id="btn-properties" title="Toggle page properties">Properties</button>
             <button id="btn-preview" title="Toggle live Quarto preview" disabled>Preview</button>
             <div id="export-picker" title="Export to another format">
@@ -193,6 +194,19 @@
         <div class="dialog-actions">
           <button type="submit" id="btn-new-db-confirm">Create</button>
           <button type="button" id="btn-new-db-cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- New folder dialog -->
+    <dialog id="new-folder-dialog">
+      <form method="dialog">
+        <h3>New folder</h3>
+        <label for="new-folder-name">Folder name</label>
+        <input id="new-folder-name" type="text" placeholder="my-folder" autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="submit" id="btn-new-folder-confirm">Create</button>
+          <button type="button" id="btn-new-folder-cancel">Cancel</button>
         </div>
       </form>
     </dialog>

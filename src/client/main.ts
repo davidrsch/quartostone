@@ -6,7 +6,7 @@ import { createVisualEditor } from './visual/index.js';
 import type { VisualEditorInstance } from './visual/index.js';
 import { initDatabaseView } from './database/index.js';
 import type { DbInstance } from './database/index.js';
-import { initSidebar } from './sidebar/index.js';
+import { initSidebar, addRecentPage } from './sidebar/index.js';
 import { initGitPanel } from './git/index.js';
 import { createPropertiesPanel } from './properties/index.js';
 import { initBranchPicker } from './branches/index.js';
@@ -52,6 +52,11 @@ const newPageDialog    = document.getElementById('new-page-dialog') as HTMLDialo
 const newPageNameInput = document.getElementById('new-page-name') as HTMLInputElement;
 const btnNewPageConfirm = document.getElementById('btn-new-page-confirm') as HTMLButtonElement;
 const btnNewPageCancel  = document.getElementById('btn-new-page-cancel') as HTMLButtonElement;
+const newFolderDialog    = document.getElementById('new-folder-dialog') as HTMLDialogElement;
+const newFolderNameInput = document.getElementById('new-folder-name') as HTMLInputElement;
+const btnNewFolderConfirm = document.getElementById('btn-new-folder-confirm') as HTMLButtonElement;
+const btnNewFolderCancel  = document.getElementById('btn-new-folder-cancel') as HTMLButtonElement;
+const btnNewFolder       = document.getElementById('btn-new-folder') as HTMLButtonElement;
 const newDbDialog      = document.getElementById('new-db-dialog') as HTMLDialogElement;
 const newDbNameInput   = document.getElementById('new-db-name') as HTMLInputElement;
 const btnNewDbConfirm  = document.getElementById('btn-new-db-confirm') as HTMLButtonElement;
@@ -72,6 +77,9 @@ let previewPanel: PreviewPanel | null = null;
 let backlinksPanel: BacklinksPanel | null = null;
 let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false; // M-4: guard against concurrent mode switches
+let pendingNewPageFolder = '';
+let pendingNewFolderParent = '';
+let visualMarkdownCache = ''; // last-known markdown when visual editor is active
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -157,11 +165,6 @@ btnCommitCancel.addEventListener('click', () => commitDialog.close());
 
 // ─── Editor mode toggle ──────────────────────────────────────────────────────
 async function switchMode(mode: 'source' | 'visual') {
-  if (mode === 'visual') {
-    // Visual editor is being rebuilt; block until it is ready.
-    showToast('Visual editor is not available in this release — see docs/technical-review.md', 'error', 5000);
-    return;
-  }
   if (mode === editorMode) return;
   if (!activePath) return;
   // M-4: prevent concurrent mode switches spawning duplicate editors
@@ -171,6 +174,7 @@ async function switchMode(mode: 'source' | 'visual') {
     if (mode === 'visual') {
     // Get current source content, destroy source editor, init visual
     const markdown = activeView ? activeView.state.doc.toString() : '';
+    visualMarkdownCache = markdown;
     activeView?.destroy();
     activeView = null;
     editorMountEl.innerHTML = '';
@@ -178,10 +182,13 @@ async function switchMode(mode: 'source' | 'visual') {
     activeVisual = await createVisualEditor({
       container: editorMountEl,
       initialMarkdown: markdown,
+      documentPath: activePath,
       onDirty: () => {
         isDirty = true;
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
+        // update cache asynchronously so properties panel stays mostly fresh
+        activeVisual?.getMarkdown().then(md => { visualMarkdownCache = md; }).catch(() => {});
       },
     });
 
@@ -190,7 +197,8 @@ async function switchMode(mode: 'source' | 'visual') {
     btnModeVisual.classList.add('active');
   } else {
     // Get current visual content, destroy visual editor, init source
-    const markdown = activeVisual ? activeVisual.getMarkdown() : '';
+    const markdown = activeVisual ? await activeVisual.getMarkdown() : visualMarkdownCache;
+    visualMarkdownCache = '';
     activeVisual?.destroy();
     activeVisual = null;
     editorMountEl.innerHTML = '';
@@ -255,7 +263,7 @@ btnProperties.addEventListener('click', () => {
   if (!hidden && activePath) {
     const getContent = () =>
       editorMode === 'visual' && activeVisual
-        ? activeVisual.getMarkdown()
+        ? visualMarkdownCache
         : (activeView ? activeView.state.doc.toString() : '');
     const setContent = (newContent: string) => {
       if (editorMode === 'source' && activeView) {
@@ -265,7 +273,7 @@ btnProperties.addEventListener('click', () => {
         }));
       } else if (editorMode === 'visual' && activeVisual) {
         // M-2: push frontmatter edits back into the visual editor
-        activeVisual.setMarkdown(newContent);
+        void activeVisual.setMarkdown(newContent);
       }
     };
     propsPanel.mount(activePath, getContent, setContent);
@@ -290,9 +298,17 @@ btnCommit.addEventListener('click', () => {
 });
 
 btnNewPage.addEventListener('click', () => {
+  pendingNewPageFolder = '';
   newPageNameInput.value = '';
   newPageDialog.showModal();
   newPageNameInput.focus();
+});
+
+btnNewFolder.addEventListener('click', () => {
+  pendingNewFolderParent = '';
+  newFolderNameInput.value = '';
+  newFolderDialog.showModal();
+  newFolderNameInput.focus();
 });
 
 /** L-3: validate a user-supplied page name */
@@ -320,6 +336,26 @@ btnNewPageConfirm.addEventListener('click', async () => {
   } catch (e) {
     showToast(`Failed: ${String(e)}`, 'error');
   }
+});
+
+btnNewFolderCancel.addEventListener('click', () => newFolderDialog.close());
+btnNewFolderConfirm.addEventListener('click', async () => {
+  const raw = newFolderNameInput.value.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  newFolderDialog.close();
+  if (!raw) { showToast('Folder name is invalid', 'error'); return; }
+  try {
+    const res = await fetch('/api/directories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: raw }),
+    });
+    if (!res.ok) throw new Error((await res.json() as { error: string }).error);
+    await refreshSidebar?.();
+    showToast(`Created folder ${raw}`, 'success');
+  } catch (e) {
+    showToast(`Failed: ${String(e)}`, 'error');
+  }
+  pendingNewFolderParent = '';
 });
 
 btnNewDb.addEventListener('click', () => {
@@ -355,7 +391,7 @@ async function saveCurrentPage() {
   if (!activePath) return;
   if (activeDb) return; // Database auto-saves on cell change
   const content = editorMode === 'visual' && activeVisual
-    ? activeVisual.getMarkdown()
+    ? await activeVisual.getMarkdown()
     : (activeView ? activeView.state.doc.toString() : '');
   if (!content) return;
   sbSaveStatus.textContent = 'Saving…';
@@ -406,6 +442,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   noPageMessageEl.classList.remove('visible');
   btnSave.disabled = true;
   btnCommit.disabled = false;
+  (document.getElementById('btn-export') as HTMLButtonElement & { pageReady: boolean }).pageReady = true;
 
   // Check if this is a database page
   const dbInstance = await initDatabaseView(editorMountEl, path);
@@ -511,7 +548,37 @@ connectLiveReload((event, data) => {
 });
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-initSidebar(fileTreeEl, openPage).then(refresh => { refreshSidebar = refresh; });
+initSidebar(fileTreeEl, (path, name) => { addRecentPage(path, name); openPage(path, name); }, {
+  onNewPage(folderPath) {
+    pendingNewPageFolder = folderPath;
+    newPageNameInput.value = folderPath ? `${folderPath}/` : '';
+    newPageDialog.showModal();
+    newPageNameInput.focus();
+    newPageNameInput.setSelectionRange(newPageNameInput.value.length, newPageNameInput.value.length);
+  },
+  onNewFolder(folderPath) {
+    pendingNewFolderParent = folderPath;
+    newFolderNameInput.value = folderPath ? `${folderPath}/` : '';
+    newFolderDialog.showModal();
+    newFolderNameInput.focus();
+    newFolderNameInput.setSelectionRange(newFolderNameInput.value.length, newFolderNameInput.value.length);
+  },
+  onDelete(path) {
+    const cleanPath = path.endsWith('.qmd') ? path : `${path}.qmd`;
+    if (activePath && (activePath === path || activePath === cleanPath)) {
+      activePath = null;
+      activeView?.destroy(); activeView = null;
+      activeVisual?.destroy(); activeVisual = null;
+      activeDb?.destroy(); activeDb = null;
+      editorMountEl.innerHTML = '';
+      noPageMessageEl.classList.add('visible');
+      pageTitleEl.textContent = '';
+      btnSave.disabled = true;
+      btnCommit.disabled = true;
+    }
+  },
+  getActivePath: () => activePath,
+}).then(refresh => { refreshSidebar = refresh; });
 
 initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; });
 
