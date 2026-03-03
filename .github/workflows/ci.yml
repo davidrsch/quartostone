@@ -44,6 +44,9 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            - name: Install pandoc
+              run: sudo apt-get install -y pandoc
+
             - name: Configure git identity (needed for integration test repo init)
               run: |
                   git config --global user.email "ci@quartostone.test"
