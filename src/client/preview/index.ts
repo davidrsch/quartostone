@@ -28,7 +28,6 @@ export function initPreviewPanel(): PreviewPanel {
 
   let active       = false;
   let currentPath: string | null = null;
-  let currentUrl:  string | null = null;
 
   /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -76,7 +75,6 @@ export function initPreviewPanel(): PreviewPanel {
       }
 
       const data = await res.json() as PreviewStartResponse;
-      currentUrl = data.url;
 
       // #118 — Use server-side TCP readiness poll instead of client-side fetch polling.
       // The server checks the TCP port directly which is more reliable than a CORS fetch.
@@ -121,7 +119,6 @@ export function initPreviewPanel(): PreviewPanel {
       hidePane();
       if (frame) frame.src = 'about:blank';
       if (currentPath) await stopPreview(currentPath);
-      currentUrl = null;
     }
   });
 
@@ -188,7 +185,6 @@ export function initPreviewPanel(): PreviewPanel {
       hidePane();
       if (frame) frame.src = 'about:blank';
       if (currentPath) await stopPreview(currentPath);
-      currentUrl = null;
     },
   };
 }

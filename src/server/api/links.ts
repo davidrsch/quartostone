@@ -7,7 +7,7 @@
 // GET /api/links/graph            → { nodes, edges } for graph view
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, basename, extname } from 'node:path';
 import type { ServerContext } from '../index.js';
 

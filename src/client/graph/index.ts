@@ -174,7 +174,6 @@ export function initGraphPanel(
 
   const ACCENT   = '#7c6af7';
   const ORPHAN   = '#f97171';
-  const DIM      = '#4a5568';
   const EDGE_CLR = '#4a556880';
 
   function draw(): void {

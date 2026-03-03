@@ -81,8 +81,6 @@ let previewPanel: PreviewPanel | null = null;
 let backlinksPanel: BacklinksPanel | null = null;
 let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false; // M-4: guard against concurrent mode switches
-let pendingNewPageFolder = '';
-let pendingNewFolderParent = '';
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
 
 const propsPanel = createPropertiesPanel(propertiesBody);
@@ -302,14 +300,12 @@ btnCommit.addEventListener('click', () => {
 });
 
 btnNewPage.addEventListener('click', () => {
-  pendingNewPageFolder = '';
   newPageNameInput.value = '';
   newPageDialog.showModal();
   newPageNameInput.focus();
 });
 
 btnNewFolder.addEventListener('click', () => {
-  pendingNewFolderParent = '';
   newFolderNameInput.value = '';
   newFolderDialog.showModal();
   newFolderNameInput.focus();
@@ -359,7 +355,6 @@ btnNewFolderConfirm.addEventListener('click', async () => {
   } catch (e) {
     showToast(`Failed: ${String(e)}`, 'error');
   }
-  pendingNewFolderParent = '';
 });
 
 btnNewDb.addEventListener('click', () => {
@@ -572,14 +567,12 @@ connectLiveReload((event, data) => {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initSidebar(fileTreeEl, (path, name) => { addRecentPage(path, name); openPage(path, name); }, {
   onNewPage(folderPath) {
-    pendingNewPageFolder = folderPath;
     newPageNameInput.value = folderPath ? `${folderPath}/` : '';
     newPageDialog.showModal();
     newPageNameInput.focus();
     newPageNameInput.setSelectionRange(newPageNameInput.value.length, newPageNameInput.value.length);
   },
   onNewFolder(folderPath) {
-    pendingNewFolderParent = folderPath;
     newFolderNameInput.value = folderPath ? `${folderPath}/` : '';
     newFolderDialog.showModal();
     newFolderNameInput.focus();
@@ -799,11 +792,7 @@ function markTabDirty(path: string, dirty: boolean) {
   if (tab) { tab.dirty = dirty; renderTabBar(); }
 }
 
-// Patch openPage to register tabs — hook below uses a wrapper
-const _origOpenPage = (window as unknown as Record<string, unknown>)['_qsOpenPage'] as
-  ((path: string, name: string) => void) | undefined;
-// We monkey-patch within this module by wrapping the existing openPage function
-// openPage is defined later in the file — we hook it via a post-load wrapper:
+// Intercept sidebar file-tree clicks via MutationObserver on page title:
 requestAnimationFrame(() => {
   const tabBarEl = document.getElementById('tab-bar')!;
   if (!tabBarEl) return;
