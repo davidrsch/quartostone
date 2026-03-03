@@ -105,7 +105,7 @@ function showFilterDialog(
     `).join('');
   }
 
-  let working: FilterRule[] = activeFilters.map(f => ({ ...f }));
+  const working: FilterRule[] = activeFilters.map(f => ({ ...f }));
 
   function refresh() {
     const container = dlg.querySelector<HTMLElement>('.db-filter-rows')!;
@@ -171,7 +171,7 @@ function showSortDialog(
   const dlg = document.createElement('dialog');
   dlg.className = 'db-dialog';
 
-  let working: SortRule[] = activeSorts.map(s => ({ ...s }));
+  const working: SortRule[] = activeSorts.map(s => ({ ...s }));
 
   function buildRows(): string {
     return working.map((s, i) => `

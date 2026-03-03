@@ -106,7 +106,6 @@ export async function createVisualEditor(
     outerScrollContainer: false,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const editor = await PanmirrorEditor.create(
     opts.container,
     context,
@@ -115,7 +114,6 @@ export async function createVisualEditor(
   );
 
   // Subscribe to document updates
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
   const unsubscribe: () => void = editor.subscribe('Update', () => {
     opts.onDirty?.();
   });
@@ -125,20 +123,16 @@ export async function createVisualEditor(
 
   return {
     async getMarkdown(): Promise<string> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const result = await editor.getMarkdown(PANDOC_WRITER_OPTIONS);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       return (result.code as string) ?? '';
     },
 
     async setMarkdown(md: string): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await editor.setMarkdown(md, PANDOC_WRITER_OPTIONS, false);
     },
 
     destroy(): void {
       unsubscribe();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       editor.destroy();
     },
   };
