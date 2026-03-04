@@ -8,7 +8,6 @@
 
 import type { Express, Request, Response } from 'express';
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { collectQmd } from '../utils/qmdFiles.js';
@@ -128,9 +127,7 @@ export function resetLinkIndex(): void {
 
 // ── Register routes ───────────────────────────────────────────────────────────
 
-export function registerLinksApi(app: Express, ctx: ServerContext): void {
-  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
-
+export function registerLinksApi(app: Express, _ctx: ServerContext): void {
   // GET /api/links/backlinks?path=<relPath>
   app.get('/api/links/backlinks', (req: Request, res: Response) => {
     const target = req.query['path'] as string | undefined;

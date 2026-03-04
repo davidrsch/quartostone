@@ -575,9 +575,7 @@ test.describe('Browser: unsaved-changes guard', () => {
     await page.keyboard.type('UNSAVED_CHANGE_MARKER');
 
     // Set up a dialog handler that auto-accepts (confirm = stay) the beforeunload prompt
-    let dialogFired = false;
     page.once('dialog', async dialog => {
-      dialogFired = true;
       await dialog.accept(); // accept = stay on page
     });
 

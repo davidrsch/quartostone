@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import supertest from 'supertest';
 import {
-  mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync,
+  mkdtempSync, mkdirSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

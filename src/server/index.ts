@@ -110,7 +110,6 @@ export function createApp(ctx: ServerContext) {
 
   // Global error handler — must be registered LAST and must have exactly 4 params
   // so Express recognises it as an error handler.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const message = err instanceof Error ? err.message : String(err);
     if (!res.headersSent) {

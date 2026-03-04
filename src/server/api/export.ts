@@ -253,7 +253,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     res.setHeader('Content-Type', mime);
 
     const stream = createReadStream(job.outputPath);
-    stream.on('error', (err) => {
+    stream.on('error', (_err) => {
       if (!res.headersSent) {
         res.status(500).json({ error: 'File read error' });
       } else {

@@ -205,27 +205,18 @@ describe('PUT /api/db', () => {
   });
 });
 
-// ── POST /api/exec — validation only ─────────────────────────────────────────
+// ── POST /api/exec — disabled by default ─────────────────────────────────────
+// The integration test config has allow_code_execution: false, so ALL /api/exec
+// requests must be rejected with 403 before any input validation runs.
+// Input-validation tests (400s) live in tests/unit/server/exec.test.ts which
+// uses allow_code_execution: true.
 
 describe('POST /api/exec', () => {
-  it('returns 400 when code is missing from the body', async () => {
-    const res = await client.post('/api/exec').send({ language: 'python' });
+  it('returns 403 when code execution is disabled (allow_code_execution: false)', async () => {
+    const res = await client.post('/api/exec').send({ code: 'print("hi")', language: 'python' });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/code is required/i);
-  });
-
-  it('returns 400 when code is an empty string', async () => {
-    const res = await client.post('/api/exec').send({ code: '   ', language: 'python' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 400 for an unsupported language', async () => {
-    const res = await client.post('/api/exec').send({ code: 'print("hi")', language: 'cobol' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/unsupported language/i);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/code execution is disabled/i);
   });
 });
 
@@ -325,5 +316,38 @@ describe('POST /api/git/commit', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true });
     expect(typeof res.body.commit).toBe('string');
+  });
+});
+
+// ── CORS middleware ───────────────────────────────────────────────────────────
+
+describe('CORS middleware', () => {
+  // The integration test config uses port: 0, so the allowed origin is http://localhost:0.
+  const allowedOrigin = 'http://localhost:0';
+
+  it('returns 403 for cross-origin requests (different origin)', async () => {
+    const res = await client
+      .get('/api/health')
+      .set('Origin', 'http://malicious.example.com');
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Cross-origin/i);
+  });
+
+  it('sets CORS headers for requests from the allowed origin', async () => {
+    const res = await client
+      .get('/api/health')
+      .set('Origin', allowedOrigin);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe(allowedOrigin);
+  });
+
+  it('handles OPTIONS preflight for the allowed origin with 204', async () => {
+    const res = await client
+      .options('/api/health')
+      .set('Origin', allowedOrigin);
+
+    expect(res.status).toBe(204);
   });
 });

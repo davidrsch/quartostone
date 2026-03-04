@@ -2,7 +2,7 @@
 // tests/unit/client/theme.test.ts
 // Unit tests for theme toggle helpers (#115).
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   applyTheme,
   toggleTheme,

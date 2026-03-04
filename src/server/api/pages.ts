@@ -211,7 +211,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
         'utf-8',
       );
       renameSync(filePath, join(trashDir, `${id}.qmd`));
-    } catch (err) {
+    } catch {
       return res.status(500).json({ error: 'Failed to delete page' });
     }
     removeLinkIndexForFile(relPath);

@@ -8,7 +8,6 @@ import { join, resolve, sep } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
 import type { ServerContext } from '../index.js';
 import { parseFrontmatter } from '../utils/frontmatter.js';
-import { PathTraversalError } from '../utils/pathGuard.js';
 import type { FieldDef, DbPage } from '../../shared/types.js';
 
 // Re-export shared types so existing imports from this module keep working.
