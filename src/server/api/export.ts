@@ -7,8 +7,8 @@
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, existsSync, unlinkSync } from 'node:fs';
-import { join, basename, extname } from 'node:path';
+import { mkdtempSync, existsSync, rmSync } from 'node:fs';
+import { join, basename, extname, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
@@ -36,6 +36,7 @@ interface ExportJob {
   token:     string;
   status:    JobStatus;
   outputPath?: string;
+  outDir?:     string;
   filename?:   string;
   error?:      string;
   stderr:      string;
@@ -105,6 +106,7 @@ function runExport(
     const msg = err.message;
     job.status = 'error';
     job.stderr = stderr;
+    try { rmSync(outDir, { recursive: true, force: true }); } catch { /* ignore */ }
     if (msg.includes('ENOENT') || msg.includes('not found')) {
       job.error = 'Quarto is not installed or not on PATH. Install from https://quarto.org';
     } else {
@@ -116,11 +118,13 @@ function runExport(
     if (code === 0 && existsSync(outFile)) {
       job.status   = 'done';
       job.outputPath = outFile;
+      job.outDir   = outDir;
       job.filename   = `${stem}${ext}`;
       job.stderr   = stderr;
     } else {
       job.status = 'error';
       job.stderr = stderr;
+      try { rmSync(outDir, { recursive: true, force: true }); } catch { /* ignore */ }
       // Detect common missing-dependency messages
       if (stderr.includes('xelatex') || stderr.includes('pdflatex') || stderr.includes('LaTeX')) {
         job.error = 'LaTeX is not installed. Install TeX Live or MiKTeX, or choose the "typst" format instead.';
@@ -149,11 +153,21 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!filePath) return res.status(400).json({ error: 'path is required' });
     if (!format)   return res.status(400).json({ error: 'format is required' });
 
-    const absPath = join(cwd, filePath);
+    const pagesDirResolved = resolve(join(cwd, ctx.config.pages_dir));
+    const absPath = resolve(join(cwd, filePath));
+    if (!absPath.startsWith(pagesDirResolved + sep)) {
+      return res.status(400).json({ error: 'Path traversal not allowed' });
+    }
     if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
 
     if (!Array.isArray(extraArgs)) {
       return res.status(400).json({ error: 'extraArgs must be an array' });
+    }
+    const SAFE_ARG = /^--[\w-]+(=[\w.,:/-]+)?$/;
+    for (const arg of extraArgs) {
+      if (typeof arg !== 'string' || !SAFE_ARG.test(arg)) {
+        return res.status(400).json({ error: `Unsafe extraArg: ${String(arg)}` });
+      }
     }
 
     purgeOldJobs();
@@ -212,9 +226,8 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     res.setHeader('Content-Type', mime);
 
     const stream = createReadStream(job.outputPath);
-    const outputPath = job.outputPath;
     stream.on('end', () => {
-      try { unlinkSync(outputPath); } catch { /* ignore */ }
+      try { if (job.outDir) rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
       jobs.delete(token);
     });
     stream.pipe(res);

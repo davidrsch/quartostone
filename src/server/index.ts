@@ -103,7 +103,9 @@ export async function createServer(ctx: ServerContext) {
   function broadcast(event: string, data?: unknown) {
     const msg = JSON.stringify({ event, data });
     wss.clients.forEach((client) => {
-      if (client.readyState === 1) client.send(msg);
+      if (client.readyState === 1) {
+        try { client.send(msg); } catch { /* dropped connection — ignore */ }
+      }
     });
   }
 

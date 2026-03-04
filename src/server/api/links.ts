@@ -175,7 +175,8 @@ export function registerLinksApi(app: Express, ctx: ServerContext): void {
       try {
         const content = readFileSync(join(pagesDir, sourcePath), 'utf-8');
         const targetTitle = pageMeta.get(target)?.title ?? target;
-        const linkRe = new RegExp(`\\[\\[${targetTitle}[^\\]]*\\]\\]`, 'i');
+        const escapedTitle = targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const linkRe = new RegExp(`\\[\\[${escapedTitle}[^\\]]*\\]\\]`, 'i');
         const lineIdx = content.split('\n').findIndex(l => linkRe.test(l) || l.includes(`[[`));
         if (lineIdx >= 0) excerpt = (content.split('\n')[lineIdx] ?? '').trim().slice(0, 120);
       } catch { /* ignore */ }

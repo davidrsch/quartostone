@@ -1,6 +1,6 @@
 /**
  * Full-text search command palette.
- * Opens on Ctrl+K / Cmd+K and lets users navigate to any workspace page.
+ * Opens on Ctrl+P / Cmd+P or via SearchOverlay.open().
  */
 
 export interface SearchOverlay {
@@ -48,13 +48,10 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
   let selectedIdx = -1;
   let currentResults: SearchResult[] = [];
 
-  /* ── Keyboard global shortcut ─────────────────────────────────────────── */
+  /* ── Keyboard shortcuts ───────────────────────────────────────────── */
 
+  // Escape closes overlay; Ctrl+P is wired in main.ts
   document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-      e.preventDefault();
-      if (isOpen) { doClose(); } else { doOpen(); }
-    }
     if (e.key === 'Escape' && isOpen) doClose();
   });
 

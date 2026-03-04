@@ -25,3 +25,11 @@ watch_interval_ms: 300
 
 # Port for the local Quartostone server.
 port: 4242
+
+# Directory (relative to workspace root) where .qmd page files are stored.
+# Default: pages
+# pages_dir: pages
+
+# Whether to automatically open a browser tab when the dev server starts.
+# Default: true
+# open_browser: true

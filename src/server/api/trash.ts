@@ -41,7 +41,8 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
   });
 
   app.post('/api/trash/restore/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = req.params['id'] as string;
+    if (!id || !/^[a-z0-9]+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return res.status(404).json({ error: 'Trashed item not found' });
@@ -63,7 +64,8 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
   });
 
   app.delete('/api/trash/:id', (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = req.params['id'] as string;
+    if (!id || !/^[a-z0-9]+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return res.status(404).json({ error: 'Not found' });

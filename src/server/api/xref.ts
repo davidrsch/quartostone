@@ -223,6 +223,47 @@ export function scanXRefsInProject(pagesDir: string, _filePath?: string): XRefs 
 
 // ── Route registration ────────────────────────────────────────────────────────
 
+// ── In-memory XRef cache (invalidated when any qmd file mtime changes) ───────
+
+interface XRefCache {
+  refs: XRef[];
+  mtimes: Map<string, number>; // absPath → mtimeMs
+}
+
+let xrefCache: XRefCache | null = null;
+
+/** Scan XRefs with mtime-based cache. Only rescans when files are added/changed/removed. */
+function scanXRefsWithCache(pagesDir: string, _filePath?: string): XRefs {
+  const files = walkFiles(pagesDir);
+
+  // Snapshot current mtimes
+  const currentMtimes = new Map<string, number>();
+  for (const f of files) {
+    try { currentMtimes.set(f, statSync(f).mtimeMs); } catch { /* skip */ }
+  }
+
+  // Validate cache
+  if (xrefCache !== null) {
+    const valid =
+      xrefCache.mtimes.size === currentMtimes.size &&
+      [...currentMtimes.entries()].every(([p, t]) => xrefCache!.mtimes.get(p) === t);
+    if (valid) return { baseDir: pagesDir, refs: xrefCache.refs };
+  }
+
+  // Rescan all files
+  const refs: XRef[] = [];
+  for (const absPath of [...currentMtimes.keys()]) {
+    try {
+      const content = readFileSync(absPath, 'utf-8');
+      const relPath = relative(pagesDir, absPath).replace(/\\/g, '/');
+      refs.push(...scanFileForXRefs(content, relPath));
+    } catch { /* skip unreadable */ }
+  }
+
+  xrefCache = { refs, mtimes: currentMtimes };
+  return { baseDir: pagesDir, refs };
+}
+
 export function registerXRefApi(app: Express, ctx: ServerContext): void {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
 
@@ -233,7 +274,7 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
    */
   app.post('/api/xref/index', (req: Request, res: Response) => {
     const { file } = req.body as { file?: string };
-    res.json(scanXRefsInProject(pagesDir, file));
+    res.json(scanXRefsWithCache(pagesDir, file));
   });
 
   /**
@@ -245,7 +286,7 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
     const { file, id } = req.body as { file?: string; id?: string };
     if (!id) return res.status(400).json({ error: 'id is required' });
 
-    const all = scanXRefsInProject(pagesDir, file);
+    const all = scanXRefsWithCache(pagesDir, file);
     all.refs = all.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);
     res.json(all);
   });

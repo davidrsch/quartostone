@@ -3,7 +3,7 @@
 
 import chokidar from 'chokidar';
 import { join, relative } from 'node:path';
-import { exec } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { simpleGit } from 'simple-git';
 import type { QuartostoneConfig } from './config.js';
 import { generateCommitSlug } from './config.js';
@@ -28,7 +28,15 @@ export function startWatcher(ctx: WatcherContext) {
 
   watcher.on('change', (filePath: string) => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => handleChange(filePath), ctx.config.watch_interval_ms);
+    debounceTimer = setTimeout(() => {
+      handleChange(filePath).catch(err =>
+        ctx.broadcast('render:error', { path: filePath, error: String(err) })
+      );
+    }, ctx.config.watch_interval_ms);
+  });
+
+  watcher.on('error', (err) => {
+    console.error('Watcher error:', err);
   });
 
   async function handleChange(filePath: string) {
@@ -39,13 +47,21 @@ export function startWatcher(ctx: WatcherContext) {
 
     // Render — compute a POSIX-style path relative to pagesDir (safe on Windows too)
     const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
-    const cmd =
-      ctx.config.render_scope === 'file'
-        ? `quarto render "${filePath}"`
-        : `quarto render "${ctx.cwd}"`;
+    const args = ctx.config.render_scope === 'file'
+      ? ['render', filePath]
+      : ['render', ctx.cwd];
 
-    exec(cmd, { cwd: ctx.cwd }, async (error, _stdout, stderr) => {
-      if (error) {
+    const proc = spawn('quarto', args, { cwd: ctx.cwd, shell: false });
+    let stderr = '';
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.stdout.on('data', () => { /* discard */ });
+
+    proc.on('error', (err) => {
+      ctx.broadcast('render:error', { path: relPath, error: err.message });
+    });
+
+    proc.on('close', async (code) => {
+      if (code !== 0) {
         ctx.broadcast('render:error', { path: relPath, error: stderr });
         return;
       }

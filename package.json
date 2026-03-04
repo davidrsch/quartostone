@@ -19,6 +19,7 @@
     "lint": "eslint src",
     "format": "prettier --write src",
     "typecheck": "tsc --noEmit",
+    "typecheck:client": "tsc --noEmit -p tsconfig.client.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

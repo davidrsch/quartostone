@@ -21,10 +21,18 @@
 
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
+import { resolve, join, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
 
 export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);
+  const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
+
+  /** Returns true if path is safely within pagesDir. */
+  function isPathSafe(rawPath: string): boolean {
+    const abs = resolve(join(ctx.cwd, rawPath));
+    return abs.startsWith(pagesDir + sep) || abs === pagesDir;
+  }
 
   app.get('/api/git/log', async (req: Request, res: Response) => {
     try {
@@ -181,7 +189,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/checkout', async (req: Request, res: Response) => {
     try {
       const { branch } = req.body as { branch?: string };
-      if (!branch) return res.status(400).json({ error: 'branch required' });
+      if (!branch || !/^[\w\-./]+$/.test(branch)) return res.status(400).json({ error: 'valid branch name required' });
 
       const status = await git.status();
       const wasStashed = !status.isClean();
@@ -212,7 +220,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/merge', async (req: Request, res: Response) => {
     try {
       const { branch, message } = req.body as { branch?: string; message?: string };
-      if (!branch) return res.status(400).json({ error: 'branch required' });
+      if (!branch || !/^[\w\-./]+$/.test(branch)) return res.status(400).json({ error: 'valid branch name required' });
       const mergeMsg = message ?? `Merge branch '${branch}'`;
       const result = await git.merge([branch, '--no-ff', '-m', mergeMsg]);
       if (result.failed) {
@@ -277,6 +285,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const path = req.query['path'] as string | undefined;
       if (!sha)  return res.status(400).json({ error: 'sha required' });
       if (!path) return res.status(400).json({ error: 'path required' });
+      if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
       // git show sha:path
       const content = await git.show([`${sha}:${path}`]);
       res.json({ content, sha, path });
@@ -296,6 +305,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const { sha, path } = req.body as { sha?: string; path?: string };
       if (!sha)  return res.status(400).json({ error: 'sha required' });
       if (!path) return res.status(400).json({ error: 'path required' });
+      if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
       await git.checkout([sha, '--', path]);
       res.json({ ok: true, sha, path });
     } catch (e) {

@@ -17,22 +17,41 @@ All issues are tracked on the [project board](https://github.com/users/davidrsch
 
 **Prerequisites:** Node.js 22+, Quarto, Git
 
+The visual editor relies on a local build of [panmirror](../quarto-fork). Clone it as a sibling of this repo:
+
+```bash
+git clone https://github.com/davidrsch/quarto quartostone-quarto-fork
+# or use the fork at ../quarto-fork relative to this repo
+```
+
 ```bash
 git clone https://github.com/davidrsch/quartostone
 cd quartostone
 npm install
+npm run build:panmirror   # builds src/client/public/panmirror.js from ../quarto-fork
 ```
 
-**Run the server in dev mode:**
+**Run the full dev environment (two terminals):**
+
+Terminal 1 — server with hot reload:
 
 ```bash
 npm run dev:server
 ```
 
+Terminal 2 — Vite client with HMR:
+
+```bash
+npm run dev:client
+```
+
+Then open `http://localhost:4242` in your browser.
+
 **Typecheck + lint:**
 
 ```bash
-npm run typecheck
+npm run typecheck          # server + shared code
+npm run typecheck:client   # client-side TypeScript
 npm run lint
 ```
 

@@ -158,7 +158,9 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   app.post('/api/pages', (req: Request, res: Response) => {
     const { path: newPath, title } = req.body as { path: string; title?: string };
     if (!newPath) return res.status(400).json({ error: 'path required' });
-    const filePath = join(pagesDir, newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`);
+    const normalized = newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`;
+    const filePath = guardAnyPath(normalized, res);
+    if (!filePath) return;
     if (existsSync(filePath)) return res.status(409).json({ error: 'Page already exists' });
     const pageTitle = title ?? newPath.split('/').pop()?.replace('.qmd', '') ?? 'New Page';
     mkdirSync(dirname(filePath), { recursive: true });

@@ -19,7 +19,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       cmd = `quarto render "${ctx.cwd}"`;
     }
 
-    exec(cmd, { cwd: ctx.cwd }, (error, stdout, stderr) => {
+    exec(cmd, { cwd: ctx.cwd, timeout: 120_000 }, (error, stdout, stderr) => {
       if (error) {
         res.status(500).json({ ok: false, error: stderr || error.message });
       } else {

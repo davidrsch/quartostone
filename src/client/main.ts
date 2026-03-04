@@ -401,7 +401,7 @@ async function saveCurrentPage() {
   const content = editorMode === 'visual' && activeVisual
     ? await activeVisual.getMarkdown()
     : (activeView ? activeView.state.doc.toString() : '');
-  if (!content) return;
+  if (content == null) return;
   sbSaveStatus.textContent = 'Saving…';
   try {
     await fetch(`/api/pages/${encodeURIComponent(activePath)}`, {
@@ -492,6 +492,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       activeVisual = await createVisualEditor({
         container: editorMountEl,
         initialMarkdown: data.content ?? '',
+        documentPath: path,
         onDirty: () => {
           isDirty = true;
           btnSave.disabled = false;
@@ -708,7 +709,7 @@ backlinksPanel = initBacklinksPanel(
 );
 
 // ── Search overlay ───────────────────────────────────────────────────────────
-initSearchOverlay((path, title) => openPage(path, title));
+const searchOverlay = initSearchOverlay((path, title) => openPage(path, title));
 
 // ── Graph panel ──────────────────────────────────────────────────────────────
 graphView = initGraphPanel(
@@ -717,12 +718,11 @@ graphView = initGraphPanel(
 );
 document.getElementById('btn-graph')?.addEventListener('click', () => graphView?.open());
 
-const historyPanel = initHistoryPanel(historyPanelEl, () => {
+initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page
   if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
   showToast('File restored to selected commit', 'success');
-});
-historySetPage = historyPanel.setPage;
+}).then(hp => { historySetPage = hp.setPage; });
 
 updateBranchStatus();
 
@@ -742,15 +742,20 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (activePath) openCommitDialog(`qs-${Math.random().toString(36).slice(2, 10)}`);
   }
-  // Ctrl+Shift+E — reserved for source/visual mode toggle (disabled until visual editor rebuilt)
+  // Ctrl+Shift+E — toggle visual/source editor mode
   if (mod && e.shiftKey && e.key === 'E') {
     e.preventDefault();
-    showToast('Visual editor is not available in this release', 'error', 3500);
+    if (activePath && !activeDb) switchMode(editorMode === 'visual' ? 'source' : 'visual');
   }
   // Ctrl+Shift+P — toggle preview panel (L-1)
   if (mod && e.shiftKey && e.key === 'P') {
     e.preventDefault();
     document.getElementById('btn-preview')?.click();
+  }
+  // Ctrl+P — search pages overlay
+  if (mod && !e.shiftKey && e.key === 'p') {
+    e.preventDefault();
+    searchOverlay.open();
   }
   // Ctrl+K — command palette (#113)
   if (mod && e.key === 'k') {

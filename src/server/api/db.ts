@@ -4,7 +4,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import * as yaml from 'yaml';
 import type { ServerContext } from '../index.js';
 
@@ -111,12 +111,13 @@ export function serialiseDbFile(page: DbPage): string {
 
 // ── Route handlers ───────────────────────────────────────────────────────────
 
-async function resolveAndCheck(cwd: string, rawPath: string | undefined, res: Response)
+async function resolveAndCheck(cwd: string, pagesDir: string, rawPath: string | undefined, res: Response)
   : Promise<string | null>
 {
   if (!rawPath) { res.status(400).json({ error: 'Missing path parameter' }); return null; }
   const abs = resolve(join(cwd, rawPath));
-  if (!abs.startsWith(resolve(cwd))) {
+  const pagesDirResolved = resolve(pagesDir);
+  if (!abs.startsWith(pagesDirResolved + sep) && abs !== pagesDirResolved) {
     res.status(400).json({ error: 'Path traversal not allowed' });
     return null;
   }
@@ -127,10 +128,11 @@ async function resolveAndCheck(cwd: string, rawPath: string | undefined, res: Re
 
 export function registerDbApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
+  const pagesDir = join(cwd, ctx.config.pages_dir);
 
   // GET /api/db?path=pages/tasks.qmd  → { schema, rows }
   app.get('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const content = await readFile(abs, 'utf-8');
@@ -147,7 +149,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
 
   // PUT /api/db?path=pages/tasks.qmd  body: { schema, rows }
   app.put('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const { schema, rows } = req.body as DbPage;
@@ -166,7 +168,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
   // POST /api/db/create?path=...  body: { title, schema? }
   // Creates a new database .qmd file
   app.post('/api/db/create', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const { title = 'Untitled Database', schema } = req.body as {
