@@ -167,20 +167,20 @@ test.describe('#140 Split editor pane — focus tracking', () => {
 test.describe('#140 Split editor pane — command palette', () => {
   test('"Toggle split editor" entry appears in command palette', async ({ page }) => {
     await page.goto('/');
-    // Open command palette via Ctrl+P
-    await page.keyboard.press('Control+p');
-    await expect(page.locator('#cmd-palette-dialog')).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('#cmd-palette-dialog')).toContainText('Toggle split editor', { timeout: 5_000 });
+    // Open command palette via Ctrl+K
+    await page.keyboard.press('Control+k');
+    await expect(page.locator('#cmd-palette')).not.toHaveClass(/hidden/, { timeout: 5_000 });
+    await expect(page.locator('#cmd-palette-list')).toContainText('Toggle split editor', { timeout: 5_000 });
   });
 
   test('command palette toggle split entry closes when activated', async ({ page }) => {
     await page.goto('/');
-    await page.keyboard.press('Control+p');
-    await expect(page.locator('#cmd-palette-dialog')).toBeVisible({ timeout: 5_000 });
+    await page.keyboard.press('Control+k');
+    await expect(page.locator('#cmd-palette')).not.toHaveClass(/hidden/, { timeout: 5_000 });
     // Click the "Toggle split editor" item
-    await page.locator('#cmd-palette-dialog').getByText('Toggle split editor').click();
+    await page.locator('#cmd-palette-list').getByText('Toggle split editor').click();
     await expect(page.locator('#editor-split')).toHaveClass(/split-active/, { timeout: 5_000 });
-    await expect(page.locator('#cmd-palette-dialog')).toBeHidden({ timeout: 5_000 });
+    await expect(page.locator('#cmd-palette')).toHaveClass(/hidden/, { timeout: 5_000 });
   });
 });
 
