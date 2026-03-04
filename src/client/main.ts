@@ -48,6 +48,7 @@ const commitMsgInput   = document.getElementById('commit-msg') as HTMLInputEleme
 const btnCommitConfirm = document.getElementById('btn-commit-confirm') as HTMLButtonElement;
 const btnCommitCancel  = document.getElementById('btn-commit-cancel') as HTMLButtonElement;
 const sbBranch         = document.getElementById('sb-branch')!;
+const sbSync           = document.getElementById('sb-sync')!;
 const sbRenderStatus   = document.getElementById('sb-render-status')!;
 const sbSaveStatus     = document.getElementById('sb-save-status')!;
 const editorMount2El   = document.getElementById('editor-mount-2')!;
@@ -423,12 +424,20 @@ async function saveCurrentPage() {
 async function updateBranchStatus() {
   try {
     const res = await fetch('/api/git/status');
-    const s = await res.json() as { current: string; files: unknown[] };
+    const s = await res.json() as { current: string; files: unknown[]; ahead: number; behind: number };
     const dirty = s.files.length > 0;
     sbBranch.textContent = `⎇ ${s.current}${dirty ? ` · ${s.files.length} changed` : ''}`;
     sbBranch.className = dirty ? 'sb-dirty' : '';
+    // Populate ahead/behind sync indicator
+    const syncParts: string[] = [];
+    if (s.ahead  > 0) syncParts.push(`↑${s.ahead}`);
+    if (s.behind > 0) syncParts.push(`↓${s.behind}`);
+    sbSync.textContent = syncParts.join(' ');
+    sbSync.classList.toggle('hidden', syncParts.length === 0);
   } catch {
     sbBranch.textContent = '';
+    sbSync.textContent = '';
+    sbSync.classList.add('hidden');
   }
 }
 
@@ -723,6 +732,11 @@ initHistoryPanel(historyPanelEl, () => {
   if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
   showToast('File restored to selected commit', 'success');
 }).then(hp => { historySetPage = hp.setPage; });
+
+// Click on ahead/behind badge → open Git panel
+sbSync.addEventListener('click', () => {
+  document.querySelector<HTMLButtonElement>('.stab[data-tab="git"]')?.click();
+});
 
 updateBranchStatus();
 

@@ -243,3 +243,11 @@ describe.skipIf(!pandocAvailable)('POST /api/pandoc/getBibliography (stub)', () 
     expect(Array.isArray(res.body.bibliography.sources)).toBe(true);
   });
 });
+
+describe('POST /api/pandoc/citationHTML (stub)', () => {
+  it('returns an empty string stub with status 200', async () => {
+    const res = await client.post('/api/pandoc/citationHTML').send({});
+    expect(res.status).toBe(200);
+    expect(typeof res.body).toBe('string');
+  });
+});
