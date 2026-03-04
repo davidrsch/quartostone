@@ -168,10 +168,16 @@ describe('pandocServer', () => {
       expect(result).toBeNull();
     });
 
-    it('editorServer.xref.quartoXrefTypes resolves to empty array', async () => {
+    it('editorServer.xref.indexForFile resolves to empty refs when no server running', async () => {
+      // The xrefServer now calls /api/xref/index — stub fetch to return empty
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ baseDir: '', refs: [] }),
+      }));
       const { editorServer } = await import('../../../src/client/visual/pandocServer.js');
-      const result = await editorServer.xref.quartoXrefTypes();
-      expect(result).toEqual([]);
+      const result = await editorServer.xref.indexForFile('/pages/doc.qmd');
+      expect(result).toMatchObject({ refs: [] });
     });
   });
 });

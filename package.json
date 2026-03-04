@@ -13,6 +13,7 @@
     "build": "tsc --project tsconfig.json",
     "build:client": "vite build",
     "build:all": "npm run build && npm run build:client",
+    "build:panmirror": "node scripts/build-panmirror.mjs",
     "dev:server": "tsx watch src/cli/commands/serve.ts",
     "dev:client": "vite",
     "lint": "eslint src",

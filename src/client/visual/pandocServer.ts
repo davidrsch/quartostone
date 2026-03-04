@@ -127,10 +127,21 @@ const pubmedServer = {
 };
 
 const xrefServer = {
-  quartoXrefTypes: async () => [],
-  quartoXrefs: async () => ({ refs: [] }),
-  xrefIndexForFile: async () => ({ refs: [] }),
-  xrefForId: async () => null,
+  /** Called by panmirror to populate `@xref` completions for the current document. */
+  async quartoIndexForFile(file: string) {
+    return apiPost<{ baseDir: string; refs: unknown[] }>('/api/xref/index', { file });
+  },
+  /** Called by panmirror to resolve a specific xref id. */
+  async quartoXrefForId(file: string, id: string) {
+    return apiPost<{ baseDir: string; refs: unknown[] }>('/api/xref/forId', { file, id });
+  },
+  // bookdown-style xrefs — not implemented
+  async indexForFile(_file: string) {
+    return { baseDir: '', refs: [] };
+  },
+  async xrefForId(_file: string, _id: string) {
+    return { baseDir: '', refs: [] };
+  },
 };
 
 // ── Assembled EditorServer ────────────────────────────────────────────────────
