@@ -43,17 +43,11 @@ The sidebar now supports:
 
 No workaround needed.
 
-### Split Editor Pane
-Only a single editor and preview pane are shown at one time. Side-by-side editing of two files is not yet implemented.  
-**Plan**: `docs/technical-review.md §3 Phase D P3`
-
 ---
 
 ## UI/UX Gaps
 
-| Issue | Workaround |
-|-------|-----------|
-| No split editor pane | Open two browser tabs |
+No open UI/UX gaps at this time.
 
 ---
 
@@ -66,6 +60,7 @@ Only a single editor and preview pane are shown at one time. Side-by-side editin
 | Sidebar was fully read-only (no rename/move/delete/context menu) | Full file management UI with context menus, inline rename, DnD, Move-to dialog, Duplicate, Trash tray (Phase 11) |
 | Branch picker opened a native browser prompt | Replaced with in-page `<dialog>`-based dropdown (Phase 8) |
 | Editor header had no breadcrumb navigation | Breadcrumb bar added below tab bar; folder segments navigate the sidebar tree (Phase 12) |
+| No split editor pane | Split pane with independent tab bars, draggable resizer, keyboard shortcut (Ctrl+\\), and sidebar focus routing (Phase 12) |
 | Visual editor (Tiptap) silently corrupted content on round-trip | Replaced with panmirror (Phase 10) |
 | Sidebar width was fixed at 260 px | Resizable via drag handle (Phase 8) |
 | No light/dark theme toggle | Theme toggle added in toolbar (Phase 8) |

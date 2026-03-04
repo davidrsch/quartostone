@@ -50,6 +50,9 @@ const btnCommitCancel  = document.getElementById('btn-commit-cancel') as HTMLBut
 const sbBranch         = document.getElementById('sb-branch')!;
 const sbRenderStatus   = document.getElementById('sb-render-status')!;
 const sbSaveStatus     = document.getElementById('sb-save-status')!;
+const editorMount2El   = document.getElementById('editor-mount-2')!;
+const editorSplitEl    = document.getElementById('editor-split')!;
+const btnSplit         = document.getElementById('btn-split') as HTMLButtonElement;
 
 // L-2: named-input dialogs (replace window.prompt)
 const newPageDialog    = document.getElementById('new-page-dialog') as HTMLDialogElement;
@@ -82,6 +85,12 @@ let backlinksPanel: BacklinksPanel | null = null;
 let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false; // M-4: guard against concurrent mode switches
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
+
+// ─── Split pane state (#140) ──────────────────────────────────────────────────
+let splitActive = false;
+let focusedPane: 'primary' | 'secondary' = 'primary';
+let activeView2: EditorView | null = null;
+let activePath2: string | null = null;
 
 const propsPanel = createPropertiesPanel(propertiesBody);
 
@@ -547,6 +556,78 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   }
 }
 
+// ─── #140 Split editor helpers ────────────────────────────────────────────────
+
+/** Set which pane is "focused" — sidebar nav routes into it. */
+function setFocusedPane(pane: 'primary' | 'secondary') {
+  focusedPane = pane;
+  const primaryEl  = document.getElementById('editor-pane-primary');
+  const secondaryEl = document.getElementById('editor-pane-secondary');
+  primaryEl?.classList.toggle('focused-pane', pane === 'primary');
+  secondaryEl?.classList.toggle('focused-pane', pane === 'secondary');
+}
+
+/** Open a file in the secondary pane (source-only). */
+async function openPageInPane2(path: string, name: string): Promise<void> {
+  activeView2?.destroy();
+  activeView2 = null;
+  editorMount2El.innerHTML = '';
+  activePath2 = path;
+
+  try {
+    activeView2 = await createEditor({
+      container: editorMount2El,
+      pagePath: path,
+      onSave: () => {
+        markTabDirty2(path, false);
+      },
+      onSaveError: (err) => {
+        showToast(`Pane 2 auto-save failed: ${err.message}`, 'error');
+      },
+      onDirty: () => {
+        markTabDirty2(path, true);
+      },
+    });
+  } catch (e) {
+    showToast(`Failed to load in split pane: ${String(e)}`, 'error');
+    activePath2 = null;
+    return;
+  }
+  ensureTab2(path, name);
+}
+
+/** Destroy the secondary pane editor and clear its state. */
+function closeSplitPane(): void {
+  activeView2?.destroy();
+  activeView2 = null;
+  activePath2 = null;
+  openTabs2.length = 0;
+  activeTabPath2 = null;
+  editorMount2El.innerHTML = '';
+  renderTabBar2();
+}
+
+/** Activate or deactivate the split-editor view. */
+function toggleSplit(): void {
+  splitActive = !splitActive;
+  editorSplitEl.classList.toggle('split-active', splitActive);
+  const divider = document.getElementById('editor-pane-divider')!;
+  divider.classList.toggle('hidden', !splitActive);
+  btnSplit.setAttribute('aria-pressed', String(splitActive));
+  btnSplit.classList.toggle('active', splitActive);
+
+  if (splitActive) {
+    // When opening, clone the current primary file into pane 2 (if any is open)
+    setFocusedPane('primary');
+    if (activePath) {
+      void openPageInPane2(activePath, pageTitleEl.textContent ?? activePath);
+    }
+  } else {
+    closeSplitPane();
+    setFocusedPane('primary');
+  }
+}
+
 // ─── Live reload (WebSocket) ──────────────────────────────────────────────────
 connectLiveReload((event, data) => {
   if (event === 'render:complete') {
@@ -565,7 +646,15 @@ connectLiveReload((event, data) => {
 });
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-initSidebar(fileTreeEl, (path, name) => { addRecentPage(path, name); openPage(path, name); }, {
+initSidebar(fileTreeEl, (path, name) => {
+  addRecentPage(path, name);
+  if (splitActive && focusedPane === 'secondary') {
+    void openPageInPane2(path, name);
+  } else {
+    setFocusedPane('primary');
+    void openPage(path, name);
+  }
+}, {
   onNewPage(folderPath) {
     newPageNameInput.value = folderPath ? `${folderPath}/` : '';
     newPageDialog.showModal();
@@ -667,6 +756,11 @@ document.addEventListener('keydown', e => {
   if (mod && e.key === 'k') {
     e.preventDefault();
     openCmdPalette();
+  }
+  // Ctrl+\ — toggle split editor (#140)
+  if (mod && e.key === '\\') {
+    e.preventDefault();
+    toggleSplit();
   }
   // Ctrl+Shift+B — toggle properties panel shortcut
   if (mod && e.shiftKey && e.key === 'B') {
@@ -792,7 +886,81 @@ function markTabDirty(path: string, dirty: boolean) {
   if (tab) { tab.dirty = dirty; renderTabBar(); }
 }
 
-// Intercept sidebar file-tree clicks via MutationObserver on page title:
+// ─── #140 Secondary pane tab bar ──────────────────────────────────────────────
+const openTabs2: TabEntry[] = [];
+let activeTabPath2: string | null = null;
+
+function renderTabBar2() {
+  const bar = document.getElementById('tab-bar-2')!;
+  if (!bar) return;
+  bar.innerHTML = '';
+  for (const tab of openTabs2) {
+    const el = document.createElement('div');
+    el.className = 'editor-tab' + (tab.path === activeTabPath2 ? ' active' : '');
+    el.title = tab.path;
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', String(tab.path === activeTabPath2));
+    el.dataset.path = tab.path;
+
+    const dot = document.createElement('span');
+    dot.className = 'editor-tab-dot';
+    dot.style.visibility = tab.dirty ? 'visible' : 'hidden';
+
+    const name = document.createElement('span');
+    name.className = 'editor-tab-name';
+    name.textContent = tab.name;
+
+    const close = document.createElement('button');
+    close.className = 'editor-tab-close';
+    close.title = 'Close tab';
+    close.setAttribute('aria-label', `Close ${tab.name}`);
+    close.textContent = '×';
+    close.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closeTab2(tab.path);
+    });
+
+    el.append(dot, name, close);
+    el.addEventListener('click', () => {
+      setFocusedPane('secondary');
+      if (tab.path !== activePath2) void openPageInPane2(tab.path, tab.name);
+    });
+    bar.appendChild(el);
+  }
+}
+
+function ensureTab2(path: string, name: string) {
+  if (!openTabs2.find(t => t.path === path)) {
+    openTabs2.push({ path, name, dirty: false });
+  }
+  activeTabPath2 = path;
+  renderTabBar2();
+}
+
+function closeTab2(path: string) {
+  const idx = openTabs2.findIndex(t => t.path === path);
+  if (idx === -1) return;
+  openTabs2.splice(idx, 1);
+  if (activeTabPath2 === path) {
+    const next = openTabs2[idx] ?? openTabs2[idx - 1];
+    if (next) {
+      void openPageInPane2(next.path, next.name);
+    } else {
+      activeTabPath2 = null;
+      activePath2 = null;
+      activeView2?.destroy(); activeView2 = null;
+      editorMount2El.innerHTML = '';
+    }
+  }
+  renderTabBar2();
+}
+
+function markTabDirty2(path: string, dirty: boolean) {
+  const tab = openTabs2.find(t => t.path === path);
+  if (tab) { tab.dirty = dirty; renderTabBar2(); }
+}
+
+
 requestAnimationFrame(() => {
   const tabBarEl = document.getElementById('tab-bar')!;
   if (!tabBarEl) return;
@@ -825,6 +993,7 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
       { icon: '👁',  label: 'Toggle preview',    hint: 'Ctrl+⇧P',  action: () => (document.getElementById('btn-preview') as HTMLButtonElement)?.click() },
       { icon: '⊡',  label: 'Toggle properties', hint: 'Ctrl+⇧B',  action: () => btnProperties.click() },
       { icon: '◈',  label: 'Open graph',         hint: '',          action: () => graphView?.open() },
+      { icon: '⧉',  label: 'Toggle split editor', hint: 'Ctrl+\\',  action: () => toggleSplit() },
       { icon: '?',  label: 'Keyboard shortcuts', hint: '',          action: () => (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal() },
     ];
   }
@@ -936,7 +1105,47 @@ document.getElementById('btn-kbd')?.addEventListener('click', () => {
   (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal();
 });
 
-// ─── Tab: dirty-state sync helper (called from isDirty setters) ──────────────
+// ─── #140 Split editor wiring ─────────────────────────────────────────────────
+btnSplit.addEventListener('click', toggleSplit);
+
+// Pane focus: clicking inside a pane marks it as the active target for sidebar nav
+{
+  const primaryPane   = document.getElementById('editor-pane-primary')!;
+  const secondaryPane = document.getElementById('editor-pane-secondary')!;
+  primaryPane.addEventListener('mousedown', () => { if (splitActive) setFocusedPane('primary'); });
+  secondaryPane.addEventListener('mousedown', () => { if (splitActive) setFocusedPane('secondary'); });
+}
+
+// Pane divider drag-to-resize between primary and secondary editor panes
+{
+  const paneDivider   = document.getElementById('editor-pane-divider')!;
+  const primaryPane   = document.getElementById('editor-pane-primary') as HTMLElement;
+  const secondaryPane = document.getElementById('editor-pane-secondary') as HTMLElement;
+
+  paneDivider.addEventListener('mousedown', ev => {
+    ev.preventDefault();
+    paneDivider.classList.add('dragging');
+    const startX = ev.clientX;
+    const startW = primaryPane.offsetWidth;
+    const total  = (primaryPane.parentElement as HTMLElement).offsetWidth;
+    const onMove = (e: MouseEvent) => {
+      const newW = Math.max(200, Math.min(total - 200, startW + e.clientX - startX));
+      primaryPane.style.flex = 'none';
+      primaryPane.style.width = `${newW}px`;
+      secondaryPane.style.flex = '1';
+      secondaryPane.style.width = '';
+    };
+    const onUp = () => {
+      paneDivider.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+
 // Patch into existing dirty-state changes by observing sbSaveStatus text
 {
   const obs = new MutationObserver(() => {
