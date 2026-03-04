@@ -5,7 +5,7 @@
 
 interface ExportJobStatus {
   token: string;
-  status: 'pending' | 'running' | 'complete' | 'error';
+  status: 'pending' | 'running' | 'done' | 'error';
   filename?: string;
   error?: string;
 }
@@ -154,12 +154,18 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       let job: ExportJobStatus;
       try {
         const res = await fetch(`/api/export/status?token=${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          clearInterval(id);
+          showToast('Export poll failed', true);
+          btnExport!.disabled = false;
+          return;
+        }
         job = await res.json() as ExportJobStatus;
       } catch {
         return; // network hiccup — keep polling
       }
 
-      if (job.status === 'complete') {
+      if (job.status === 'done') {
         clearInterval(id);
         btnExport!.disabled = false;
         triggerDownload(token, job.filename ?? 'export');

@@ -58,6 +58,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
 
     child.on('close', (code: number | null) => {
       clearTimeout(timer);
+      if (res.headersSent) return;
       if (code === 0) {
         res.json({ ok: true, output: stdout });
       } else {

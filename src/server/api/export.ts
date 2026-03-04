@@ -28,6 +28,15 @@ export const SUPPORTED_FORMATS = [
 
 export type ExportFormat = typeof SUPPORTED_FORMATS[number] | string;
 
+// ── Argument security ─────────────────────────────────────────────────────────
+
+const BLOCKED_ARGS = [
+  '--output', '--lua-filter', '--extract-media', '--resource-path',
+  '--data-dir', '--filter', '--template', '--include-in-header',
+  '--include-before-body', '--include-after-body',
+];
+const SAFE_ARG = /^--[\w-]+(=[\w.,:-]+)?$/;
+
 // ── Job store (in-memory) ─────────────────────────────────────────────────────
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
@@ -165,12 +174,11 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!Array.isArray(extraArgs)) {
       return res.status(400).json({ error: 'extraArgs must be an array' });
     }
-    const SAFE_ARG = /^--[\w-]+(=[\w.,:/-]+)?$/;
-    for (const arg of extraArgs) {
-      if (typeof arg !== 'string' || !SAFE_ARG.test(arg)) {
-        return res.status(400).json({ error: `Unsafe extraArg: ${String(arg)}` });
-      }
-    }
+    const safeExtraArgs = (extraArgs ?? []).filter((a: unknown): a is string => {
+      if (typeof a !== 'string') return false;
+      if (!SAFE_ARG.test(a)) return false;
+      return !BLOCKED_ARGS.some(b => a === b || a.startsWith(b + '='));
+    });
 
     purgeOldJobs();
     const token = randomUUID();
@@ -178,7 +186,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     jobs.set(token, job);
 
     // Start async — respond immediately with token
-    setImmediate(() => runExport(cwd, absPath, format, extraArgs, job));
+    setImmediate(() => runExport(cwd, absPath, format, safeExtraArgs, job));
 
     res.json({ token, status: 'pending' });
   });

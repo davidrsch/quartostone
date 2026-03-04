@@ -241,8 +241,12 @@ export function connectLiveReload(onEvent: (event: string, data: unknown) => voi
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
     ws.onmessage = (msg) => {
-      const payload = JSON.parse(msg.data as string) as { event: string; data?: unknown };
-      onEvent(payload.event, payload.data);
+      try {
+        const payload = JSON.parse(msg.data as string) as { event: string; data?: unknown };
+        onEvent(payload.event, payload.data);
+      } catch {
+        // silently ignore malformed messages
+      }
     };
     ws.onclose = () => setTimeout(connect, 2000);
   }

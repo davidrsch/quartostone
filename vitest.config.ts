@@ -21,7 +21,8 @@ export default defineConfig({
       // or real HTTP/WebSocket infrastructure — those are covered by E2E tests.
       exclude: [
         'src/server/watcher.ts',  // chokidar file-watch loop; tested via E2E
-        'src/server/api/render.ts', // `quarto` subprocess; tested via E2E
+        'src/server/api/render.ts',   // `quarto` subprocess; tested via E2E
+        'src/server/api/preview.ts',  // `quarto` subprocess + live TCP; tested via E2E
       ],
       reporter: ['text', 'lcov', 'html'],
       thresholds: {

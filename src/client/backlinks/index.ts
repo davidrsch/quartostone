@@ -45,13 +45,23 @@ export function initBacklinksPanel(
     for (const entry of entries) {
       const item = document.createElement('div');
       item.className = 'bl-item';
-      item.innerHTML = `
-        <button class="bl-title" data-path="${entry.path}">${entry.title}</button>
-        ${entry.excerpt ? `<p class="bl-excerpt">"${entry.excerpt}"</p>` : ''}
-      `;
-      item.querySelector<HTMLButtonElement>('.bl-title')?.addEventListener('click', () => {
+
+      const btn = document.createElement('button');
+      btn.className = 'bl-title';
+      btn.dataset['path'] = entry.path;
+      btn.textContent = entry.title;
+      btn.addEventListener('click', () => {
         onOpenPage(entry.path, entry.title);
       });
+      item.appendChild(btn);
+
+      if (entry.excerpt) {
+        const p = document.createElement('p');
+        p.className = 'bl-excerpt';
+        p.textContent = `"${entry.excerpt}"`;
+        item.appendChild(p);
+      }
+
       containerEl.appendChild(item);
     }
   }

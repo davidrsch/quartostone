@@ -246,6 +246,12 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     const timeoutMs = Number.isFinite(rawTimeout) ? Math.min(rawTimeout, 30000) : 5000;
     if (isNaN(port)) return res.status(400).json({ error: 'port is required' });
 
+    // SSRF guard: only allow polling ports that belong to active preview sessions
+    const activeSessionPorts = new Set([...previews.values()].map(s => s.port));
+    if (!activeSessionPorts.has(port)) {
+      return res.status(400).json({ error: 'No active preview session on that port' });
+    }
+
     const deadline = Date.now() + timeoutMs;
     const poll = (): Promise<boolean> => new Promise(resolve => {
       if (Date.now() >= deadline) { resolve(false); return; }
