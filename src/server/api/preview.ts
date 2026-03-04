@@ -9,7 +9,7 @@
 import type { Express, Request, Response } from 'express';
 import { spawn, execSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createServer, createConnection } from 'node:net';
 import type { ServerContext } from '../index.js';
@@ -141,7 +141,7 @@ function startPreview(
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────
-
+const PREVIEW_FORMATS = ['html', 'revealjs', 'pdf', 'docx', 'pptx'] as const;
 export function registerPreviewApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
 
@@ -162,8 +162,18 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 
     if (!filePath) return res.status(400).json({ error: 'path is required' });
 
+    if (format && !PREVIEW_FORMATS.includes(format as typeof PREVIEW_FORMATS[number])) {
+      return res.status(400).json({ error: 'Invalid format' });
+    }
+
     const absPath = join(cwd, filePath);
     if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
+
+    const pagesDir = resolve(join(cwd, ctx.config.pages_dir));
+    const abs = resolve(absPath);
+    if (!abs.startsWith(pagesDir + sep) && abs !== pagesDir) {
+      return res.status(400).json({ error: 'Path outside pages directory' });
+    }
 
     // Re-use existing preview if same path and format
     const existing = previews.get(filePath);
@@ -232,10 +242,11 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   // Returns { ready: true } when up, { ready: false, timedOut: true } on timeout.
   app.get('/api/preview/ready', async (req: Request, res: Response) => {
     const port    = parseInt(req.query['port'] as string ?? '', 10);
-    const timeout = Math.min(parseInt(req.query['timeout'] as string ?? '15000', 10), 30_000);
+    const rawTimeout = parseInt(String(req.query['timeout'] ?? ''), 10);
+    const timeoutMs = Number.isFinite(rawTimeout) ? Math.min(rawTimeout, 30000) : 5000;
     if (isNaN(port)) return res.status(400).json({ error: 'port is required' });
 
-    const deadline = Date.now() + timeout;
+    const deadline = Date.now() + timeoutMs;
     const poll = (): Promise<boolean> => new Promise(resolve => {
       if (Date.now() >= deadline) { resolve(false); return; }
       const sock = createConnection({ port, host: '127.0.0.1' });

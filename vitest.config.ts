@@ -16,7 +16,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      include: ['src/server/**/*.ts'],
+      include: ['src/server/**/*.ts', 'src/client/**/*.ts'],
       // Exclude files that require external processes (Quarto render, chokidar)
       // or real HTTP/WebSocket infrastructure — those are covered by E2E tests.
       exclude: [

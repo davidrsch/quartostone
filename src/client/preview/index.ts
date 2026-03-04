@@ -79,6 +79,10 @@ export function initPreviewPanel(): PreviewPanel {
       // #118 — Use server-side TCP readiness poll instead of client-side fetch polling.
       // The server checks the TCP port directly which is more reliable than a CORS fetch.
       const readyRes = await fetch(`/api/preview/ready?port=${data.port}&timeout=20000`);
+      if (!readyRes.ok) {
+        setError(`Preview server readiness check failed (HTTP ${readyRes.status})`);
+        return;
+      }
       const readyData = await readyRes.json().catch(() => ({ ready: false })) as { ready: boolean };
       if (!readyData.ready) {
         console.warn('[preview] quarto server did not become ready in 20 s');
@@ -136,22 +140,26 @@ export function initPreviewPanel(): PreviewPanel {
       resizer.classList.add('dragging');
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'col-resize';
-    });
 
-    document.addEventListener('mousemove', (e: MouseEvent) => {
-      if (!dragging) return;
-      const delta = startX - e.clientX;
-      const newWidth = Math.max(200, Math.min(startWidth + delta, window.innerWidth * 0.75));
-      pane.style.width = newWidth + 'px';
-      pane.style.flex = 'none';
-    });
+      const onMove = (e: MouseEvent) => {
+        if (!dragging) return;
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(200, Math.min(startWidth + delta, window.innerWidth * 0.75));
+        pane.style.width = newWidth + 'px';
+        pane.style.flex = 'none';
+      };
 
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      resizer.classList.remove('dragging');
-      document.body.style.removeProperty('user-select');
-      document.body.style.removeProperty('cursor');
+      const onUp = () => {
+        dragging = false;
+        resizer.classList.remove('dragging');
+        document.body.style.removeProperty('user-select');
+        document.body.style.removeProperty('cursor');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
   }
 

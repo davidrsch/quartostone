@@ -143,11 +143,13 @@ export function initBranchPicker(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch }),
       });
-      const data = await res.json() as { ok?: boolean; branch?: string; stashConflict?: boolean; error?: string };
       if (!res.ok) {
-        alert(`Could not switch to "${branch}": ${data.error ?? 'unknown error'}`);
+        let msg = `Could not switch to "${branch}": unknown error`;
+        try { const e = await res.json() as { error?: string }; msg = `Could not switch to "${branch}": ${e.error ?? 'unknown error'}`; } catch { /* ignore */ }
+        alert(msg);
         return;
       }
+      const data = await res.json() as { ok?: boolean; branch?: string; stashConflict?: boolean; error?: string };
       pickerLabel.textContent = branch;
       onSwitched(branch, data.stashConflict);
     } catch {
@@ -163,16 +165,21 @@ export function initBranchPicker(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch }),
       });
-      const data = await res.json() as { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+      const text = await res.text();
       if (res.status === 409) {
         // Conflict — show resolution modal (#100)
-        await showConflictModal(data.conflicts ?? []);
+        let d: { conflicts?: string[] } = {};
+        try { d = JSON.parse(text); } catch { /* ignore */ }
+        await showConflictModal(d.conflicts ?? []);
         return;
       }
       if (!res.ok) {
-        alert(`Merge failed: ${data.error ?? 'unknown error'}`);
+        let d: { error?: string } = {};
+        try { d = JSON.parse(text); } catch { /* ignore */ }
+        alert(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
         return;
       }
+      const data = JSON.parse(text) as { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
       alert(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`);
     } catch {
       alert('Merge failed: network error');

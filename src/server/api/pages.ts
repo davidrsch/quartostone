@@ -94,7 +94,14 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const filePath = guardPath(req.params[0] as string, res);
     if (!filePath) return;
     if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
-    res.json({ path: req.params[0], content: readFileSync(filePath, 'utf-8') });
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      return res.json({ content });
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
+      return res.status(500).json({ error: 'File system error' });
+    }
   });
 
   app.put('/api/pages/*', (req: Request, res: Response) => {
@@ -102,12 +109,19 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     if (!filePath) return;
     const { content } = req.body as { content: string };
     if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, content, 'utf-8');
-    // Keep link and search indexes in sync
-    const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
-    updateLinkIndexForFile(pagesDir, relPath);
-    updateSearchIndexForFile(pagesDir, relPath);
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, content, 'utf-8');
+      // Keep link and search indexes in sync
+      const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
+      updateLinkIndexForFile(pagesDir, relPath);
+      updateSearchIndexForFile(pagesDir, relPath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOSPC') return res.status(500).json({ error: 'No space left on device' });
+      if (code === 'EACCES') return res.status(500).json({ error: 'Permission denied' });
+      return res.status(500).json({ error: 'File system error' });
+    }
     res.json({ ok: true });
   });
 
@@ -141,8 +155,14 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     }
     if (existsSync(newAbsRaw)) return res.status(409).json({ error: 'Target path already exists' });
 
-    mkdirSync(dirname(newAbsRaw), { recursive: true });
-    renameSync(oldAbs, newAbsRaw);
+    try {
+      mkdirSync(dirname(newAbsRaw), { recursive: true });
+      renameSync(oldAbs, newAbsRaw);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST') return res.status(409).json({ error: 'Name already exists' });
+      return res.status(500).json({ error: 'File system error' });
+    }
 
     if (isFile) {
       const oldRel = relative(pagesDir, oldAbs).replace(/\\/g, '/');
@@ -163,8 +183,15 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     if (!filePath) return;
     if (existsSync(filePath)) return res.status(409).json({ error: 'Page already exists' });
     const pageTitle = title ?? newPath.split('/').pop()?.replace('.qmd', '') ?? 'New Page';
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `---\ntitle: "${pageTitle}"\ndate: today\n---\n\n# ${pageTitle}\n`, 'utf-8');
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, `---\ntitle: "${pageTitle}"\ndate: today\n---\n\n# ${pageTitle}\n`, 'utf-8');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOSPC') return res.status(500).json({ error: 'No space left on device' });
+      if (code === 'EACCES') return res.status(500).json({ error: 'Permission denied' });
+      return res.status(500).json({ error: 'File system error' });
+    }
     const newRel = (newPath.endsWith('.qmd') ? newPath : newPath + '.qmd');
     updateLinkIndexForFile(pagesDir, newRel);
     updateSearchIndexForFile(pagesDir, newRel);
@@ -178,15 +205,19 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
 
     // Soft-delete: move file to .quartostone/trash/ instead of permanent removal
     const trashDir = join(ctx.cwd, '.quartostone', 'trash');
-    mkdirSync(trashDir, { recursive: true });
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
-    writeFileSync(
-      join(trashDir, `${id}.meta.json`),
-      JSON.stringify({ id, originalPath: relPath, name: relPath.replace(/\.qmd$/, ''), deletedAt: new Date().toISOString() }),
-      'utf-8',
-    );
-    renameSync(filePath, join(trashDir, `${id}.qmd`));
+    try {
+      mkdirSync(trashDir, { recursive: true });
+      writeFileSync(
+        join(trashDir, `${id}.meta.json`),
+        JSON.stringify({ id, originalPath: relPath, name: relPath.replace(/\.qmd$/, ''), deletedAt: new Date().toISOString() }),
+        'utf-8',
+      );
+      renameSync(filePath, join(trashDir, `${id}.qmd`));
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to delete page' });
+    }
     removeLinkIndexForFile(relPath);
     removeSearchIndexForFile(relPath);
     res.json({ ok: true, trashed: id });
@@ -210,7 +241,13 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     let entries: string[];
     try { entries = readdirSync(abs); } catch { return res.status(400).json({ error: 'Not a directory' }); }
     if (entries.length > 0) return res.status(409).json({ error: 'Directory not empty' });
-    rmSync(abs, { recursive: true });
+    try {
+      rmSync(abs, { recursive: true, force: true });
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return res.status(404).json({ error: 'Not found' });
+      return res.status(500).json({ error: 'File system error' });
+    }
     res.json({ ok: true });
   });
 }

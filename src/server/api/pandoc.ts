@@ -82,8 +82,9 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       runPandoc(['--list-highlight-languages']),
     ]);
 
-    if (ver.notFound) {
-      return res.status(503).json({ error: 'pandoc not found' });
+    if (ver.notFound || out.notFound || hl.notFound ||
+        ver.exitCode !== 0 || out.exitCode !== 0 || hl.exitCode !== 0) {
+      return res.status(503).json({ error: 'pandoc not available' });
     }
 
     // Parse version from first line: "pandoc X.Y.Z"
@@ -111,19 +112,29 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // POST /api/pandoc/markdownToAst
   app.post('/api/pandoc/markdownToAst', async (req: Request, res: Response) => {
-    const { markdown, format, options } = req.body as {
+    const { markdown, format } = req.body as {
       markdown: string;
       format: string;
-      options: string[];
     };
     if (typeof markdown !== 'string' || typeof format !== 'string') {
       return pandocError(res, 'markdown and format required', 400);
     }
 
+    const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
+    const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
+    const rawOptions: unknown = req.body.options;
+    const safeOptions: string[] = Array.isArray(rawOptions)
+      ? rawOptions.filter((o): o is string => {
+          if (typeof o !== 'string') return false;
+          if (!SAFE_PANDOC_OPTION.test(o)) return false;
+          return !BLOCKED_FLAGS.some(b => o === b || o.startsWith(b + '='));
+        })
+      : [];
+
     const args = [
       '--from', format,
       '--to', 'json',
-      ...((options as string[]) ?? []),
+      ...safeOptions,
     ];
 
     const result = await runPandoc(args, markdown);
@@ -142,19 +153,29 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // POST /api/pandoc/astToMarkdown
   app.post('/api/pandoc/astToMarkdown', async (req: Request, res: Response) => {
-    const { ast, format, options } = req.body as {
+    const { ast, format } = req.body as {
       ast: unknown;
       format: string;
-      options: string[];
     };
     if (!ast || typeof format !== 'string') {
       return pandocError(res, 'ast and format required', 400);
     }
 
+    const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
+    const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
+    const rawOptions: unknown = req.body.options;
+    const safeOptions: string[] = Array.isArray(rawOptions)
+      ? rawOptions.filter((o): o is string => {
+          if (typeof o !== 'string') return false;
+          if (!SAFE_PANDOC_OPTION.test(o)) return false;
+          return !BLOCKED_FLAGS.some(b => o === b || o.startsWith(b + '='));
+        })
+      : [];
+
     const args = [
       '--from', 'json',
       '--to', format,
-      ...((options as string[]) ?? []),
+      ...safeOptions,
     ];
 
     const result = await runPandoc(args, JSON.stringify(ast));
@@ -169,6 +190,9 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
   // POST /api/pandoc/listExtensions
   app.post('/api/pandoc/listExtensions', async (req: Request, res: Response) => {
     const { format } = req.body as { format?: string };
+    if (!format || !/^[\w+-]+$/.test(format)) {
+      return res.status(400).json({ error: 'Invalid format' });
+    }
     const args = format ? [`--list-extensions=${format}`] : ['--list-extensions'];
     const result = await runPandoc(args);
     if (result.notFound) return pandocError(res, 'pandoc not found', 503);

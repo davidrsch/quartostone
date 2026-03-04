@@ -3,8 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src/server/**/*", "src/cli/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", "src/client"]
+  "include": ["src/server/**/*", "src/cli/**/*", "src/client/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

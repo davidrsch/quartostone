@@ -142,8 +142,12 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
         return;
       }
       res.json(db);
-    } catch {
-      res.status(404).json({ error: 'File not found' });
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return res.status(404).json({ error: 'Database file not found' });
+      }
+      return res.status(500).json({ error: 'Failed to read database file' });
     }
   });
 
@@ -156,6 +160,9 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
       if (!Array.isArray(schema)) {
         res.status(400).json({ error: 'schema must be an array' });
         return;
+      }
+      if (rows !== undefined && !Array.isArray(rows)) {
+        return res.status(400).json({ error: 'rows must be an array' });
       }
       const content = serialiseDbFile({ schema: normaliseSchema(schema), rows: rows ?? [] });
       await writeFile(abs, content, 'utf-8');

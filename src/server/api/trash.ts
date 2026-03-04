@@ -8,7 +8,7 @@ import {
   readdirSync, readFileSync, mkdirSync,
   existsSync, rmSync, renameSync,
 } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { updateLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile } from './search.js';
@@ -47,16 +47,26 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return res.status(404).json({ error: 'Trashed item not found' });
 
-    const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as TrashMeta;
+    let meta: TrashMeta;
+    try {
+      meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as TrashMeta;
+    } catch {
+      return res.status(400).json({ error: 'Corrupted metadata file' });
+    }
     if (!existsSync(trashFile)) return res.status(404).json({ error: 'Trashed file missing from disk' });
 
-    const target = join(pagesDir, meta.originalPath);
-    if (existsSync(target)) {
+    const restoreTarget = resolve(join(pagesDir, meta.originalPath));
+    const safePagesDir = resolve(pagesDir);
+    if (!restoreTarget.startsWith(safePagesDir + sep) && restoreTarget !== safePagesDir) {
+      return res.status(400).json({ error: 'Invalid restore path' });
+    }
+
+    if (existsSync(restoreTarget)) {
       return res.status(409).json({ error: `Cannot restore: ${meta.originalPath} already exists` });
     }
 
-    mkdirSync(dirname(target), { recursive: true });
-    renameSync(trashFile, target);
+    mkdirSync(dirname(restoreTarget), { recursive: true });
+    renameSync(trashFile, restoreTarget);
     rmSync(metaPath);
     updateLinkIndexForFile(pagesDir, meta.originalPath);
     updateSearchIndexForFile(pagesDir, meta.originalPath);

@@ -141,6 +141,7 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
     if (!q) { renderResults([]); return; }
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) { renderResults([]); return; }
       const data = await res.json() as SearchResult[];
       renderResults(data);
     } catch {

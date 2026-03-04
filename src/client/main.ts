@@ -405,11 +405,17 @@ async function saveCurrentPage() {
   if (content == null) return;
   sbSaveStatus.textContent = 'Saving…';
   try {
-    await fetch(`/api/pages/${encodeURIComponent(activePath)}`, {
+    const res = await fetch(`/api/pages/${encodeURIComponent(activePath)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
+    if (!res.ok) {
+      console.error('Save failed:', res.status);
+      sbSaveStatus.textContent = '';
+      showToast('Save failed', 'error');
+      return;
+    }
     isDirty = false;
     btnSave.disabled = true;
     sbSaveStatus.textContent = 'Saved';
@@ -424,6 +430,12 @@ async function saveCurrentPage() {
 async function updateBranchStatus() {
   try {
     const res = await fetch('/api/git/status');
+    if (!res.ok) {
+      sbBranch.textContent = '';
+      sbSync.textContent = '';
+      sbSync.classList.add('hidden');
+      return;
+    }
     const s = await res.json() as { current: string; files: unknown[]; ahead: number; behind: number };
     const dirty = s.files.length > 0;
     sbBranch.textContent = `⎇ ${s.current}${dirty ? ` · ${s.files.length} changed` : ''}`;
@@ -562,7 +574,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         activeVisual.setMarkdown(newContent);
       }
     };
-    propsPanel.mount(path, getContent, setContent);
+    propsPanel.mount(path, getContent as () => string, setContent);
   }
 }
 
@@ -693,16 +705,16 @@ initSidebar(fileTreeEl, (path, name) => {
     }
   },
   getActivePath: () => activePath,
-}).then(refresh => { refreshSidebar = refresh; });
+}).then(refresh => { refreshSidebar = refresh; }).catch(err => console.error('Sidebar init failed:', err));
 
-initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; });
+initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; }).catch(err => console.error('Git panel init failed:', err));
 
 branchPicker = initBranchPicker((branch, stashConflict) => {
   updateBranchStatus();
   showToast(`Switched to branch "${branch}"`, 'success');
   if (stashConflict) showToast('Stash re-apply had conflicts — check your files', 'error', 6000);
   // Reload current page on branch switch so content reflects new branch
-  if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
+  if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath);
 });
 
 // ── Export picker ───────────────────────────────────────────────────────────
@@ -731,7 +743,7 @@ initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page
   if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
   showToast('File restored to selected commit', 'success');
-}).then(hp => { historySetPage = hp.setPage; });
+}).then(hp => { historySetPage = hp.setPage; }).catch(err => console.error('History panel init failed:', err));
 
 // Click on ahead/behind badge → open Git panel
 sbSync.addEventListener('click', () => {
@@ -749,7 +761,7 @@ document.addEventListener('keydown', e => {
   // Ctrl+S — save
   if (mod && e.key === 's') {
     e.preventDefault();
-    if (isDirty) saveCurrentPage();
+    if (isDirty) void saveCurrentPage();
   }
   // Ctrl+Shift+G — open commit dialog (L-1)
   if (mod && e.shiftKey && e.key === 'G') {
@@ -988,6 +1000,7 @@ requestAnimationFrame(() => {
     if (activePath) ensureTab(activePath, pageTitleEl.textContent ?? activePath);
   });
   titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
+  window.addEventListener('beforeunload', () => { titleObs.disconnect(); });
 });
 
 // Mark tab dirty when isDirty changes — patch this into setDirtyState
@@ -1085,8 +1098,8 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
   backdrop.addEventListener('click', closeCmdPalette);
 }
 
-function openCmdPalette() { (window as unknown as Record<string, unknown>)['openCmdPalette']?.(); }
-function closeCmdPalette() { (window as unknown as Record<string, unknown>)['closeCmdPalette']?.(); }
+function openCmdPalette() { (window as unknown as Record<string, () => void>)['openCmdPalette']?.(); }
+function closeCmdPalette() { (window as unknown as Record<string, () => void>)['closeCmdPalette']?.(); }
 
 // ─── #115 Light/dark theme toggle ────────────────────────────────────────────
 {
@@ -1174,5 +1187,6 @@ btnSplit.addEventListener('click', toggleSplit);
     setDirtyTab(dirty);
   });
   obs.observe(sbSaveStatus, { childList: true, characterData: true, subtree: true });
+  window.addEventListener('beforeunload', () => { obs.disconnect(); });
 }
 

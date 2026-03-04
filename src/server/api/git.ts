@@ -36,7 +36,14 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
   app.get('/api/git/log', async (req: Request, res: Response) => {
     try {
-      const filePath = req.query.path as string | undefined;
+      const filePath = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
+      if (filePath) {
+        const abs = resolve(join(ctx.cwd, ctx.config.pages_dir, filePath));
+        const base = resolve(join(ctx.cwd, ctx.config.pages_dir));
+        if (!abs.startsWith(base + sep) && abs !== base) {
+          return res.status(400).json({ error: 'Path outside pages directory' });
+        }
+      }
       const log = filePath
         ? await git.log({ maxCount: 50, file: filePath })
         : await git.log({ maxCount: 50 });
@@ -61,6 +68,10 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.get('/api/git/diff', async (req: Request, res: Response) => {
     try {
       const sha = req.query.sha as string | undefined;
+      const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
+      if (sha && !SAFE_SHA.test(sha)) {
+        return res.status(400).json({ error: 'Invalid SHA format' });
+      }
       // Without sha: return the unstaged working-tree diff
       // With sha: show the diff introduced by that commit
       const diff = sha ? await git.show([sha]) : await git.diff();
@@ -139,7 +150,20 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.patch('/api/git/remote', async (req: Request, res: Response) => {
     try {
       const { url } = req.body as { url?: string };
-      if (!url) return res.status(400).json({ error: 'url required' });
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'url is required' });
+      }
+      // Disallow local file:// remotes and validate basic URL format
+      const allowedProtocols = ['https:', 'http:', 'ssh:', 'git:'];
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return res.status(400).json({ error: 'Invalid remote URL' });
+      }
+      if (!allowedProtocols.includes(parsedUrl.protocol)) {
+        return res.status(400).json({ error: 'Remote URL must use https, http, ssh, or git protocol' });
+      }
       // Set or add remote
       try {
         await git.remote(['set-url', 'origin', url]);

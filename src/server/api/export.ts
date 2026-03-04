@@ -151,7 +151,9 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     };
 
     if (!filePath) return res.status(400).json({ error: 'path is required' });
-    if (!format)   return res.status(400).json({ error: 'format is required' });
+    if (!format || !SUPPORTED_FORMATS.includes(format as typeof SUPPORTED_FORMATS[number])) {
+      return res.status(400).json({ error: `Unsupported format. Valid formats: ${SUPPORTED_FORMATS.join(', ')}` });
+    }
 
     const pagesDirResolved = resolve(join(cwd, ctx.config.pages_dir));
     const absPath = resolve(join(cwd, filePath));

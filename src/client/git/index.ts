@@ -181,6 +181,10 @@ export async function initGitPanel(
         diffBody.textContent = 'Loading…';
         diffPanel.classList.remove('hidden');
         const dr = await fetch(`/api/git/diff?sha=${hash}`);
+        if (!dr.ok) {
+          diffBody.textContent = 'Failed to load diff.';
+          return;
+        }
         const d = await dr.json() as { diff: string };
         diffBody.textContent = d.diff;
         colorDiff(diffBody);

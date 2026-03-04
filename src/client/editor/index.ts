@@ -38,24 +38,27 @@ function imageDragDropExtension(): Extension {
         event.preventDefault(); // allow drop
       }
     },
-    async drop(event, view) {
+    drop(event, view) {
       const files = [...(event.dataTransfer?.files ?? [])].filter(f => f.type.startsWith('image/'));
       if (files.length === 0) return;
       event.preventDefault();
       // Determine drop position in document
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
-      let insertAt = pos ?? view.state.doc.length;
-      for (const file of files) {
-        const url = await uploadImageFile(file);
-        if (!url) continue;
-        const alt   = file.name.replace(/\.[^.]+$/, '');
-        const md    = `![${alt}](${url})`;
-        view.dispatch({
-          changes: { from: insertAt, insert: md },
-          selection: { anchor: insertAt + md.length },
-        });
-        insertAt += md.length;
-      }
+      const insertAt = pos ?? view.state.doc.length;
+      void (async () => {
+        let at = insertAt;
+        for (const file of files) {
+          const url = await uploadImageFile(file);
+          if (!url) continue;
+          const alt = file.name.replace(/\.[^.]+$/, '');
+          const md  = `![${alt}](${url})`;
+          view.dispatch({
+            changes: { from: at, insert: md },
+            selection: { anchor: at + md.length },
+          });
+          at += md.length;
+        }
+      })();
     },
     paste(event, view) {
       const items = [...(event.clipboardData?.items ?? [])];
@@ -146,6 +149,7 @@ async function wikiLinkCompletions(context: CompletionContext): Promise<Completi
   const typedAfterBrackets = match.text.slice(2); // text after [[
   try {
     const res = await fetch(`/api/links/search?q=${encodeURIComponent(typedAfterBrackets)}`);
+    if (!res.ok) return null;
     const pages = await res.json() as PageHit[];
     return {
       from:    match.from + 2,  // replace text after [[
@@ -192,7 +196,9 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
       run: (view) => {
         if (saveTimer) clearTimeout(saveTimer);
         const content = view.state.doc.toString();
-        savePage(opts.pagePath, content).then(() => opts.onSave?.(content));
+        savePage(opts.pagePath, content)
+          .then(() => opts.onSave?.(content))
+          .catch((err: unknown) => { opts.onSaveError?.(err instanceof Error ? err : new Error(String(err))); console.error('Save error:', err); });
         return true;
       },
     },
@@ -232,7 +238,8 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
 // Live-reload via WebSocket — passes event name + data to callback
 export function connectLiveReload(onEvent: (event: string, data: unknown) => void) {
   function connect() {
-    const ws = new WebSocket(`ws://${location.host}/ws`);
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
     ws.onmessage = (msg) => {
       const payload = JSON.parse(msg.data as string) as { event: string; data?: unknown };
       onEvent(payload.event, payload.data);
