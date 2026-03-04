@@ -90,14 +90,16 @@ export interface EditorOptions {
   onDirty?: () => void;
 }
 
-async function loadPage(path: string): Promise<string> {
+/** @internal exported for unit tests */
+export async function loadPage(path: string): Promise<string> {
   const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error(`Failed to load page: ${path}`);
   const data = (await res.json()) as { content: string };
   return data.content;
 }
 
-async function savePage(path: string, content: string): Promise<void> {
+/** @internal exported for unit tests */
+export async function savePage(path: string, content: string): Promise<void> {
   const res = await fetch(`/api/pages/${encodeURIComponent(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
