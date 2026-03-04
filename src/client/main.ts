@@ -1039,7 +1039,9 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
     palette.classList.remove('hidden');
     input.value = '';
     renderPalette('');
-    input.focus();
+    // Defer focus by one frame so the browser has processed the display change
+    // before attempting to focus the input (needed for headless Chromium).
+    requestAnimationFrame(() => input.focus());
   }
 
   (window as unknown as Record<string, unknown>)['closeCmdPalette'] = closeCmdPalette;

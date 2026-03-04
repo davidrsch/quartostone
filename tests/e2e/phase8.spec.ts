@@ -141,9 +141,11 @@ test.describe('#113 Command palette', () => {
 
   test('input is focused when palette opens', async ({ page }) => {
     await page.goto('/');
+    await page.locator('body').click();
     await page.keyboard.press('Control+k');
-
-    await expect(page.locator('#cmd-palette-input')).toBeFocused({ timeout: 3_000 });
+    // Wait for the palette to be visible before asserting focus (headless timing)
+    await expect(page.locator('#cmd-palette')).not.toHaveClass(/hidden/);
+    await expect(page.locator('#cmd-palette-input')).toBeFocused({ timeout: 5_000 });
   });
 });
 
