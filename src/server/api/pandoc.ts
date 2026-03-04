@@ -15,6 +15,15 @@ import type { ServerContext } from '../index.js';
 
 const PANDOC_TIMEOUT_MS = 30_000;
 
+// ── Module-level capabilities cache ─────────────────────────────────────────
+
+let capabilitiesCache: unknown | null = null;
+
+/** Reset the capabilities cache — primarily for use in tests. */
+export function resetCapabilitiesCache(): void {
+  capabilitiesCache = null;
+}
+
 // ── Subprocess helper ─────────────────────────────────────────────────────────
 
 interface ProcResult {
@@ -66,13 +75,31 @@ function runPandoc(args: string[], stdin?: string): Promise<ProcResult> {
 function pandocError(res: Response, detail: string, code = 500) {
   res.status(code).json({ error: detail });
 }
+// ── Shared option sanitiser ───────────────────────────────────────────────────
 
+const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
+const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
+
+function sanitisePandocOptions(rawOptions: unknown): string[] {
+  return Array.isArray(rawOptions)
+    ? rawOptions.filter((o): o is string => {
+        if (typeof o !== 'string') return false;
+        if (!SAFE_PANDOC_OPTION.test(o)) return false;
+        return !BLOCKED_FLAGS.some(b => o === b || o.startsWith(b + '='));
+      })
+    : [];
+}
 // ── Route registration ────────────────────────────────────────────────────────
 
 export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // GET /api/pandoc/capabilities
   app.post('/api/pandoc/capabilities', async (_req: Request, res: Response) => {
+    // Return cached result if available
+    if (capabilitiesCache !== null) {
+      return res.json(capabilitiesCache);
+    }
+
     const [ver, , out, hl] = await Promise.all([
       runPandoc(['--version']),
       runPandoc(['--to', 'json', '--from', 'markdown', '/dev/null']).catch(() =>
@@ -102,12 +129,14 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       }
     } catch { /* use default */ }
 
-    res.json({
+    const result = {
       version,
       api_version,
       output_formats: out.stdout.trim(),
       highlight_languages: hl.stdout.trim(),
-    });
+    };
+    capabilitiesCache = result;
+    return res.json(result);
   });
 
   // POST /api/pandoc/markdownToAst
@@ -123,16 +152,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return res.status(400).json({ error: 'Invalid or missing format' });
     }
 
-    const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
-    const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
-    const rawOptions: unknown = req.body.options;
-    const safeOptions: string[] = Array.isArray(rawOptions)
-      ? rawOptions.filter((o): o is string => {
-          if (typeof o !== 'string') return false;
-          if (!SAFE_PANDOC_OPTION.test(o)) return false;
-          return !BLOCKED_FLAGS.some(b => o === b || o.startsWith(b + '='));
-        })
-      : [];
+    const safeOptions = sanitisePandocOptions(req.body.options);
 
     const args = [
       '--from', format,
@@ -167,16 +187,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return res.status(400).json({ error: 'Invalid or missing format' });
     }
 
-    const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
-    const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
-    const rawOptions: unknown = req.body.options;
-    const safeOptions: string[] = Array.isArray(rawOptions)
-      ? rawOptions.filter((o): o is string => {
-          if (typeof o !== 'string') return false;
-          if (!SAFE_PANDOC_OPTION.test(o)) return false;
-          return !BLOCKED_FLAGS.some(b => o === b || o.startsWith(b + '='));
-        })
-      : [];
+    const safeOptions = sanitisePandocOptions(req.body.options);
 
     const args = [
       '--from', 'json',

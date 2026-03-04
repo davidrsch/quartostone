@@ -7,25 +7,26 @@
 // GET /api/links/graph            → { nodes, edges } for graph view
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative, basename, extname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { join, basename } from 'node:path';
 import type { ServerContext } from '../index.js';
-
-// ── Wiki link regex ───────────────────────────────────────────────────────────
-
-// Matches [[Target]], [[Target|Display]], [[Target#anchor]], [[Target#anchor|Display]]
-const WIKI_LINK_RE = /\[\[([^\]]+?)\]\]/g;
+import { collectQmd } from '../utils/qmdFiles.js';
+import { getTitleWithFallback, getTags } from '../utils/frontmatter.js';
+import { WIKI_LINK_SCAN_RE } from '../../shared/wikiLink.js';
 
 // ── Link index ────────────────────────────────────────────────────────────────
 
 // forwardLinks[relPath] = Set of resolved page paths this file links to
 const forwardLinks = new Map<string, Set<string>>();
 
-// allPages[relPath] = { title, tags }
+// allPages[relPath] = { title, tags, excerpt }
 export interface PageMeta {
-  path:  string;
-  title: string;
-  tags:  string[];
+  path:    string;
+  title:   string;
+  tags:    string[];
+  /** First non-empty body line, stored at index time for backlinks. */
+  excerpt: string;
 }
 
 const pageMeta = new Map<string, PageMeta>();
@@ -54,33 +55,10 @@ function resolveSlug(slug: string, allPaths: string[]): string | null {
   return null;
 }
 
-// ── Front-matter title extractor (no yaml import needed for minimal parsing) ──
+// ── Front-matter helpers (delegated to shared utilities) ─────────────────────────────────────────
 
-function extractTitle(content: string, fallbackSlug: string): string {
-  // Look for `title: "..."` or `title: ...` in front-matter
-  const fm = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (fm) {
-    const titleMatch = fm[1]?.match(/^title:\s*["']?(.+?)["']?\s*$/m);
-    if (titleMatch) return (titleMatch[1] ?? '').trim();
-  }
-  return fallbackSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function extractTags(content: string): string[] {
-  const fm = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!fm) return [];
-  const tagsMatch = fm[1]?.match(/^tags:\s*\[([^\]]*)\]\s*$/m);
-  if (tagsMatch) {
-    return (tagsMatch[1] ?? '').split(',').map(t => t.replace(/["'\s]/g, '')).filter(Boolean);
-  }
-  const tagsBlockMatch = fm[1]?.match(/^tags:\s*\n((?:  ?[-*] .+\n?)*)/m);
-  if (tagsBlockMatch) {
-    return (tagsBlockMatch[1] ?? '').split('\n')
-      .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
-      .filter(Boolean);
-  }
-  return [];
-}
+const extractTitle = getTitleWithFallback;
+const extractTags  = getTags;
 
 // ── Scan a single file ────────────────────────────────────────────────────────
 
@@ -89,19 +67,22 @@ function scanFile(relPath: string, absPath: string, allPagePaths: string[]): voi
   try { content = readFileSync(absPath, 'utf-8'); }
   catch { forwardLinks.delete(relPath); pageMeta.delete(relPath); return; }
 
-  // Update page meta
+  // Update page meta — extract a short excerpt from the body for backlinks
   const slug = basename(relPath, '.qmd');
+  const bodyText = content.replace(/^---[\s\S]*?---\s*/m, '');
+  const excerptLine = bodyText.split('\n').map(l => l.trim()).find(l => l.length > 2 && !l.startsWith('#')) ?? '';
   pageMeta.set(relPath, {
-    path:  relPath,
-    title: extractTitle(content, slug),
-    tags:  extractTags(content),
+    path:    relPath,
+    title:   extractTitle(content, slug),
+    tags:    extractTags(content),
+    excerpt: excerptLine.slice(0, 120),
   });
 
   // Extract all outgoing wiki links
   const links = new Set<string>();
   let m: RegExpExecArray | null;
-  WIKI_LINK_RE.lastIndex = 0;
-  while ((m = WIKI_LINK_RE.exec(content)) !== null) {
+  WIKI_LINK_SCAN_RE.lastIndex = 0;
+  while ((m = WIKI_LINK_SCAN_RE.exec(content)) !== null) {
     const target = m[1] ?? '';
     const slug2  = targetToSlug(target);
     const resolved = resolveSlug(slug2, allPagePaths);
@@ -111,22 +92,6 @@ function scanFile(relPath: string, absPath: string, allPagePaths: string[]): voi
 }
 
 // ── Full index rebuild ────────────────────────────────────────────────────────
-
-function collectQmd(dir: string, root: string): string[] {
-  let results: string[] = [];
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results = results.concat(collectQmd(full, root));
-      } else if (entry.isFile() && extname(entry.name) === '.qmd') {
-        results.push(relative(root, full).replace(/\\/g, '/'));
-      }
-    }
-  } catch { /* ignore */ }
-  return results;
-}
 
 export function rebuildLinkIndex(pagesDir: string): void {
   const allPaths = collectQmd(pagesDir, pagesDir);
@@ -155,6 +120,12 @@ export function removeLinkIndexForFile(relPath: string): void {
 
 export { forwardLinks, pageMeta };
 
+/** Reset the index — intended for use in tests only */
+export function resetLinkIndex(): void {
+  forwardLinks.clear();
+  pageMeta.clear();
+}
+
 // ── Register routes ───────────────────────────────────────────────────────────
 
 export function registerLinksApi(app: Express, ctx: ServerContext): void {
@@ -165,23 +136,17 @@ export function registerLinksApi(app: Express, ctx: ServerContext): void {
     const target = req.query['path'] as string | undefined;
     if (!target) return res.status(400).json({ error: 'path is required' });
 
-    const backlinks: { path: string; title: string; excerpt: string }[] = [];
-
-    for (const [sourcePath, targets] of forwardLinks.entries()) {
-      if (!targets.has(target)) continue;
-      const meta = pageMeta.get(sourcePath);
-      // Extract excerpt containing the wiki link
-      let excerpt = '';
-      try {
-        const content = readFileSync(join(pagesDir, sourcePath), 'utf-8');
-        const targetTitle = pageMeta.get(target)?.title ?? target;
-        const escapedTitle = targetTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const linkRe = new RegExp(`\\[\\[${escapedTitle}[^\\]]*\\]\\]`, 'i');
-        const lineIdx = content.split('\n').findIndex(l => linkRe.test(l) || l.includes(`[[`));
-        if (lineIdx >= 0) excerpt = (content.split('\n')[lineIdx] ?? '').trim().slice(0, 120);
-      } catch { /* ignore */ }
-      backlinks.push({ path: sourcePath, title: meta?.title ?? sourcePath, excerpt });
-    }
+    // Gather all source files that link to this target and return cached data
+    const backlinks = Array.from(forwardLinks.entries())
+      .filter(([, targets]) => targets.has(target))
+      .map(([sourcePath]) => {
+        const meta = pageMeta.get(sourcePath);
+        return {
+          path:    sourcePath,
+          title:   meta?.title   ?? sourcePath,
+          excerpt: meta?.excerpt ?? '',
+        };
+      });
 
     res.json(backlinks);
   });

@@ -26,6 +26,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 beforeAll(() => {

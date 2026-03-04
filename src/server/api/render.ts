@@ -3,8 +3,9 @@
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { isInsideDir } from '../utils/pathGuard.js';
 
 export function registerRenderApi(app: Express, ctx: ServerContext) {
   app.post('/api/render', (req: Request, res: Response) => {
@@ -25,14 +26,13 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       }
 
       const pagesRoot = resolve(join(ctx.cwd, ctx.config.pages_dir));
-      const absPath = resolve(join(ctx.cwd, ctx.config.pages_dir, filePath));
 
       // Reject path traversal attacks
-      const rel = relative(pagesRoot, absPath);
-      if (rel.startsWith('..') || isAbsolute(rel)) {
+      if (!isInsideDir(pagesRoot, filePath)) {
         return res.status(400).json({ error: 'Path outside pages directory' });
       }
 
+      const absPath = resolve(pagesRoot, filePath);
       renderTarget = absPath;
     } else {
       renderTarget = ctx.cwd;

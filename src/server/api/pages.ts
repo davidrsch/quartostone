@@ -6,45 +6,29 @@
 // DELETE /api/pages/:path    — delete a page
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
-import { join, relative, extname, dirname, resolve, sep } from 'node:path';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
+import { join, relative, extname, dirname } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
+import { resolveInsideDir, PathTraversalError } from '../utils/pathGuard.js';
+import { getFrontmatterKey } from '../utils/frontmatter.js';
+import type { PageNode } from '../../shared/types.js';
 
-interface PageNode {
-  name: string;
-  path: string;
-  type: 'file' | 'folder';
-  icon?: string;
-  children?: PageNode[];
-}
-
-/** Extract a single YAML scalar from a QMD frontmatter string without a full YAML parse. */
-function extractFrontmatterKey(content: string, key: string): string | undefined {
-  // Match only inside the leading `---` block
-  const fmMatch = /^---\r?\n([\s\S]*?)\n---/.exec(content);
-  if (!fmMatch) return undefined;
-  const re = new RegExp(`^${key}:\\s*(.+)$`, 'm');
-  const m = re.exec(fmMatch[1]);
-  if (!m) return undefined;
-  // Strip surrounding quotes if present
-  return m[1].replace(/^['"]|['"]$/g, '').trim();
-}
-
-function buildTree(dir: string, rootDir: string): PageNode[] {
+function buildTree(dir: string, rootDir: string, depth = 0): PageNode[] {
+  if (depth > 20) return [];  // prevent infinite recursion / symlink cycles
   const entries = readdirSync(dir, { withFileTypes: true });
   const nodes: PageNode[] = [];
   for (const entry of entries) {
     const full = join(dir, entry.name);
     const rel = relative(rootDir, full).replace(/\\/g, '/');
     if (entry.isDirectory()) {
-      nodes.push({ name: entry.name, path: rel, type: 'folder', children: buildTree(full, rootDir) });
+      nodes.push({ name: entry.name, path: rel, type: 'folder', children: buildTree(full, rootDir, depth + 1) });
     } else if (entry.isFile() && extname(entry.name) === '.qmd') {
       let icon: string | undefined;
       try {
         const content = readFileSync(full, 'utf-8');
-        icon = extractFrontmatterKey(content, 'icon');
+        icon = getFrontmatterKey(content, 'icon');
       } catch { /* ignore */ }
       const node: PageNode = { name: entry.name.replace(/\.qmd$/, ''), path: rel, type: 'file' };
       if (icon) node.icon = icon;
@@ -59,26 +43,29 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
 
   /** Returns the resolved absolute path for a .qmd file, or null after sending 400. */
   function guardPath(rawSuffix: string, res: Response): string | null {
-    const pagesDirResolved = resolve(pagesDir);
-    const pagePath = join(pagesDir, rawSuffix);
-    const filePath = pagePath.endsWith('.qmd') ? pagePath : `${pagePath}.qmd`;
-    const abs = resolve(filePath);
-    if (!abs.startsWith(pagesDirResolved + sep) && abs !== pagesDirResolved) {
-      res.status(400).json({ error: 'Path traversal not allowed' });
-      return null;
+    const withQmd = rawSuffix.endsWith('.qmd') ? rawSuffix : `${rawSuffix}.qmd`;
+    try {
+      return resolveInsideDir(pagesDir, withQmd);
+    } catch (e) {
+      if (e instanceof PathTraversalError) {
+        res.status(400).json({ error: 'Path traversal not allowed' });
+        return null;
+      }
+      throw e;
     }
-    return abs;
   }
 
   /** Returns the resolved absolute path for any path within pagesDir, or null after sending 400. */
   function guardAnyPath(rawSuffix: string, res: Response): string | null {
-    const pagesDirResolved = resolve(pagesDir);
-    const abs = resolve(join(pagesDir, rawSuffix));
-    if (!abs.startsWith(pagesDirResolved + sep)) {
-      res.status(400).json({ error: 'Path traversal not allowed' });
-      return null;
+    try {
+      return resolveInsideDir(pagesDir, rawSuffix);
+    } catch (e) {
+      if (e instanceof PathTraversalError) {
+        res.status(400).json({ error: 'Path traversal not allowed' });
+        return null;
+      }
+      throw e;
     }
-    return abs;
   }
 
   app.get('/api/pages', (_req: Request, res: Response) => {
@@ -131,27 +118,32 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const { newPath } = req.body as { newPath?: string };
     if (!newPath) return res.status(400).json({ error: 'newPath required' });
 
-    const pagesDirResolved = resolve(pagesDir);
     // Detect whether the target is a .qmd file or a directory
-    const asFile = resolve(join(pagesDir, rawOld.endsWith('.qmd') ? rawOld : `${rawOld}.qmd`));
-    const asDir  = resolve(join(pagesDir, rawOld));
-
     let oldAbs: string;
     let isFile: boolean;
-
-    if (asFile.startsWith(pagesDirResolved + sep) && existsSync(asFile)) {
-      oldAbs = asFile; isFile = true;
-    } else if (asDir.startsWith(pagesDirResolved + sep) && existsSync(asDir)) {
-      oldAbs = asDir; isFile = false;
-    } else {
+    try {
+      const asFile = resolveInsideDir(pagesDir, rawOld.endsWith('.qmd') ? rawOld : `${rawOld}.qmd`);
+      if (existsSync(asFile)) {
+        oldAbs = asFile; isFile = true;
+      } else {
+        const asDir = resolveInsideDir(pagesDir, rawOld);
+        if (existsSync(asDir)) {
+          oldAbs = asDir; isFile = false;
+        } else {
+          return res.status(404).json({ error: 'Not found' });
+        }
+      }
+    } catch {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    const newAbsRaw = isFile
-      ? resolve(join(pagesDir, newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`))
-      : resolve(join(pagesDir, newPath));
-
-    if (!newAbsRaw.startsWith(pagesDirResolved + sep)) {
+    let newAbsRaw: string;
+    try {
+      newAbsRaw = resolveInsideDir(
+        pagesDir,
+        isFile ? (newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`) : newPath,
+      );
+    } catch {
       return res.status(400).json({ error: 'Path traversal not allowed' });
     }
     if (existsSync(newAbsRaw)) return res.status(409).json({ error: 'Target path already exists' });
@@ -242,15 +234,17 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const abs = guardAnyPath(req.params[0] as string, res);
     if (!abs) return;
     if (!existsSync(abs)) return res.status(404).json({ error: 'Not found' });
-    let entries: string[];
-    try { entries = readdirSync(abs); } catch { return res.status(400).json({ error: 'Not a directory' }); }
-    if (entries.length > 0) return res.status(409).json({ error: 'Directory not empty' });
     try {
-      rmSync(abs, { recursive: true, force: true });
-    } catch (err) {
+      rmdirSync(abs); // throws ENOTEMPTY if non-empty (atomic)
+    } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') return res.status(404).json({ error: 'Not found' });
-      return res.status(500).json({ error: 'File system error' });
+      if (code === 'ENOTEMPTY' || code === 'EEXIST') {
+        return res.status(409).json({ error: 'Directory is not empty' });
+      }
+      if (code === 'ENOENT') {
+        return res.status(404).json({ error: 'Directory not found' });
+      }
+      throw err;
     }
     res.json({ ok: true });
   });

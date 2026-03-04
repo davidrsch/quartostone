@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { simpleGit } from 'simple-git';
 import type { QuartostoneConfig } from './config.js';
 import { generateCommitSlug } from './config.js';
+import { markXRefCacheDirty } from './api/xref.js';
 
 interface WatcherContext {
   cwd: string;
@@ -27,6 +28,7 @@ export function startWatcher(ctx: WatcherContext) {
   });
 
   watcher.on('change', (filePath: string) => {
+    markXRefCacheDirty();
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       handleChange(filePath).catch(err =>
@@ -72,7 +74,7 @@ export function startWatcher(ctx: WatcherContext) {
       if (ctx.config.commit_mode === 'auto') {
         try {
           const message = generateCommitSlug(ctx.config.commit_message_auto);
-          await git.add(ctx.config.pages_dir + '/');
+          await git.add(filePath);
           await git.commit(message);
           ctx.broadcast('git:committed', { message });
         } catch (e) {

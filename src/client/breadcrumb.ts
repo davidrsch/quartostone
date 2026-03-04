@@ -42,8 +42,16 @@ export function renderBreadcrumb(
     span.setAttribute('aria-current', isCurrent ? 'page' : 'false');
 
     if (!isCurrent) {
+      span.tabIndex = 0;
+      span.setAttribute('role', 'button');
       span.addEventListener('click', () => {
         onFolderClick?.(cumulativePath);
+      });
+      span.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          span.click();
+        }
       });
     }
     frag.appendChild(span);

@@ -3,15 +3,30 @@
 // These tests call the real pandoc binary; they are skipped when pandoc is not
 // on the system PATH.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import supertest from 'supertest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { EventEmitter } from 'node:events';
 import { execSync, spawnSync } from 'node:child_process';
+
+// Mock node:child_process so we can intercept spawn in the "unavailable" tests.
+// By default the mock delegates to the real spawn so existing pandoc tests are unaffected.
+vi.mock('node:child_process', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...orig,
+    spawn: vi.fn((...args: Parameters<typeof orig.spawn>) => orig.spawn(...args)),
+  };
+});
+
+const { spawn } = await import('node:child_process');
+const spawnMock = vi.mocked(spawn);
 
 import { createApp } from '../../../src/server/index.js';
 import type { QuartostoneConfig } from '../../../src/server/config.js';
+import { resetCapabilitiesCache } from '../../../src/server/api/pandoc.js';
 
 // ── Detect pandoc availability ────────────────────────────────────────────────
 
@@ -35,6 +50,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
@@ -249,5 +265,43 @@ describe('POST /api/pandoc/citationHTML (stub)', () => {
     const res = await client.post('/api/pandoc/citationHTML').send({});
     expect(res.status).toBe(200);
     expect(typeof res.body).toBe('string');
+  });
+});
+
+// ── Pandoc unavailable path ────────────────────────────────────────────────────
+// These tests do NOT require pandoc to be installed — they mock spawn to simulate
+// ENOENT so we can verify the server responds with 503.
+
+describe('when pandoc is not available', () => {
+  beforeEach(() => {
+    resetCapabilitiesCache(); // ensure module-level cache is cleared before running
+    // Make every spawn call emit ENOENT to simulate "pandoc not on PATH"
+    spawnMock.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+        kill: ReturnType<typeof vi.fn>;
+      };
+      proc.stdout = new EventEmitter();
+      proc.stderr = new EventEmitter();
+      proc.stdin = { write: vi.fn(), end: vi.fn() };
+      proc.kill = vi.fn();
+      setTimeout(() => {
+        proc.emit('error', Object.assign(new Error('spawn pandoc ENOENT'), { code: 'ENOENT' }));
+        setTimeout(() => proc.emit('close', 1), 10);
+      }, 5);
+      return proc as never;
+    });
+  });
+
+  afterEach(() => {
+    spawnMock.mockRestore();
+  });
+
+  it('POST /api/pandoc/capabilities returns 503', async () => {
+    const res = await client.post('/api/pandoc/capabilities').send({});
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/pandoc/i);
   });
 });

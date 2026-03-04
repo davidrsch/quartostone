@@ -7,23 +7,36 @@
 // GET  /api/preview/ready?port=                       → { ready } (polls until port accepts connections)
 
 import type { Express, Request, Response } from 'express';
-import { spawn, execSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createServer, createConnection } from 'node:net';
 import type { ServerContext } from '../index.js';
+import { isInsideDir } from '../utils/pathGuard.js';
+import { PREVIEW_FORMATS } from '../../shared/formats.js';
 
 // ─── #118 Quarto PATH detection ───────────────────────────────────────────────
 
-function resolveQuartoPath(): string | null {
-  // 1. Try the PATH-aware `which` / `where`
-  const cmd = process.platform === 'win32' ? 'where quarto' : 'which quarto';
-  try {
-    const out = execSync(cmd, { encoding: 'utf-8', timeout: 3000 }).trim();
-    const first = out.split(/\r?\n/)[0].trim();
-    if (first && existsSync(first)) return first;
-  } catch { /* not in PATH */ }
+async function resolveQuartoPath(): Promise<string | null> {
+  // 1. Try the PATH-aware `which` / `where` asynchronously (never blocks the event loop)
+  const fromPath = await new Promise<string | null>((resolve) => {
+    const cmd = process.platform === 'win32' ? 'where' : 'which';
+    const child = spawn(cmd, ['quarto'], { stdio: 'pipe' });
+    let out = '';
+    child.stdout?.on('data', (d: Buffer) => { out += d.toString(); });
+    child.on('close', (code) => {
+      if (code === 0) {
+        const first = out.trim().split(/\r?\n/)[0]?.trim() ?? '';
+        resolve(first && existsSync(first) ? first : null);
+      } else {
+        resolve(null);
+      }
+    });
+    child.on('error', () => resolve(null));
+  });
+
+  if (fromPath) return fromPath;
 
   // 2. Common install paths
   const candidates: string[] = process.platform === 'win32'
@@ -45,13 +58,21 @@ function resolveQuartoPath(): string | null {
   return null;
 }
 
-const quartoExecutable: string | null = resolveQuartoPath();
-if (!quartoExecutable) {
-  console.warn('[preview] quarto not found in PATH — preview feature will be unavailable.');
-} else {
-  console.info(`[preview] quarto detected at: ${quartoExecutable}`);
-}
+// \u2500\u2500 Lazy quarto executable resolution \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
+let _quartoExe: string | null | undefined = undefined; // undefined = not yet resolved
+
+async function getQuartoExecutable(): Promise<string | null> {
+  if (_quartoExe === undefined) {
+    _quartoExe = await resolveQuartoPath();
+    if (!_quartoExe) {
+      console.warn('[preview] quarto not found in PATH \u2014 preview feature will be unavailable.');
+    } else {
+      console.info(`[preview] quarto detected at: ${_quartoExe}`);
+    }
+  }
+  return _quartoExe;
+}
 // ── Process registry ──────────────────────────────────────────────────────────
 
 interface PreviewProcess {
@@ -94,6 +115,7 @@ function startPreview(
   relPath: string,
   port:   number,
   format: string,
+  exe:    string | null,
 ): PreviewProcess {
   const args = [
     'preview', absPath,
@@ -103,8 +125,8 @@ function startPreview(
   ];
 
   // Use resolved executable path for reliability (#118)
-  const exe = quartoExecutable ?? 'quarto';
-  const proc = spawn(exe, args, { cwd, shell: process.platform === 'win32' && !quartoExecutable });
+  const resolvedExe = exe ?? 'quarto';
+  const proc = spawn(resolvedExe, args, { cwd, shell: process.platform === 'win32' && !exe });
   const logs: string[] = [];
 
   const captureLog = (data: Buffer) => {
@@ -141,13 +163,14 @@ function startPreview(
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────
-const PREVIEW_FORMATS = ['html', 'revealjs', 'pdf', 'docx', 'pptx'] as const;
 export function registerPreviewApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
 
   // POST /api/preview/start  body: { path: string; format?: string }
   app.post('/api/preview/start', async (req: Request, res: Response) => {
-    // #118 — fail fast if quarto is not available
+    // #118 \u2014 resolve quarto lazily (never blocks module load)
+    const quartoExecutable = await getQuartoExecutable();
+    // fail fast if quarto is not available
     if (!quartoExecutable) {
       return res.status(503).json({
         error: 'Quarto not found',
@@ -169,9 +192,8 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     const absPath = join(cwd, filePath);
     if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
 
-    const pagesDir = resolve(join(cwd, ctx.config.pages_dir));
-    const abs = resolve(absPath);
-    if (!abs.startsWith(pagesDir + sep) && abs !== pagesDir) {
+    const pagesRoot = resolve(join(cwd, ctx.config.pages_dir));
+    if (!isInsideDir(pagesRoot, absPath)) {
       return res.status(400).json({ error: 'Path outside pages directory' });
     }
 
@@ -188,7 +210,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     }
 
     const port   = await findFreePort();
-    const entry  = startPreview(cwd, absPath, filePath, port, format);
+    const entry  = startPreview(cwd, absPath, filePath, port, format, quartoExecutable);
 
     res.json({ port: entry.port, url: entry.url, reused: false });
   });
@@ -224,15 +246,16 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   // GET /api/preview/status?path=
   // Without path: returns overall running state (any preview active).
   // With path: returns state for a specific file preview.
-  app.get('/api/preview/status', (req: Request, res: Response) => {
+  app.get('/api/preview/status', async (req: Request, res: Response) => {
+    const exe = await getQuartoExecutable();
     const filePath = req.query['path'] as string | undefined;
 
     if (!filePath) {
-      return res.json({ running: previews.size > 0, count: previews.size, quartoAvailable: !!quartoExecutable });
+      return res.json({ running: previews.size > 0, count: previews.size, quartoAvailable: !!exe });
     }
 
     const entry = previews.get(filePath);
-    if (!entry) return res.json({ running: false, quartoAvailable: !!quartoExecutable });
+    if (!entry) return res.json({ running: false, quartoAvailable: !!exe });
 
     res.json({ running: true, url: entry.url, port: entry.port, format: entry.format });
   });
@@ -286,3 +309,12 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 
 // ── Exported for testing ──────────────────────────────────────────────────────
 export { previews };
+
+/**
+ * Preset the cached quarto executable path — for use in tests only.
+ * Call this in `beforeEach` to bypass `resolveQuartoPath()` (which spawns a
+ * real subprocess) and keep spawn mocks focused on the actual preview process.
+ */
+export function setQuartoExeForTest(exe: string | null | undefined): void {
+  _quartoExe = exe;
+}

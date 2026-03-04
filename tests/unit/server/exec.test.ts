@@ -52,6 +52,10 @@ function makeFakeProcess(opts: FakeProcessOptions = {}) {
     if (stderr) proc.stderr.emit('data', Buffer.from(stderr));
     if (emitError) {
       proc.emit('error', emitError);
+      // Real Node.js processes emit 'close' after 'error'
+      setTimeout(() => {
+        proc.emit('close', 1, null);  // exit code 1 on error
+      }, delayMs + 10);
     } else {
       proc.emit('close', exitCode);
     }
@@ -71,6 +75,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: true,
 };
 
 let workspace: string;
@@ -216,5 +221,52 @@ describe('POST /api/exec — Julia language', () => {
     expect(res.status).toBe(200);
     expect(res.body.stdout).toBe('Hello Julia\n');
     expect(res.body.ok).toBe(true);
+  });
+});
+
+describe('POST /api/exec — timeout behavior', () => {
+  it('returns timedOut: true when subprocess does not exit within the time limit', async () => {
+    // Create a fake process that never emits 'close' on its own;
+    // it only emits 'close' when kill() is called (simulating OS SIGKILL).
+    const proc = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      kill: ReturnType<typeof vi.fn>;
+    };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.kill = vi.fn().mockImplementation(() => {
+      proc.emit('close', 1);
+    });
+
+    // Use 'r' language to avoid a python fallback — exactly one spawn call.
+    spawnMock.mockImplementationOnce(() => proc as never);
+
+    // Use a very short timeout (100 ms) via exec_timeout_ms so the test runs quickly
+    // without fake timers (which don't play nicely with supertest's real TCP transport).
+    const shortTimeoutApp = createApp({
+      cwd: workspace,
+      config: { ...DEFAULT_CONFIG, exec_timeout_ms: 100 },
+      port: 0,
+    });
+    const res = await supertest(shortTimeoutApp)
+      .post('/api/exec')
+      .send({ code: 'while(TRUE) {}', language: 'r' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.timedOut).toBe(true);
+  });
+
+  it('returns 403 when allow_code_execution is false', async () => {
+    const restrictedApp = createApp({
+      cwd: workspace,
+      config: { ...DEFAULT_CONFIG, allow_code_execution: false },
+      port: 0,
+    });
+    const res = await supertest(restrictedApp)
+      .post('/api/exec')
+      .send({ code: 'x=1', language: 'python' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/disabled/i);
   });
 });

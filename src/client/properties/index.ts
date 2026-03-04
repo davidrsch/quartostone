@@ -1,8 +1,10 @@
 // src/client/properties/index.ts
 // Page properties panel — reads and edits YAML frontmatter from editor content
 
+import { escAttr } from '../utils/escape.js';
+
 export interface PropertiesPanel {
-  mount: (pagePath: string, getContent: () => string, setContent: (s: string) => void) => void;
+  mount: (pagePath: string, getContent: () => string | Promise<string>, setContent: (s: string) => void) => void;
   unmount: () => void;
 }
 
@@ -21,7 +23,7 @@ interface Frontmatter {
 
 const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 
-function parseFrontmatter(content: string): { fm: Frontmatter; body: string } {
+export function parseFrontmatter(content: string): { fm: Frontmatter; body: string } {
   const m = FM_RE.exec(content);
   if (!m) return { fm: {}, body: content };
   const fm = parseYamlSimple(m[1]);
@@ -62,14 +64,14 @@ function parseYamlSimple(yaml: string): Frontmatter {
   return out;
 }
 
-function coerce(val: string): unknown {
+export function coerce(val: string): unknown {
   if (val === 'true') return true;
   if (val === 'false') return false;
   if (!isNaN(Number(val)) && val !== '') return Number(val);
   return val.replace(/^["']|["']$/g, '');
 }
 
-function serializeFrontmatter(fm: Frontmatter): string {
+export function serializeFrontmatter(fm: Frontmatter): string {
   const lines: string[] = [];
   const order = ['title', 'author', 'date', 'description', 'categories', 'draft', 'icon'];
   const sorted = [...order.filter(k => k in fm), ...Object.keys(fm).filter(k => !order.includes(k))];
@@ -97,17 +99,17 @@ const STANDARD_KEYS = new Set(['title', 'author', 'date', 'description', 'catego
 // ─── Panel factory ────────────────────────────────────────────────────────────
 
 export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel {
-  let currentGet: (() => string) | null = null;
+  let currentGet: (() => string | Promise<string>) | null = null;
   let currentSet: ((s: string) => void) | null = null;
 
   function mount(
     _pagePath: string,
-    getContent: () => string,
+    getContent: () => string | Promise<string>,
     setContent: (s: string) => void,
   ) {
     currentGet = getContent;
     currentSet = setContent;
-    render();
+    void render();
   }
 
   function unmount() {
@@ -116,9 +118,9 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     containerEl.innerHTML = '<p class="props-empty">No page open.</p>';
   }
 
-  function render() {
+  async function render() {
     if (!currentGet) return;
-    const { fm } = parseFrontmatter(currentGet());
+    const { fm } = parseFrontmatter(await currentGet());
     containerEl.innerHTML = '';
     containerEl.appendChild(buildForm(fm));
   }
@@ -127,9 +129,9 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     const form = document.createElement('div');
     form.className = 'props-form';
 
-    const save = () => {
+    const save = async () => {
       if (!currentGet || !currentSet) return;
-      const { body } = parseFrontmatter(currentGet());
+      const { body } = parseFrontmatter(await currentGet());
       const newFm = readForm(form);
       currentSet(serializeFrontmatter(newFm) + body);
     };
@@ -293,10 +295,6 @@ function makeExtraRow(
 
   row.append(head, valInput);
   return row;
-}
-
-function escAttr(s: string): string {
-  return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ─── Icon field (#95) ─────────────────────────────────────────────────────────

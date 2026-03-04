@@ -196,7 +196,13 @@ describe('connectLiveReload', () => {
     expect(wsInstances).toHaveLength(1);
 
     wsInstances[0].close(); // triggers onclose → setTimeout(connect, 2000)
-    vi.advanceTimersByTime(2000);
+
+    // Advance to just before the reconnect delay — should NOT have reconnected yet
+    vi.advanceTimersByTime(1999);
+    expect(wsInstances).toHaveLength(1);
+
+    // Now advance past the threshold — reconnect must fire
+    vi.advanceTimersByTime(1);
     expect(wsInstances).toHaveLength(2);
     expect(wsInstances[1].url).toBe('ws://localhost:4343/ws');
   });

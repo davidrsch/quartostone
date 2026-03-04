@@ -2,6 +2,7 @@
 // Lightweight Express server — file API, Git API, static site serving, WebSocket broadcaster
 
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { createServer as createHttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
@@ -43,6 +44,23 @@ export interface ServerContext {
 export function createApp(ctx: ServerContext) {
   const app = express();
   app.use(express.json());
+
+  // CORS — only allow same-origin requests (localhost:port). Reject cross-origin requests.
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigin = `http://localhost:${ctx.config.port}`;
+    if (origin && origin !== allowedOrigin) {
+      res.status(403).json({ error: 'Cross-origin request denied' });
+      return;
+    }
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+  });
 
   // Health-check endpoint — always returns 200. Used by Playwright webServer readiness probe.
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -89,6 +107,16 @@ export function createApp(ctx: ServerContext) {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
   try { rebuildLinkIndex(pagesDir); } catch { /* empty workspace */ }
   try { rebuildSearchIndex(pagesDir); } catch { /* empty workspace */ }
+
+  // Global error handler — must be registered LAST and must have exactly 4 params
+  // so Express recognises it as an error handler.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: message });
+    }
+  });
 
   return app;
 }

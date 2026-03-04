@@ -18,6 +18,7 @@ export interface BranchPickerResult {
 
 export function initBranchPicker(
   onSwitched: (branch: string, stashConflict?: boolean) => void,
+  showToast?: (msg: string, kind?: 'success' | 'error' | 'info') => void,
 ): BranchPickerResult {
   const pickerBtn     = document.getElementById('btn-branch-picker') as HTMLButtonElement;
   const pickerLabel   = document.getElementById('branch-picker-label')!;
@@ -30,6 +31,10 @@ export function initBranchPicker(
   const btnCancel       = document.getElementById('btn-new-branch-cancel')!;
 
   let dropdownOpen = false;
+
+  function toast(msg: string, kind: 'success' | 'error' | 'info' = 'error'): void {
+    if (showToast) { showToast(msg, kind); } else { console.error(msg); }
+  }
 
   // Toggle dropdown
   pickerBtn.addEventListener('click', async (e) => {
@@ -77,18 +82,22 @@ export function initBranchPicker(
       });
       if (!res.ok) {
         const err = await res.json() as { error?: string };
-        alert(`Failed to create branch: ${err.error ?? 'unknown'}`);
+        toast(`Failed to create branch: ${err.error ?? 'unknown'}`);
         return;
       }
       const { name: created } = await res.json() as { name: string };
       pickerLabel.textContent = created;
       onSwitched(created);
     } catch {
-      alert('Failed to create branch: network error');
+      toast('Failed to create branch: network error');
     }
   });
 
-  async function renderBranches() {
+  let _renderingBranches = false;
+
+  async function renderBranches(): Promise<void> {
+    if (_renderingBranches) return;
+    _renderingBranches = true;
     branchListEl.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:var(--text-dim)">Loading…</div>';
     try {
       const res = await fetch('/api/git/branches');
@@ -137,6 +146,8 @@ export function initBranchPicker(
       }
     } catch {
       branchListEl.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:#f97171">Could not load branches</div>';
+    } finally {
+      _renderingBranches = false;
     }
   }
 
@@ -150,14 +161,14 @@ export function initBranchPicker(
       if (!res.ok) {
         let msg = `Could not switch to "${branch}": unknown error`;
         try { const e = await res.json() as { error?: string }; msg = `Could not switch to "${branch}": ${e.error ?? 'unknown error'}`; } catch { /* ignore */ }
-        alert(msg);
+        toast(msg);
         return;
       }
       const data = await res.json() as { ok?: boolean; branch?: string; stashConflict?: boolean; error?: string };
       pickerLabel.textContent = branch;
       onSwitched(branch, data.stashConflict);
     } catch {
-      alert(`Could not switch branch: network error`);
+      toast(`Could not switch branch: network error`);
     }
   }
 
@@ -180,7 +191,7 @@ export function initBranchPicker(
       if (!res.ok) {
         let d: { error?: string } = {};
         try { d = JSON.parse(text); } catch { /* ignore */ }
-        alert(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
+        toast(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
         return;
       }
       let data: { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
@@ -189,9 +200,9 @@ export function initBranchPicker(
       } catch {
         throw new Error('Server returned invalid JSON');
       }
-      alert(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`);
+      toast(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`, 'success');
     } catch {
-      alert('Merge failed: network error');
+      toast('Merge failed: network error');
     }
   }
 
@@ -256,14 +267,14 @@ export function initBranchPicker(
         const d = await r.json() as { ok?: boolean; commit?: string; error?: string };
         if (r.ok) {
           overlay.remove();
-          alert(`Merge completed (${d.commit?.slice(0, 7) ?? '?'})`);
+          toast(`Merge completed (${d.commit?.slice(0, 7) ?? '?'})`, 'success');
         } else {
-          alert(`Could not complete merge: ${d.error ?? 'unknown error'}`);
+          toast(`Could not complete merge: ${d.error ?? 'unknown error'}`);
           completeBtn.disabled = false;
           completeBtn.textContent = '✓ Complete Merge';
         }
       } catch {
-        alert('Network error');
+        toast('Network error');
         completeBtn.disabled = false;
         completeBtn.textContent = '✓ Complete Merge';
       }
@@ -281,15 +292,15 @@ export function initBranchPicker(
         const r = await fetch('/api/git/merge-abort', { method: 'POST' });
         if (r.ok) {
           overlay.remove();
-          alert('Merge aborted — working tree restored.');
+          toast('Merge aborted — working tree restored.', 'success');
         } else {
           const d = await r.json() as { error?: string };
-          alert(`Abort failed: ${d.error ?? 'unknown error'}`);
+          toast(`Abort failed: ${d.error ?? 'unknown error'}`);
           abortBtn.disabled = false;
           abortBtn.textContent = '✕ Abort Merge';
         }
       } catch {
-        alert('Network error');
+        toast('Network error');
         abortBtn.disabled = false;
         abortBtn.textContent = '✕ Abort Merge';
       }

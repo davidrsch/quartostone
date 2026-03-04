@@ -2,6 +2,8 @@
 // Structured data view — Table and Kanban modes for database .qmd pages
 // #97: filter/sort toolbar   #98: column header editing (rename/type/delete/insert)
 
+import { escHtml as esc } from '../utils/escape.js';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface FieldDef {
@@ -28,11 +30,6 @@ export interface DbInstance {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-}
 
 // #97 — Apply active filters and sorts to a row array, returning a new array
 // with original indices preserved (needed for edit callbacks).

@@ -1,6 +1,9 @@
 // src/client/git/index.ts
 // Git sidebar panel — status strip, commit history list, inline diff viewer, remote sync
 
+import { escHtml } from '../utils/escape.js';
+import { API } from '../api/endpoints.js';
+
 interface CommitEntry {
   hash: string;
   message: string;
@@ -103,7 +106,7 @@ export async function initGitPanel(
     try {
       const url = remoteUrlInput.value.trim();
       if (!url) return;
-      const res = await fetch('/api/git/remote', {
+      const res = await fetch(API.gitRemote, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -124,7 +127,7 @@ export async function initGitPanel(
     btnPush.disabled = true;
     btnPush.textContent = '↑ Pushing…';
     try {
-      const res = await fetch('/api/git/push', { method: 'POST' });
+      const res = await fetch(API.gitPush, { method: 'POST' });
       if (res.ok) {
         await loadRemote();
       } else {
@@ -144,7 +147,7 @@ export async function initGitPanel(
     btnPull.disabled = true;
     btnPull.textContent = '↓ Pulling…';
     try {
-      const res = await fetch('/api/git/pull', { method: 'POST' });
+      const res = await fetch(API.gitPull, { method: 'POST' });
       if (res.ok) {
         await Promise.all([loadStatus(), loadHistory(), loadRemote()]);
       } else if (res.status === 409) {
@@ -166,7 +169,7 @@ export async function initGitPanel(
 
   async function loadStatus() {
     try {
-      const res = await fetch('/api/git/status');
+      const res = await fetch(API.gitStatus);
       if (!res.ok) throw new Error('status failed');
       const s: GitStatus = await res.json();
       renderStatus(statusStrip, s);
@@ -177,14 +180,14 @@ export async function initGitPanel(
 
   async function loadHistory() {
     try {
-      const res = await fetch('/api/git/log');
+      const res = await fetch(API.gitLog);
       if (!res.ok) throw new Error('log failed');
       const commits: CommitEntry[] = await res.json();
       renderHistory(commitList, commits, async (hash, msg) => {
         diffTitle.textContent = `${hash.slice(0, 7)} · ${msg}`;
         diffBody.textContent = 'Loading…';
         diffPanel.classList.remove('hidden');
-        const dr = await fetch(`/api/git/diff?sha=${hash}`);
+        const dr = await fetch(`${API.gitDiff}?sha=${hash}`);
         if (!dr.ok) {
           diffBody.textContent = 'Failed to load diff.';
           return;
@@ -200,7 +203,7 @@ export async function initGitPanel(
 
   async function loadRemote() {
     try {
-      const res = await fetch('/api/git/remote');
+      const res = await fetch(API.gitRemote);
       if (!res.ok) {
         syncInfo.textContent = 'No remote';
         btnPush.disabled = true;
@@ -257,8 +260,8 @@ function renderHistory(
     return;
   }
   el.innerHTML = commits.map(c => `
-    <div class="git-commit-row" data-hash="${c.hash}">
-      <div class="git-commit-hash">${c.hash.slice(0, 7)}</div>
+    <div class="git-commit-row" data-hash="${escHtml(c.hash)}">
+      <div class="git-commit-hash">${escHtml(c.hash.slice(0, 7))}</div>
       <div class="git-commit-msg">${escHtml(c.message)}</div>
       <div class="git-commit-meta">${escHtml(c.author_name)} · ${formatDate(c.date)}</div>
     </div>
@@ -311,6 +314,4 @@ function formatDate(dateStr: string): string {
   }
 }
 
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+

@@ -48,6 +48,16 @@ test.describe('Pages API — CRUD', () => {
   const testPage = 'e2e-crud-test.qmd';
   const testContent = '---\ntitle: E2E CRUD Test\n---\n\n# E2E Write Test\n\nCreated by the E2E suite.\n';
 
+  test.beforeAll(async ({ request }) => {
+    // Delete the test page if it was left over from a previous failed run
+    await request.delete(`/api/pages/${testPage}`).catch(() => { /* ignore 404 */ });
+  });
+
+  test.afterAll(async ({ request }) => {
+    // Idempotent cleanup: remove the test page if any test left it behind
+    await request.delete(`/api/pages/${testPage}`).catch(() => { /* ignore */ });
+  });
+
   test('PUT /api/pages creates or updates a page', async ({ request }) => {
     const res = await request.put(`/api/pages/${testPage}`, {
       data: { content: testContent },

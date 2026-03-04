@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import type { ServerContext } from '../index.js';
 
 const EXEC_TIMEOUT_MS = 30_000;
+const MAX_OUTPUT = 1_048_576; // 1 MB per stream
 
 // ── Run a code snippet in a subprocess ───────────────────────────────────────
 
@@ -34,8 +35,8 @@ function runSubprocess(
     // is always set before the close event fires, avoiding a race condition.
     const proc = spawn(cmd, args, { cwd, shell: false });
 
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.stdout.on('data', (chunk: Buffer) => { if (stdout.length < MAX_OUTPUT) stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk: Buffer) => { if (stderr.length < MAX_OUTPUT) stderr += chunk.toString(); });
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -59,7 +60,7 @@ function runSubprocess(
 
 // ── Language-specific execution ───────────────────────────────────────────────
 
-async function executePython(code: string, cwd: string): Promise<ExecResult> {
+async function executePython(code: string, cwd: string, timeout: number): Promise<ExecResult> {
   // Wrap code with matplotlib non-interactive backend to avoid window popups
   const wrapped = `
 import sys, warnings
@@ -74,7 +75,7 @@ ${code}
 
   // Try 'python' first, fall back to 'python3'
   for (const cmd of ['python', 'python3']) {
-    const result = await runSubprocess(cmd, ['-c', wrapped], cwd, EXEC_TIMEOUT_MS);
+    const result = await runSubprocess(cmd, ['-c', wrapped], cwd, timeout);
     // Only fall through to next candidate when the binary was genuinely not found
     if (!result.notFound) return result;
   }
@@ -86,23 +87,39 @@ ${code}
   };
 }
 
-async function executeR(code: string, cwd: string): Promise<ExecResult> {
-  return runSubprocess('Rscript', ['--vanilla', '-e', code], cwd, EXEC_TIMEOUT_MS);
+async function executeR(code: string, cwd: string, timeout: number): Promise<ExecResult> {
+  return runSubprocess('Rscript', ['--vanilla', '-e', code], cwd, timeout);
 }
 
-async function executeJulia(code: string, cwd: string): Promise<ExecResult> {
-  return runSubprocess('julia', ['--quiet', '-e', code], cwd, EXEC_TIMEOUT_MS);
+async function executeJulia(code: string, cwd: string, timeout: number): Promise<ExecResult> {
+  return runSubprocess('julia', ['--quiet', '-e', code], cwd, timeout);
+}
+
+// ── Error sanitization ──────────────────────────────────────────────────────
+
+/** Remove absolute paths and credentials from error messages before sending to the client. */
+function sanitizeError(e: unknown): string {
+  let msg = e instanceof Error ? e.message : String(e);
+  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
+  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
+  return msg;
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────
 
 export function registerExecApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
+  const execTimeout = ctx.config.exec_timeout_ms ?? EXEC_TIMEOUT_MS;
 
   // POST /api/exec
   // body: { code: string, language: 'python' | 'r' | 'julia' }
   // response: { stdout, stderr, timedOut, exitCode }
   app.post('/api/exec', async (req: Request, res: Response) => {
+    if (!ctx.config.allow_code_execution) {
+      res.status(403).json({ error: 'Code execution is disabled. Set allow_code_execution: true in _quartostone.yml to enable it.' });
+      return;
+    }
+
     const { code, language } = req.body as { code?: string; language?: string };
 
     if (typeof code !== 'string' || !code.trim()) {
@@ -115,13 +132,13 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
       switch (language) {
         case 'python':
         case 'python3':
-          result = await executePython(code, cwd);
+          result = await executePython(code, cwd, execTimeout);
           break;
         case 'r':
-          result = await executeR(code, cwd);
+          result = await executeR(code, cwd, execTimeout);
           break;
         case 'julia':
-          result = await executeJulia(code, cwd);
+          result = await executeJulia(code, cwd, execTimeout);
           break;
         default:
           res.status(400).json({ error: `Unsupported language: ${String(language)}` });
@@ -136,7 +153,7 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
         ok:       result.exitCode === 0 && !result.timedOut,
       });
     } catch (err) {
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: sanitizeError(err) });
     }
   });
 }

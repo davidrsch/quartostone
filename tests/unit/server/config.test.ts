@@ -78,6 +78,30 @@ describe('loadConfig', () => {
     expect(config.port).toBe(4242);
     expect(config.commit_mode).toBe('prompt');
   });
+
+  it('falls back to default commit_mode when given an unrecognised value', async () => {
+    writeFileSync(configPath, 'commit_mode: magic\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.commit_mode).toBe('prompt'); // the default
+  });
+
+  it('falls back to default port when given a non-numeric port value', async () => {
+    writeFileSync(configPath, 'port: not-a-number\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.port).toBe(4242); // the default
+  });
+
+  it('resets watch_interval_ms to 300 when given 0', async () => {
+    writeFileSync(configPath, 'watch_interval_ms: 0\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.watch_interval_ms).toBe(300); // the default
+  });
 });
 
 // ── generateCommitSlug ────────────────────────────────────────────────────────

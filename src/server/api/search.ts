@@ -6,18 +6,15 @@
 // POST /api/search/reindex    → rebuilds the full index
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, relative, basename, extname } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, basename } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { collectQmd } from '../utils/qmdFiles.js';
+import { getTitleWithFallback } from '../utils/frontmatter.js';
+import type { SearchResult } from '../../shared/types.js';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-export interface SearchResult {
-  path:    string;
-  title:   string;
-  excerpt: string;
-  score:   number;
-}
+// Re-export so existing code that imports SearchResult from this module continues to work.
+export type { SearchResult };
 
 interface IndexEntry {
   path:    string;
@@ -57,12 +54,7 @@ function stripMarkdown(raw: string): string {
 }
 
 function extractFrontMatterTitle(raw: string, fallback: string): string {
-  const fm = raw.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (fm) {
-    const m = fm[1]?.match(/^title:\s*["']?(.+?)["']?\s*$/m);
-    if (m) return (m[1] ?? '').trim();
-  }
-  return fallback.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return getTitleWithFallback(raw, fallback);
 }
 
 function tokenize(text: string): string[] {
@@ -71,21 +63,6 @@ function tokenize(text: string): string[] {
 
 // ── Index management ──────────────────────────────────────────────────────────
 
-function collectQmd(dir: string, root: string): string[] {
-  let results: string[] = [];
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results = results.concat(collectQmd(full, root));
-      } else if (entry.isFile() && extname(entry.name) === '.qmd') {
-        results.push(relative(root, full).replace(/\\/g, '/'));
-      }
-    }
-  } catch { /* ignore */ }
-  return results;
-}
 
 /** Rebuild the full search index from all .qmd files in pagesDir */
 export function rebuildSearchIndex(pagesDir: string): void {
@@ -131,6 +108,11 @@ function indexFile(pagesDir: string, relPath: string): void {
 
 // Export for testing
 export { index };
+
+/** Reset the index — intended for use in tests only */
+export function resetSearchIndex(): void {
+  index.clear();
+}
 
 // ── Search ────────────────────────────────────────────────────────────────────
 

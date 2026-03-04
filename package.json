@@ -12,7 +12,9 @@
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "build:client": "vite build",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "build:all": "npm run build && npm run build:client",
+    "build:all:with-panmirror": "npm run build && npm run build:client && npm run build:panmirror",
     "build:panmirror": "node scripts/build-panmirror.mjs",
     "dev:server": "tsx watch src/cli/commands/serve.ts",
     "dev:client": "vite",
@@ -38,6 +40,7 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
+    "concurrently": "^9.0.0",
     "@codemirror/lang-markdown": "^6.3.2",
     "@codemirror/lang-yaml": "^6.1.1",
     "@codemirror/language-data": "^6.5.1",

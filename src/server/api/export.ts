@@ -8,25 +8,18 @@
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
-import { join, basename, extname, resolve, sep } from 'node:path';
+import { join, basename, extname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import type { ServerContext } from '../index.js';
+import { isInsideDir } from '../utils/pathGuard.js';
+import { EXPORT_FORMATS } from '../../shared/formats.js';
 
-// ── Supported formats ─────────────────────────────────────────────────────────
+// Alias for backward compatibility with code that references SUPPORTED_FORMATS.
+export const SUPPORTED_FORMATS = EXPORT_FORMATS;
 
-export const SUPPORTED_FORMATS = [
-  'html',
-  'pdf',
-  'typst',
-  'docx',
-  'revealjs',
-  'beamer',
-  'epub',
-] as const;
-
-export type ExportFormat = typeof SUPPORTED_FORMATS[number] | string;
+export type ExportFormat = typeof EXPORT_FORMATS[number] | string;
 
 // ── Argument security ─────────────────────────────────────────────────────────
 
@@ -49,18 +42,32 @@ interface ExportJob {
   filename?:   string;
   error?:      string;
   stderr:      string;
+  createdAt:   number;
 }
 
 const jobs = new Map<string, ExportJob>();
 
-// Purge completed/errored jobs older than 10 minutes
-function purgeOldJobs() {
+/** Keeps only the most recent 100 jobs in memory by evicting the oldest entries. */
+function purgeOldJobs(): void {
   // simple approach: keep only the last 100 jobs
   if (jobs.size > 100) {
     const oldest = Array.from(jobs.keys()).slice(0, jobs.size - 100);
     for (const k of oldest) jobs.delete(k);
   }
 }
+
+// Time-based cleanup: purge jobs and their temp dirs older than 30 minutes
+setInterval(() => {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [id, job] of jobs.entries()) {
+    if (job.createdAt && job.createdAt < cutoff) {
+      jobs.delete(id);
+      if (job.outDir) {
+        try { rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+    }
+  }
+}, 5 * 60 * 1000).unref();
 
 // ── Quarto runner ─────────────────────────────────────────────────────────────
 
@@ -164,9 +171,9 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
       return res.status(400).json({ error: `Unsupported format. Valid formats: ${SUPPORTED_FORMATS.join(', ')}` });
     }
 
-    const pagesDirResolved = resolve(join(cwd, ctx.config.pages_dir));
+    const pagesRoot = resolve(join(cwd, ctx.config.pages_dir));
     const absPath = resolve(join(cwd, filePath));
-    if (!absPath.startsWith(pagesDirResolved + sep)) {
+    if (!isInsideDir(pagesRoot, absPath)) {
       return res.status(400).json({ error: 'Path traversal not allowed' });
     }
     if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
@@ -174,21 +181,31 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!Array.isArray(extraArgs)) {
       return res.status(400).json({ error: 'extraArgs must be an array' });
     }
-    const safeExtraArgs = (extraArgs ?? []).filter((a: unknown): a is string => {
-      if (typeof a !== 'string') return false;
-      if (!SAFE_ARG.test(a)) return false;
-      return !BLOCKED_ARGS.some(b => a === b || a.startsWith(b + '='));
+    // Reject requests that include blocked or unsafe arguments (security)
+    const badArg = extraArgs.find((a: unknown): boolean => {
+      if (typeof a !== 'string') return true;
+      if (!SAFE_ARG.test(a)) return true;
+      return BLOCKED_ARGS.some(b => a === b || (a as string).startsWith(b + '='));
     });
+    if (badArg !== undefined) {
+      return res.status(400).json({ error: `Blocked or unsafe argument: ${String(badArg)}` });
+    }
+    const safeExtraArgs = extraArgs as string[];
 
     purgeOldJobs();
     const token = randomUUID();
-    const job: ExportJob = { token, status: 'pending', stderr: '' };
+    const job: ExportJob = { token, status: 'pending', stderr: '', createdAt: Date.now() };
     jobs.set(token, job);
 
     // Start async — respond immediately with token
     setImmediate(() => runExport(cwd, absPath, format, safeExtraArgs, job));
 
     res.json({ token, status: 'pending' });
+  });
+
+  // GET /api/export/formats — returns the list of supported export formats
+  app.get('/api/export/formats', (_req: Request, res: Response) => {
+    res.json({ formats: EXPORT_FORMATS });
   });
 
   // GET /api/export/status?token=

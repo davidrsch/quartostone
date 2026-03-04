@@ -29,6 +29,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
@@ -61,7 +62,7 @@ describe('GET /api/links/backlinks', () => {
   it('returns 400 when path query param is missing', async () => {
     const res = await client.get('/api/links/backlinks');
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: /path/i });
+    expect(res.body.error).toMatch(/path/i);
   });
 
   it('returns empty array when no pages link to the target', async () => {
@@ -114,7 +115,7 @@ describe('GET /api/links/forward', () => {
   it('returns 400 when path query param is missing', async () => {
     const res = await client.get('/api/links/forward');
     expect(res.status).toBe(400);
-    expect(res.body).toMatchObject({ error: /path/i });
+    expect(res.body.error).toMatch(/path/i);
   });
 
   it('returns empty array when page has no outgoing wiki links', async () => {

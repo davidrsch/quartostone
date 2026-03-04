@@ -29,6 +29,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
@@ -219,7 +220,7 @@ describe('PUT /api/pages/*', () => {
       .put('/api/pages/../../evil')
       .send({ content: 'pwned' });
 
-    expect([400, 404, 200]).toContain(res.status);
+    expect([400, 404]).toContain(res.status);
   });
 });
 
@@ -444,6 +445,6 @@ describe('DELETE /api/directories/*', () => {
 
     // Attempt to delete what is actually a file (readdirSync will fail → 400)
     const res = await client.delete('/api/directories/afile.qmd');
-    expect([400, 404, 200]).toContain(res.status); // Implementation-dependent
+    expect([400, 404]).toContain(res.status); // File-not-a-directory must be rejected, not accepted
   });
 });

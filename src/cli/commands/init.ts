@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
+import { DEFAULTS } from '../../server/config.js';
 
 const QUARTO_YML = `project:
   type: website
@@ -21,13 +22,15 @@ format:
     toc: true
 `;
 
-const QUARTOSTONE_YML = `commit_mode: prompt
-commit_message_auto: "qs-{alphanum8}"
-render_on_save: true
-render_scope: file
-watch_interval_ms: 300
-port: 4242
-`;
+const QUARTOSTONE_YML = [
+  `commit_mode: ${DEFAULTS.commit_mode}`,
+  `commit_message_auto: "qs-{alphanum8}"`,
+  `render_on_save: ${DEFAULTS.render_on_save}`,
+  `render_scope: ${DEFAULTS.render_scope}`,
+  `watch_interval_ms: ${DEFAULTS.watch_interval_ms}`,
+  `port: ${DEFAULTS.port}`,
+  `# allow_code_execution: true`,
+].join('\n') + '\n';
 
 const INDEX_QMD = `---
 title: "Welcome"

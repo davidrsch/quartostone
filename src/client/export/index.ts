@@ -3,6 +3,8 @@
  * polling for job completion, and triggering the file download.
  */
 
+import { showToast } from '../utils/toast.js';
+
 interface ExportJobStatus {
   token: string;
   status: 'pending' | 'running' | 'done' | 'error';
@@ -13,12 +15,12 @@ interface ExportJobStatus {
 /** Returns the currently-active page path from the editor, or null. */
 export type GetCurrentPathFn = () => string | null;
 
-export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
+export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageReady(ready: boolean): void } {
   const picker    = document.getElementById('export-picker') as HTMLElement | null;
   const btnExport = document.getElementById('btn-export')   as HTMLButtonElement | null;
   const dropdown  = document.getElementById('export-dropdown') as HTMLElement | null;
 
-  if (!picker || !btnExport || !dropdown) return;
+  if (!picker || !btnExport || !dropdown) return { setPageReady() {} };
 
   /* ── Toggle dropdown ──────────────────────────────────────────────────── */
 
@@ -91,24 +93,11 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
 
   /* ── Core export flow ─────────────────────────────────────────────────── */
 
-  function showToast(msg: string, isError = false): void {
-    const t = document.createElement('div');
-    t.style.cssText = [
-      'position:fixed', 'bottom:24px', 'right:24px', 'z-index:9999',
-      'background:' + (isError ? '#7f1d1d' : '#1e293b'),
-      'color:#f8fafc', 'border-radius:6px', 'padding:10px 16px',
-      'font-size:13px', 'box-shadow:0 4px 16px rgba(0,0,0,.3)',
-      'max-width:340px',
-    ].join(';');
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), isError ? 6000 : 4000);
-  }
 
   async function startExport(format: string, extraArgs: string[]): Promise<void> {
     const path = getCurrentPath();
     if (!path) {
-      showToast('Open a file before exporting.', true);
+      showToast('Open a file before exporting.', 'error', 6000);
       return;
     }
 
@@ -129,7 +118,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       const data = await res.json() as { token: string };
       token = data.token;
     } catch (err) {
-      showToast('Export failed: ' + String(err), true);
+      showToast('Export failed: ' + String(err), 'error', 6000);
       btnExport!.disabled = false;
       return;
     }
@@ -146,7 +135,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       count++;
       if (count > MAX_POLLS) {
         clearInterval(id);
-        showToast('Export timed out.', true);
+        showToast('Export timed out.', 'error', 6000);
         btnExport!.disabled = false;
         return;
       }
@@ -156,7 +145,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
         const res = await fetch(`/api/export/status?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
           clearInterval(id);
-          showToast('Export poll failed', true);
+          showToast('Export poll failed', 'error', 6000);
           btnExport!.disabled = false;
           return;
         }
@@ -172,7 +161,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
       } else if (job.status === 'error') {
         clearInterval(id);
         btnExport!.disabled = false;
-        showToast('Export error: ' + (job.error ?? 'unknown'), true);
+        showToast('Export error: ' + (job.error ?? 'unknown'), 'error', 6000);
       }
     }, INTERVAL);
   }
@@ -187,9 +176,8 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): void {
     showToast(`Downloaded ${filename}`);
   }
 
-  /* ── Enable button once a page is loaded ─────────────────────────────── */
-  // Allow external callers to enable/disable
-  Object.defineProperty(btnExport, 'pageReady', {
-    set(v: boolean) { btnExport.disabled = !v; },
-  });
+  /* ── Return control object ────────────────────────────────────────────────── */
+  return {
+    setPageReady(ready: boolean) { btnExport!.disabled = !ready; },
+  };
 }

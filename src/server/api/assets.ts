@@ -14,6 +14,11 @@ const ALLOWED_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.bmp', '.ico',
 ]);
 
+const ALLOWED_MIMETYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'image/svg+xml', 'image/avif', 'image/tiff', 'image/bmp', 'image/x-icon',
+]);
+
 export function registerAssetsApi(app: Express, ctx: ServerContext): void {
   const assetsDir = join(ctx.cwd, ctx.config.pages_dir, '_assets');
   mkdirSync(assetsDir, { recursive: true });
@@ -37,7 +42,9 @@ export function registerAssetsApi(app: Express, ctx: ServerContext): void {
     limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
     fileFilter: (_req, file, cb) => {
       const ext = extname(file.originalname).toLowerCase();
-      cb(null, ALLOWED_EXTS.has(ext));
+      if (!ALLOWED_EXTS.has(ext)) { cb(null, false); return; }
+      if (!ALLOWED_MIMETYPES.has(file.mimetype)) { cb(new Error('Invalid MIME type')); return; }
+      cb(null, true);
     },
   });
 

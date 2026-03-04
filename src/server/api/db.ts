@@ -5,24 +5,16 @@
 import type { Express, Request, Response } from 'express';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
-import * as yaml from 'yaml';
+import { stringify as yamlStringify } from 'yaml';
 import type { ServerContext } from '../index.js';
+import { parseFrontmatter } from '../utils/frontmatter.js';
+import { PathTraversalError } from '../utils/pathGuard.js';
+import type { FieldDef, DbPage } from '../../shared/types.js';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Re-export shared types so existing imports from this module keep working.
+export type { FieldDef, DbPage };
 
-export interface FieldDef {
-  id: string;
-  name: string;
-  type: 'text' | 'select' | 'date' | 'checkbox' | 'number';
-  options?: string[];  // for select type
-}
-
-export interface DbPage {
-  schema: FieldDef[];
-  rows: Record<string, string>[];
-}
-
-// ── Markdown table helpers ───────────────────────────────────────────────────
+// ── Markdown table helpers ──────────────────────────────────────────────────
 
 function parseMarkdownTable(src: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines = src.split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
@@ -47,7 +39,7 @@ function parseMarkdownTable(src: string): { headers: string[]; rows: Record<stri
 function serializeMarkdownTable(schema: FieldDef[], rows: Record<string, string>[]): string {
   const ids = schema.map(f => f.id);
   const widths = ids.map(id =>
-    Math.max(id.length, ...rows.map(r => (r[id] ?? '').length), 3)
+    Math.max(id.length, ...rows.map(r => (r[id] ?? '').replace(/\|/g, '\\|').length), 3)
   );
 
   const pad = (s: string, w: number) => s.padEnd(w, ' ');
@@ -55,7 +47,10 @@ function serializeMarkdownTable(schema: FieldDef[], rows: Record<string, string>
   const header  = '| ' + ids.map((id, i) => pad(id, widths[i])).join(' | ') + ' |';
   const sep     = '|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|';
   const dataLines = rows.map(row =>
-    '| ' + ids.map((id, i) => pad(row[id] ?? '', widths[i])).join(' | ') + ' |'
+    '| ' + ids.map((id, i) => {
+      const cellText = String(row[id] ?? '').replace(/\|/g, '\\|');
+      return pad(cellText, widths[i]);
+    }).join(' | ') + ' |'
   );
 
   return [header, sep, ...dataLines].join('\n');
@@ -63,15 +58,6 @@ function serializeMarkdownTable(schema: FieldDef[], rows: Record<string, string>
 
 // ── Parse / serialise a database .qmd file ───────────────────────────────────
 
-function parseFrontmatter(content: string): { meta: Record<string, unknown>; body: string } {
-  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!m) return { meta: {}, body: content };
-  try {
-    return { meta: yaml.parse(m[1]) as Record<string, unknown>, body: m[2] };
-  } catch {
-    return { meta: {}, body: content };
-  }
-}
 
 function normaliseSchema(raw: unknown): FieldDef[] {
   if (!Array.isArray(raw)) return [];
@@ -101,12 +87,22 @@ export function serialiseDbFile(page: DbPage): string {
     }),
   };
 
-  const fmStr = yaml.stringify(frontmatter).trimEnd();
+  const fmStr = yamlStringify(frontmatter).trimEnd();
   const tableStr = page.rows.length > 0 || page.schema.length > 0
     ? '\n' + serializeMarkdownTable(page.schema, page.rows) + '\n'
     : '';
 
   return `---\n${fmStr}\n---\n${tableStr}`;
+}
+
+// ── Error sanitization ──────────────────────────────────────────────────────
+
+/** Remove absolute paths and credentials from error messages before sending to the client. */
+function sanitizeError(e: unknown): string {
+  let msg = e instanceof Error ? e.message : String(e);
+  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
+  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
+  return msg;
 }
 
 // ── Route handlers ───────────────────────────────────────────────────────────
@@ -168,7 +164,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
       await writeFile(abs, content, 'utf-8');
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: sanitizeError(err) });
     }
   });
 
@@ -197,13 +193,20 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
           return obj;
         }),
       };
-      const fmStr = yaml.stringify(frontmatter).trimEnd();
+      const fmStr = yamlStringify(frontmatter).trimEnd();
       const tableStr = '\n' + serializeMarkdownTable(finalSchema, []) + '\n';
       const content = `---\n${fmStr}\n---\n${tableStr}`;
-      await writeFile(abs, content, 'utf-8');
+      try {
+        await writeFile(abs, content, { flag: 'wx', encoding: 'utf-8' });
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+          return res.status(409).json({ error: 'File already exists' });
+        }
+        throw err;
+      }
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: sanitizeError(err) });
     }
   });
 }

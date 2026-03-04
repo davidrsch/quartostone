@@ -30,8 +30,13 @@ test.describe('#115 Light/dark theme toggle', () => {
 
     await page.locator('#btn-theme').click();
 
-    const isLight = await htmlEl.evaluate(el => el.classList.contains('light'));
-    expect(isLight).toBe(!startedLight);
+    // Use Playwright's auto-retrying assertion instead of a one-shot evaluate()
+    // to avoid flakiness caused by the DOM update not yet being visible.
+    if (startedLight) {
+      await expect(htmlEl).not.toHaveClass(/\blight\b/);
+    } else {
+      await expect(htmlEl).toHaveClass(/\blight\b/);
+    }
   });
 
   test('clicking #btn-theme twice returns to original theme', async ({ page }) => {

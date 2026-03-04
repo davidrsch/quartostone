@@ -1,0 +1,306 @@
+﻿diff --git a/src/client/branches/index.ts b/src/client/branches/index.ts
+index 77a6f68..8d2b83f 100644
+--- a/src/client/branches/index.ts
++++ b/src/client/branches/index.ts
+@@ -18,6 +18,7 @@ export interface BranchPickerResult {
+ 
+ export function initBranchPicker(
+   onSwitched: (branch: string, stashConflict?: boolean) => void,
++  showToast?: (msg: string, kind?: 'success' | 'error' | 'info') => void,
+ ): BranchPickerResult {
+   const pickerBtn     = document.getElementById('btn-branch-picker') as HTMLButtonElement;
+   const pickerLabel   = document.getElementById('branch-picker-label')!;
+@@ -31,6 +32,10 @@ export function initBranchPicker(
+ 
+   let dropdownOpen = false;
+ 
++  function toast(msg: string, kind: 'success' | 'error' | 'info' = 'error'): void {
++    if (showToast) { showToast(msg, kind); } else { console.error(msg); }
++  }
++
+   // Toggle dropdown
+   pickerBtn.addEventListener('click', async (e) => {
+     e.stopPropagation();
+@@ -77,18 +82,22 @@ export function initBranchPicker(
+       });
+       if (!res.ok) {
+         const err = await res.json() as { error?: string };
+-        alert(`Failed to create branch: ${err.error ?? 'unknown'}`);
++        toast(`Failed to create branch: ${err.error ?? 'unknown'}`);
+         return;
+       }
+       const { name: created } = await res.json() as { name: string };
+       pickerLabel.textContent = created;
+       onSwitched(created);
+     } catch {
+-      alert('Failed to create branch: network error');
++      toast('Failed to create branch: network error');
+     }
+   });
+ 
+-  async function renderBranches() {
++  let _renderingBranches = false;
++
++  async function renderBranches(): Promise<void> {
++    if (_renderingBranches) return;
++    _renderingBranches = true;
+     branchListEl.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:var(--text-dim)">Loading…</div>';
+     try {
+       const res = await fetch('/api/git/branches');
+@@ -137,6 +146,8 @@ export function initBranchPicker(
+       }
+     } catch {
+       branchListEl.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:#f97171">Could not load branches</div>';
++    } finally {
++      _renderingBranches = false;
+     }
+   }
+ 
+@@ -150,14 +161,14 @@ export function initBranchPicker(
+       if (!res.ok) {
+         let msg = `Could not switch to "${branch}": unknown error`;
+         try { const e = await res.json() as { error?: string }; msg = `Could not switch to "${branch}": ${e.error ?? 'unknown error'}`; } catch { /* ignore */ }
+-        alert(msg);
++        toast(msg);
+         return;
+       }
+       const data = await res.json() as { ok?: boolean; branch?: string; stashConflict?: boolean; error?: string };
+       pickerLabel.textContent = branch;
+       onSwitched(branch, data.stashConflict);
+     } catch {
+-      alert(`Could not switch branch: network error`);
++      toast(`Could not switch branch: network error`);
+     }
+   }
+ 
+@@ -180,7 +191,7 @@ export function initBranchPicker(
+       if (!res.ok) {
+         let d: { error?: string } = {};
+         try { d = JSON.parse(text); } catch { /* ignore */ }
+-        alert(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
++        toast(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
+         return;
+       }
+       let data: { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+@@ -189,9 +200,9 @@ export function initBranchPicker(
+       } catch {
+         throw new Error('Server returned invalid JSON');
+       }
+-      alert(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`);
++      toast(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`, 'success');
+     } catch {
+-      alert('Merge failed: network error');
++      toast('Merge failed: network error');
+     }
+   }
+ 
+@@ -256,14 +267,14 @@ export function initBranchPicker(
+         const d = await r.json() as { ok?: boolean; commit?: string; error?: string };
+         if (r.ok) {
+           overlay.remove();
+-          alert(`Merge completed (${d.commit?.slice(0, 7) ?? '?'})`);
++          toast(`Merge completed (${d.commit?.slice(0, 7) ?? '?'})`, 'success');
+         } else {
+-          alert(`Could not complete merge: ${d.error ?? 'unknown error'}`);
++          toast(`Could not complete merge: ${d.error ?? 'unknown error'}`);
+           completeBtn.disabled = false;
+           completeBtn.textContent = '✓ Complete Merge';
+         }
+       } catch {
+-        alert('Network error');
++        toast('Network error');
+         completeBtn.disabled = false;
+         completeBtn.textContent = '✓ Complete Merge';
+       }
+@@ -281,15 +292,15 @@ export function initBranchPicker(
+         const r = await fetch('/api/git/merge-abort', { method: 'POST' });
+         if (r.ok) {
+           overlay.remove();
+-          alert('Merge aborted — working tree restored.');
++          toast('Merge aborted — working tree restored.', 'success');
+         } else {
+           const d = await r.json() as { error?: string };
+-          alert(`Abort failed: ${d.error ?? 'unknown error'}`);
++          toast(`Abort failed: ${d.error ?? 'unknown error'}`);
+           abortBtn.disabled = false;
+           abortBtn.textContent = '✕ Abort Merge';
+         }
+       } catch {
+-        alert('Network error');
++        toast('Network error');
+         abortBtn.disabled = false;
+         abortBtn.textContent = '✕ Abort Merge';
+       }
+diff --git a/src/client/main.ts b/src/client/main.ts
+index 74a8d77..6681dab 100644
+--- a/src/client/main.ts
++++ b/src/client/main.ts
+@@ -87,6 +87,12 @@ let graphView: { open(): void; close(): void; refresh(): void } | null = null;
+ let switchingMode = false; // M-4: guard against concurrent mode switches
+ let visualMarkdownCache = ''; // last-known markdown when visual editor is active
+ 
++// module-level palette controls (FIX MAIN-05)
++let openCmdPalette: () => void  = () => {};
++let closeCmdPalette: () => void = () => {};
++// module-level export picker handle (FIX EXP-02)
++let exportPicker: { setPageReady(ready: boolean): void } | null = null;
++
+ // ─── Split pane state (#140) ──────────────────────────────────────────────────
+ let splitActive = false;
+ let focusedPane: 'primary' | 'secondary' = 'primary';
+@@ -198,6 +204,7 @@ async function switchMode(mode: 'source' | 'visual') {
+       onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
+       onDirty: () => {
+         isDirty = true;
++        if (activePath) markTabDirty(activePath, true);
+         btnSave.disabled = false;
+         sbSaveStatus.textContent = 'Unsaved changes';
+         // update cache asynchronously so properties panel stays mostly fresh
+@@ -221,6 +228,7 @@ async function switchMode(mode: 'source' | 'visual') {
+       pagePath: activePath,
+       onSave: () => {
+         isDirty = false;
++        if (activePath) markTabDirty(activePath, false);
+         btnSave.disabled = true;
+         sbSaveStatus.textContent = 'Saved';
+         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+@@ -233,6 +241,7 @@ async function switchMode(mode: 'source' | 'visual') {
+       },
+       onDirty: () => {
+         isDirty = true;
++        if (activePath) markTabDirty(activePath, true);
+         btnSave.disabled = false;
+         sbSaveStatus.textContent = 'Unsaved changes';
+       },
+@@ -489,7 +498,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
+   noPageMessageEl.classList.remove('visible');
+   btnSave.disabled = true;
+   btnCommit.disabled = false;
+-  (document.getElementById('btn-export') as HTMLButtonElement & { pageReady: boolean }).pageReady = true;
++  exportPicker?.setPageReady(true)
+ 
+   // Check if this is a database page
+   const dbInstance = await initDatabaseView(editorMountEl, path);
+@@ -518,6 +527,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
+         onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
+         onDirty: () => {
+           isDirty = true;
++          markTabDirty(path, true);
+           btnSave.disabled = false;
+           sbSaveStatus.textContent = 'Unsaved changes';
+         },
+@@ -534,6 +544,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
+       pagePath: path,
+       onSave: () => {
+         isDirty = false;
++        markTabDirty(path, false);
+         btnSave.disabled = true;
+         sbSaveStatus.textContent = 'Saved';
+         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+@@ -546,6 +557,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
+       },
+       onDirty: () => {
+         isDirty = true;
++        markTabDirty(path, true);
+         btnSave.disabled = false;
+         sbSaveStatus.textContent = 'Unsaved changes';
+       },
+@@ -573,10 +585,10 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
+         dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
+       } else if (editorMode === 'visual' && activeVisual) {
+         // M-2: push frontmatter edits back into the visual editor
+-        activeVisual.setMarkdown(newContent);
++        void activeVisual.setMarkdown(newContent).catch(err => console.error('setMarkdown failed:', err));
+       }
+     };
+-    propsPanel.mount(path, getContent as () => string, setContent);
++    propsPanel.mount(path, getContent, setContent);
+   }
+ }
+ 
+@@ -717,10 +729,10 @@ branchPicker = initBranchPicker((branch, stashConflict) => {
+   if (stashConflict) showToast('Stash re-apply had conflicts — check your files', 'error', 6000);
+   // Reload current page on branch switch so content reflects new branch
+   if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath);
+-});
++}, showToast);
+ 
+ // ── Export picker ───────────────────────────────────────────────────────────
+-initExportPicker(() => activePath);
++exportPicker = initExportPicker(() => activePath);
+ 
+ // ── Preview panel ────────────────────────────────────────────────────────────
+ previewPanel = initPreviewPanel();
+@@ -743,7 +755,7 @@ document.getElementById('btn-graph')?.addEventListener('click', () => graphView?
+ 
+ initHistoryPanel(historyPanelEl, () => {
+   // After a restore, reload the current page
+-  if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
++  if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath).catch(e => console.error('History restore failed:', e));
+   showToast('File restored to selected commit', 'success');
+ }).then(hp => { historySetPage = hp.setPage; }).catch(err => console.error('History panel init failed:', err));
+ 
+@@ -999,8 +1011,6 @@ requestAnimationFrame(() => {
+   if (!tabBarEl) return;
+   // intercept sidebar file-tree clicks by observing activePath changes via MutationObserver on page title
+   const titleObs = new MutationObserver(() => {
+-    if (activePath) ensureTab(activePath, pageTitleEl.textContent ?? activePath);
+-  });
+   titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
+   window.addEventListener('beforeunload', () => { titleObs.disconnect(); });
+ });
+@@ -1062,21 +1072,19 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath,
+     const items = list.querySelectorAll<HTMLLIElement>('.cmd-item');
+     items[selectedIdx]?.classList.remove('selected');
+     items[selectedIdx]?.setAttribute('aria-selected', 'false');
+-    selectedIdx = Math.max(0, Math.min(items.length - 1, idx));
+-    items[selectedIdx]?.classList.add('selected');
+-    items[selectedIdx]?.setAttribute('aria-selected', 'true');
+-    items[selectedIdx]?.scrollIntoView({ block: 'nearest' });
+-  }
+-
+-  (window as unknown as Record<string, unknown>)['openCmdPalette'] = openCmdPalette;
+-  function openCmdPalette() {
++  openCmdPalette = () => {
+     palette.classList.remove('hidden');
+     input.value = '';
+     renderPalette('');
+     // Defer focus by one frame so the browser has processed the display change
+     // before attempting to focus the input (needed for headless Chromium).
+     requestAnimationFrame(() => input.focus());
+-  }
++  };
++
++  closeCmdPalette = () => {
++    palette.classList.add('hidden');
++    input.value = '';
++  };
+ 
+   (window as unknown as Record<string, unknown>)['closeCmdPalette'] = closeCmdPalette;
+   function closeCmdPalette() {
+@@ -1094,9 +1102,6 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath,
+       closeCmdPalette();
+       action?.action();
+     }
+-    if (e.key === 'Escape') { e.preventDefault(); closeCmdPalette(); }
+-  });
+-
+   backdrop.addEventListener('click', closeCmdPalette);
+ }
+ 
+@@ -1180,15 +1185,5 @@ btnSplit.addEventListener('click', toggleSplit);
+     document.addEventListener('mouseup', onUp);
+   });
+ }
+-
+-
+-// Patch into existing dirty-state changes by observing sbSaveStatus text
+-{
+-  const obs = new MutationObserver(() => {
+-    const dirty = sbSaveStatus.textContent?.includes('Unsaved') ?? false;
+-    setDirtyTab(dirty);
+-  });
+-  obs.observe(sbSaveStatus, { childList: true, characterData: true, subtree: true });
+-  window.addEventListener('beforeunload', () => { obs.disconnect(); });
+ }
+ 

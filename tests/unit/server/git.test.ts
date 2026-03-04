@@ -26,6 +26,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 // ── Fixture ───────────────────────────────────────────────────────────────────
@@ -155,6 +156,20 @@ describe('GET /api/git/branches', () => {
 // ── POST /api/git/branches ────────────────────────────────────────────────────
 
 describe('POST /api/git/branches', () => {
+  // Record the current branch before any test in this block may change it
+  let originalBranch: string;
+
+  beforeAll(() => {
+    originalBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: workspace })
+      .toString()
+      .trim();
+  });
+
+  afterAll(() => {
+    execSync(`git checkout ${originalBranch}`, { cwd: workspace });
+    try { execSync('git branch -D test-branch', { cwd: workspace }); } catch { /* may not exist */ }
+  });
+
   it('returns 400 for invalid branch name', async () => {
     const res = await client.post('/api/git/branches').send({ name: 'bad name with spaces' });
     expect(res.status).toBe(400);
@@ -165,11 +180,7 @@ describe('POST /api/git/branches', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.name).toBe('test-branch');
-    // Switch back to main/master for subsequent tests
-    const branches = (await client.get('/api/git/branches')).body;
-    const defaultBranch = (branches.branches as Array<{ name: string; current: boolean }>)
-      .find(b => !b.current)?.name ?? 'main';
-    execSync(`git checkout ${defaultBranch}`, { cwd: workspace });
+    // Cleanup is handled by afterAll above
   });
 });
 
@@ -186,6 +197,22 @@ describe('POST /api/git/checkout', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/valid branch/i);
   });
+
+  it('checks out an existing branch and returns ok', async () => {
+    // Capture the current branch so we can switch back afterwards
+    const statusBefore = await client.get('/api/git/status');
+    const originalBranch = (statusBefore.body as { current: string }).current;
+
+    execSync('git branch test-checkout-branch', { cwd: workspace });
+
+    const res = await client.post('/api/git/checkout').send({ branch: 'test-checkout-branch' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    // Switch back to the original branch and tidy up
+    execSync(`git checkout ${originalBranch}`, { cwd: workspace });
+    execSync('git branch -D test-checkout-branch', { cwd: workspace });
+  });
 });
 
 // ── POST /api/git/merge ───────────────────────────────────────────────────────
@@ -200,6 +227,26 @@ describe('POST /api/git/merge', () => {
     const res = await client.post('/api/git/merge').send({ branch: '$(evil)' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/valid branch/i);
+  });
+
+  it('merges a feature branch and returns ok', async () => {
+    // Capture the current branch so we can return to it
+    const statusBefore = await client.get('/api/git/status');
+    const mainBranch = (statusBefore.body as { current: string }).current;
+
+    // Create and switch to a feature branch, add a commit, then come back
+    execSync('git checkout -b test-merge-branch', { cwd: workspace });
+    writeFileSync(join(workspace, 'pages', 'merge-test.qmd'), '---\ntitle: Merge\n---\n');
+    execSync('git add pages/merge-test.qmd', { cwd: workspace });
+    execSync('git commit -m "test: merge-test page"', { cwd: workspace });
+    execSync(`git checkout ${mainBranch}`, { cwd: workspace });
+
+    const res = await client.post('/api/git/merge').send({ branch: 'test-merge-branch' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+
+    // Clean up the merged branch
+    execSync('git branch -D test-merge-branch', { cwd: workspace });
   });
 });
 

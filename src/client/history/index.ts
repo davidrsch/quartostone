@@ -2,6 +2,9 @@
 // Per-page commit timeline — shows commits that touched the current file,
 // with a "Restore" button that checks the file out at that commit.
 
+import { escHtml } from '../utils/escape.js';
+import { API } from '../api/endpoints.js';
+
 interface HistoryCommit {
   hash: string;
   message: string;
@@ -29,7 +32,7 @@ export async function initHistoryPanel(
     emptyEl.classList.add('hidden');
 
     try {
-      const res = await fetch(`/api/git/log?path=${encodeURIComponent(path)}`);
+      const res = await fetch(`${API.gitLog}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error('Failed to load history');
       const commits: HistoryCommit[] = await res.json();
 
@@ -50,8 +53,8 @@ export async function initHistoryPanel(
 
         item.innerHTML = `
           <button class="restore-btn" data-sha="${commit.hash}" title="Restore file to this version">↩</button>
-          <div class="history-commit-msg" title="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</div>
-          <div class="history-commit-meta">${shortSha} · ${escapeHtml(commit.author_name)} · ${dateStr}</div>
+          <div class="history-commit-msg" title="${escHtml(commit.message)}">${escHtml(commit.message)}</div>
+          <div class="history-commit-meta">${shortSha} · ${escHtml(commit.author_name)} · ${dateStr}</div>
         `;
 
         item.querySelector<HTMLButtonElement>('.restore-btn')!
@@ -64,14 +67,14 @@ export async function initHistoryPanel(
         listEl.appendChild(item);
       }
     } catch (err) {
-      listEl.innerHTML = `<div class="history-error">Could not load history: ${escapeHtml(String(err))}</div>`;
+      listEl.innerHTML = `<div class="history-error">Could not load history: ${escHtml(String(err))}</div>`;
     }
   }
 
   async function restoreFile(path: string, sha: string) {
     if (!confirm(`Restore "${path}" to version ${sha.slice(0, 7)}?\n\nUnsaved changes will be lost.`)) return;
     try {
-      const res = await fetch('/api/git/restore', {
+      const res = await fetch(API.gitRestore, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sha, path }),
@@ -96,14 +99,6 @@ export async function initHistoryPanel(
       return;
     }
     await loadHistory(path);
-  }
-
-  function escapeHtml(str: string): string {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   // Expose refresh for outside callers (e.g. after a commit)

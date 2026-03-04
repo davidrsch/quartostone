@@ -22,6 +22,7 @@ import {
   scanFileForXRefs,
   scanXRefsInProject,
   walkFiles,
+  resetXrefCache,
 } from '../../../src/server/api/xref.js';
 
 // ── Shared test config + workspace ────────────────────────────────────────────
@@ -35,12 +36,14 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
 let client: ReturnType<typeof supertest>;
 
 beforeEach(() => {
+  resetXrefCache(); // clear module-level singleton between tests
   workspace = mkdtempSync(join(tmpdir(), 'qs-xref-test-'));
   mkdirSync(join(workspace, 'pages'), { recursive: true });
   execSync('git init', { cwd: workspace });

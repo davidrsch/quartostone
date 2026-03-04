@@ -3,6 +3,7 @@
 // drag-and-drop move, and Trash tray.
 
 import { focusAdjacentTreeItem } from '../treeNav.js';
+import { showToast } from '../utils/toast.js';
 
 export interface PageNode {
   name: string;
@@ -132,8 +133,7 @@ function startRename(
       if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
       await onRefresh();
     } catch (err) {
-      input.replaceWith(labelEl);
-      sidebarToast(`Rename failed: ${String(err)}`);
+      showToast(`Rename failed: ${String(err)}`, 'error', 4000);
     }
   }
 
@@ -144,23 +144,12 @@ function startRename(
   input.addEventListener('blur', () => void commit());
 }
 
-function sidebarToast(msg: string): void {
-  const container = document.getElementById('toast-container');
-  if (!container) { console.error(msg); return; }
-  const t = document.createElement('div');
-  t.className = 'toast error';
-  t.textContent = msg;
-  container.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
-}
-
-// ── Collapsible section ───────────────────────────────────────────────────────
-
+// ── Section builder ───────────────────────────────────────────────
 function buildSection(title: string, content: HTMLElement, startCollapsed = false): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'sidebar-section';
   const header = document.createElement('div');
-  header.className = 'sidebar-section-header';
+  header.className = 'section-header';
   const chevron = document.createElement('span');
   chevron.className = 'section-chevron';
   chevron.textContent = startCollapsed ? '▶' : '▼';
@@ -170,10 +159,20 @@ function buildSection(title: string, content: HTMLElement, startCollapsed = fals
   let collapsed = startCollapsed;
   content.classList.add('sidebar-section-body');
   if (collapsed) content.classList.add('hidden');
+  header.tabIndex = 0;
+  header.setAttribute('role', 'button');
+  header.setAttribute('aria-expanded', String(!startCollapsed));
   header.addEventListener('click', () => {
     collapsed = !collapsed;
     content.classList.toggle('hidden', collapsed);
     chevron.textContent = collapsed ? '▶' : '▼';
+    header.setAttribute('aria-expanded', String(!collapsed));
+  });
+  header.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      header.click();
+    }
   });
   wrapper.append(header, content);
   return wrapper;
@@ -187,6 +186,9 @@ let _dragName: string | null = null;
 /** Module-level snapshot of the full page tree — updated on every refresh so that
  *  the "Move to…" dialog can enumerate available folders without prop-drilling. */
 let _allNodes: PageNode[] = [];
+
+/** Revision counter to prevent stale async section appends after re-render. */
+let _renderRev = 0;
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -220,6 +222,7 @@ export async function initSidebar(
   }
 
   function render() {
+    const rev = ++_renderRev;
     containerEl.innerHTML = '';
     const activePath = options?.getActivePath?.() ?? null;
 
@@ -299,10 +302,10 @@ export async function initSidebar(
       activeTagFilter = tag;
       taggedPaths = paths;
       render();
-    });
+    }, rev);
 
     // Trash tray (async, appends itself when ready)
-    void buildTrashSection(containerEl, refresh);
+    void buildTrashSection(containerEl, refresh, rev);
   }
 
   await refresh();
@@ -571,10 +574,9 @@ async function deleteItem(
   try {
     const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
-    opts?.onDelete?.(node.path, node.type);
     await onRefresh();
   } catch (err) {
-    sidebarToast(`Delete failed: ${String(err)}`);
+    showToast(`Delete failed: ${String(err)}`, 'error', 4000);
   }
 }
 
@@ -599,7 +601,7 @@ async function movePage(
     if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
     await onRefresh();
   } catch (err) {
-    sidebarToast(`Move failed: ${String(err)}`);
+    showToast(`Move failed: ${String(err)}`, 'error', 4000);
   }
 }
 
@@ -691,16 +693,17 @@ async function duplicatePage(node: PageNode, onRefresh: () => Promise<void>): Pr
     if (!putRes.ok) throw new Error('Failed to create copy');
     await onRefresh();
   } catch (err) {
-    sidebarToast(`Duplicate failed: ${String(err)}`);
+    showToast(`Duplicate failed: ${String(err)}`, 'error', 4000);
   }
 }
 
 // ── Tags section (#99) ────────────────────────────────────────────────────────
 
 async function buildTagsSection(
-  container: HTMLElement,
+  containerEl: HTMLElement,
   activeTag: string | null,
   onTagClick: (tag: string | null, paths: Set<string>) => void,
+  rev: number,
 ): Promise<void> {
   try {
     const res = await fetch('/api/links/graph');
@@ -746,7 +749,8 @@ async function buildTagsSection(
       body.appendChild(chip);
     }
 
-    container.appendChild(buildSection(`Tags (${tagMap.size})`, body, true));
+    if (_renderRev !== rev) return;
+    containerEl.appendChild(buildSection(`Tags (${tagMap.size})`, body, true));
   } catch { /* silent */ }
 }
 
@@ -755,6 +759,7 @@ async function buildTagsSection(
 async function buildTrashSection(
   container: HTMLElement,
   onRefresh: () => Promise<void>,
+  rev: number,
 ): Promise<void> {
   try {
     const res = await fetch('/api/trash');
@@ -779,25 +784,25 @@ async function buildTrashSection(
       restoreBtn.addEventListener('click', async () => {
         try {
           const r = await fetch(`/api/trash/restore/${item.id}`, { method: 'POST' });
-          if (r.ok) { await onRefresh(); }
-          else { sidebarToast(`Restore failed: ${((await r.json()) as { error: string }).error}`); }
+          if (!r.ok) { showToast(`Restore failed: ${((await r.json()) as { error: string }).error}`, 'error', 4000); return; }
+          await onRefresh();
         } catch (err) {
-          sidebarToast(`Restore failed: ${String(err)}`);
+          showToast(`Restore failed: ${String(err)}`, 'error', 4000);
         }
       });
 
       const delBtn = document.createElement('button');
       delBtn.className = 'trash-btn danger';
       delBtn.title = 'Delete permanently';
-      delBtn.textContent = '✕';
+      delBtn.textContent = '🗑';
       delBtn.addEventListener('click', async () => {
         if (!confirm(`Permanently delete "${item.name}"?`)) return;
         try {
           const r = await fetch(`/api/trash/${item.id}`, { method: 'DELETE' });
-          if (r.ok) { await onRefresh(); }
-          else { sidebarToast('Permanent delete failed'); }
+          if (!r.ok) { showToast('Permanent delete failed', 'error', 4000); return; }
+          await onRefresh();
         } catch (err) {
-          sidebarToast(`Permanent delete failed: ${String(err)}`);
+          showToast(`Permanent delete failed: ${String(err)}`, 'error', 4000);
         }
       });
 
@@ -805,6 +810,7 @@ async function buildTrashSection(
       row.append(name, actions);
       body.appendChild(row);
     }
+    if (_renderRev !== rev) return;
     container.appendChild(buildSection(`Trash (${items.length})`, body, true));
   } catch { /* silent */ }
 }
@@ -818,10 +824,13 @@ function buildSimpleList(
   iconChar: string,
 ): HTMLElement {
   const list = document.createElement('div');
+  list.className = 'simple-list';
   for (const node of nodes) {
     const item = document.createElement('div');
     item.className = `tree-item file${activePath === node.path ? ' active' : ''}`;
     item.style.paddingLeft = '16px';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'option');
     const icon = document.createElement('span');
     icon.className = 'icon'; icon.textContent = iconChar;
     const label = document.createElement('span');
@@ -831,6 +840,12 @@ function buildSimpleList(
       document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
       item.classList.add('active');
       onSelect(node.path, node.name);
+    });
+    item.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        item.click();
+      }
     });
     list.appendChild(item);
   }
@@ -843,10 +858,13 @@ function buildRecentList(
   activePath: string | null,
 ): HTMLElement {
   const list = document.createElement('div');
-  for (const entry of recent.slice(0, 5)) {
+  list.className = 'simple-list';
+  for (const entry of recent) {
     const item = document.createElement('div');
     item.className = `tree-item file${activePath === entry.path ? ' active' : ''}`;
     item.style.paddingLeft = '16px';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'option');
     const icon = document.createElement('span');
     icon.className = 'icon'; icon.textContent = '↵';
     const label = document.createElement('span');
@@ -856,6 +874,12 @@ function buildRecentList(
       document.querySelectorAll('.tree-item.active').forEach(el => el.classList.remove('active'));
       item.classList.add('active');
       onSelect(entry.path, entry.name);
+    });
+    item.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        item.click();
+      }
     });
     list.appendChild(item);
   }
@@ -994,7 +1018,8 @@ function openEmojiPicker(
 
 async function updatePageIcon(path: string, icon: string): Promise<void> {
   try {
-    const res = await fetch(`/api/pages/${path}`);
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/api/pages/${encoded}`);
     if (!res.ok) return;
     const { content } = await res.json() as { content: string };
 
@@ -1014,10 +1039,13 @@ async function updatePageIcon(path: string, icon: string): Promise<void> {
       updated = `---\nicon: "${icon}"\n---\n${content}`;
     }
 
-    await fetch(`/api/pages/${path}`, {
+    const putRes = await fetch(`/api/pages/${encoded}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: updated }),
     });
+    if (!putRes.ok) {
+      console.error('Failed to save icon:', putRes.status, await putRes.text());
+    }
   } catch { /* silent */ }
 }

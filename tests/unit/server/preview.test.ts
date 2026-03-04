@@ -47,7 +47,12 @@ const spawnMock = vi.mocked(spawn);
 
 import { createApp } from '../../../src/server/index.js';
 import type { QuartostoneConfig } from '../../../src/server/config.js';
-import { previews } from '../../../src/server/api/preview.js';
+import { previews, setQuartoExeForTest } from '../../../src/server/api/preview.js';
+
+/** Platform-appropriate existing binary used as a stand-in for quarto in tests. */
+const FAKE_QUARTO_PATH = process.platform === 'win32'
+  ? 'C:\\Windows\\System32\\cmd.exe'
+  : '/usr/bin/env';
 
 // ── Fake ChildProcess factory ─────────────────────────────────────────────────
 
@@ -91,12 +96,17 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
 let client: ReturnType<typeof supertest>;
 
 beforeEach(() => {
+  // Preset the cached quarto executable so resolveQuartoPath() is never called
+  // (avoids spawning a real `where`/`which` process and consuming spawn mocks).
+  setQuartoExeForTest(FAKE_QUARTO_PATH);
+
   workspace = mkdtempSync(join(tmpdir(), 'qs-preview-test-'));
   mkdirSync(join(workspace, 'pages'), { recursive: true });
   writeFileSync(join(workspace, 'pages', 'slide.qmd'), '---\ntitle: Slide\n---\n\nHello\n');
@@ -116,6 +126,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   previews.clear();
+  // Reset the quarto exe cache so the next test starts fresh.
+  setQuartoExeForTest(undefined);
   rmSync(workspace, { recursive: true, force: true });
 });
 

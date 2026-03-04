@@ -4,6 +4,8 @@
  * on a <canvas> element using a simple force-directed layout.
  */
 
+import { API } from '../api/endpoints.js';
+
 interface GraphNode {
   id:       string;
   title:    string;
@@ -63,6 +65,16 @@ export function initGraphPanel(
   const tooltip    = panelEl.querySelector<HTMLElement>('#graph-tooltip')!;
   const filterInput = panelEl.querySelector<HTMLInputElement>('#graph-filter')!;
   const closeBtn   = panelEl.querySelector<HTMLButtonElement>('#graph-close-btn')!;
+
+  // FIX GRAPH-01: ARIA role + keyboard accessibility for canvas
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', 'Page link graph — use the filter input above to find and highlight pages');
+  canvas.tabIndex = 0;
+  canvas.addEventListener('keydown', (e) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
 
   closeBtn.addEventListener('click', () => close());
 
@@ -321,7 +333,7 @@ export function initGraphPanel(
 
   async function loadData(): Promise<void> {
     try {
-      const res = await fetch('/api/links/graph');
+      const res = await fetch(API.linksGraph);
       if (!res.ok) return;
       const data = await res.json() as GraphData;
 

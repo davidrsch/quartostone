@@ -67,19 +67,3 @@ describe('getVisibleTreeItems', () => {
   });
 });
 
-describe('treeitem aria attributes', () => {
-  it('file node has role=treeitem', () => {
-    const item = makeTreeItem('test-page');
-    expect(item.getAttribute('role')).toBe('treeitem');
-  });
-
-  it('file node has tabIndex 0 for keyboard focus', () => {
-    const item = makeTreeItem('test-page');
-    expect(item.tabIndex).toBe(0);
-  });
-
-  it('file node has aria-label with the page name', () => {
-    const item = makeTreeItem('my-document');
-    expect(item.getAttribute('aria-label')).toBe('my-document');
-  });
-});

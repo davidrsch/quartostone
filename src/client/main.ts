@@ -87,6 +87,12 @@ let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false; // M-4: guard against concurrent mode switches
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
 
+// module-level palette controls (FIX MAIN-05)
+let openCmdPalette: () => void  = () => {};
+let closeCmdPalette: () => void = () => {};
+// module-level export picker handle (FIX EXP-02)
+let exportPicker: { setPageReady(ready: boolean): void } | null = null;
+
 // ─── Split pane state (#140) ──────────────────────────────────────────────────
 let splitActive = false;
 let focusedPane: 'primary' | 'secondary' = 'primary';
@@ -198,6 +204,7 @@ async function switchMode(mode: 'source' | 'visual') {
       onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
       onDirty: () => {
         isDirty = true;
+        if (activePath) markTabDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
         // update cache asynchronously so properties panel stays mostly fresh
@@ -221,6 +228,7 @@ async function switchMode(mode: 'source' | 'visual') {
       pagePath: activePath,
       onSave: () => {
         isDirty = false;
+        if (activePath) markTabDirty(activePath, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
@@ -233,6 +241,7 @@ async function switchMode(mode: 'source' | 'visual') {
       },
       onDirty: () => {
         isDirty = true;
+        if (activePath) markTabDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
       },
@@ -278,7 +287,7 @@ btnProperties.addEventListener('click', () => {
       editorMode === 'visual' && activeVisual
         ? visualMarkdownCache
         : (activeView ? activeView.state.doc.toString() : '');
-    const setContent = (newContent: string) => {
+    const setContent = async (newContent: string) => {
       if (editorMode === 'source' && activeView) {
         const { dispatch, state } = activeView;
         dispatch(state.update({
@@ -286,7 +295,7 @@ btnProperties.addEventListener('click', () => {
         }));
       } else if (editorMode === 'visual' && activeVisual) {
         // M-2: push frontmatter edits back into the visual editor
-        void activeVisual.setMarkdown(newContent);
+        await activeVisual.setMarkdown(newContent);
       }
     };
     propsPanel.mount(activePath, getContent, setContent);
@@ -489,7 +498,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   noPageMessageEl.classList.remove('visible');
   btnSave.disabled = true;
   btnCommit.disabled = false;
-  (document.getElementById('btn-export') as HTMLButtonElement & { pageReady: boolean }).pageReady = true;
+  exportPicker?.setPageReady(true)
 
   // Check if this is a database page
   const dbInstance = await initDatabaseView(editorMountEl, path);
@@ -518,6 +527,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
         onDirty: () => {
           isDirty = true;
+          markTabDirty(path, true);
           btnSave.disabled = false;
           sbSaveStatus.textContent = 'Unsaved changes';
         },
@@ -534,6 +544,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       pagePath: path,
       onSave: () => {
         isDirty = false;
+        markTabDirty(path, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
@@ -546,6 +557,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       },
       onDirty: () => {
         isDirty = true;
+        markTabDirty(path, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
       },
@@ -567,16 +579,16 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       editorMode === 'visual' && activeVisual
         ? activeVisual.getMarkdown()
         : (activeView ? activeView.state.doc.toString() : '');
-    const setContent = (newContent: string) => {
+    const setContent = async (newContent: string) => {
       if (editorMode === 'source' && activeView) {
         const { dispatch, state } = activeView;
         dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
       } else if (editorMode === 'visual' && activeVisual) {
         // M-2: push frontmatter edits back into the visual editor
-        activeVisual.setMarkdown(newContent);
+        await activeVisual.setMarkdown(newContent);
       }
     };
-    propsPanel.mount(path, getContent as () => string, setContent);
+    propsPanel.mount(path, getContent, setContent);
   }
 }
 
@@ -717,10 +729,10 @@ branchPicker = initBranchPicker((branch, stashConflict) => {
   if (stashConflict) showToast('Stash re-apply had conflicts — check your files', 'error', 6000);
   // Reload current page on branch switch so content reflects new branch
   if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath);
-});
+}, showToast);
 
 // ── Export picker ───────────────────────────────────────────────────────────
-initExportPicker(() => activePath);
+exportPicker = initExportPicker(() => activePath);
 
 // ── Preview panel ────────────────────────────────────────────────────────────
 previewPanel = initPreviewPanel();
@@ -743,7 +755,7 @@ document.getElementById('btn-graph')?.addEventListener('click', () => graphView?
 
 initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page
-  if (activePath) openPage(activePath, pageTitleEl.textContent ?? activePath);
+  if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath).catch((e: unknown) => showToast(String(e), 'error'));
   showToast('File restored to selected commit', 'success');
 }).then(hp => { historySetPage = hp.setPage; }).catch(err => console.error('History panel init failed:', err));
 
@@ -994,16 +1006,11 @@ function markTabDirty2(path: string, dirty: boolean) {
 }
 
 
-requestAnimationFrame(() => {
-  const tabBarEl = document.getElementById('tab-bar')!;
-  if (!tabBarEl) return;
-  // intercept sidebar file-tree clicks by observing activePath changes via MutationObserver on page title
-  const titleObs = new MutationObserver(() => {
-    if (activePath) ensureTab(activePath, pageTitleEl.textContent ?? activePath);
-  });
+{
+  const titleObs = new MutationObserver(() => { renderTabBar(); });
   titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
-  window.addEventListener('beforeunload', () => { titleObs.disconnect(); });
-});
+  window.addEventListener('beforeunload', () => titleObs.disconnect());
+}
 
 // Mark tab dirty when isDirty changes — patch this into setDirtyState
 function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, dirty); }
@@ -1062,27 +1069,24 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
     const items = list.querySelectorAll<HTMLLIElement>('.cmd-item');
     items[selectedIdx]?.classList.remove('selected');
     items[selectedIdx]?.setAttribute('aria-selected', 'false');
-    selectedIdx = Math.max(0, Math.min(items.length - 1, idx));
+    selectedIdx = idx;
     items[selectedIdx]?.classList.add('selected');
     items[selectedIdx]?.setAttribute('aria-selected', 'true');
-    items[selectedIdx]?.scrollIntoView({ block: 'nearest' });
   }
 
-  (window as unknown as Record<string, unknown>)['openCmdPalette'] = openCmdPalette;
-  function openCmdPalette() {
+  openCmdPalette = () => {
     palette.classList.remove('hidden');
     input.value = '';
     renderPalette('');
     // Defer focus by one frame so the browser has processed the display change
     // before attempting to focus the input (needed for headless Chromium).
     requestAnimationFrame(() => input.focus());
-  }
+  };
 
-  (window as unknown as Record<string, unknown>)['closeCmdPalette'] = closeCmdPalette;
-  function closeCmdPalette() {
+  closeCmdPalette = () => {
     palette.classList.add('hidden');
     input.value = '';
-  }
+  };
 
   input.addEventListener('input', () => renderPalette(input.value));
   input.addEventListener('keydown', e => {
@@ -1094,14 +1098,9 @@ function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, 
       closeCmdPalette();
       action?.action();
     }
-    if (e.key === 'Escape') { e.preventDefault(); closeCmdPalette(); }
   });
-
   backdrop.addEventListener('click', closeCmdPalette);
 }
-
-function openCmdPalette() { (window as unknown as Record<string, () => void>)['openCmdPalette']?.(); }
-function closeCmdPalette() { (window as unknown as Record<string, () => void>)['closeCmdPalette']?.(); }
 
 // ─── #115 Light/dark theme toggle ────────────────────────────────────────────
 {
@@ -1180,15 +1179,3 @@ btnSplit.addEventListener('click', toggleSplit);
     document.addEventListener('mouseup', onUp);
   });
 }
-
-
-// Patch into existing dirty-state changes by observing sbSaveStatus text
-{
-  const obs = new MutationObserver(() => {
-    const dirty = sbSaveStatus.textContent?.includes('Unsaved') ?? false;
-    setDirtyTab(dirty);
-  });
-  obs.observe(sbSaveStatus, { childList: true, characterData: true, subtree: true });
-  window.addEventListener('beforeunload', () => { obs.disconnect(); });
-}
-

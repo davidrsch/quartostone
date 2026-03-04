@@ -223,36 +223,36 @@ export function scanXRefsInProject(pagesDir: string, _filePath?: string): XRefs 
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-// ── In-memory XRef cache (invalidated when any qmd file mtime changes) ───────
+// ── In-memory XRef cache (invalidated by file-watcher dirty flag) ────────────
 
-interface XRefCache {
-  refs: XRef[];
-  mtimes: Map<string, number>; // absPath → mtimeMs
+export let xrefCache: XRefs | null = null;
+/** Starts dirty so the first call always performs a full scan. */
+let xrefCacheDirty = true;
+
+/**
+ * Mark the XRef cache as stale. Call this whenever a .qmd file is added,
+ * changed, or deleted (e.g. from the file watcher).
+ */
+export function markXRefCacheDirty(): void {
+  xrefCacheDirty = true;
 }
 
-let xrefCache: XRefCache | null = null;
+/** Reset the cache — intended for use in tests only */
+export function resetXrefCache(): void {
+  xrefCache = null;
+  xrefCacheDirty = true;
+}
 
-/** Scan XRefs with mtime-based cache. Only rescans when files are added/changed/removed. */
+/** Scan XRefs using a watcher-driven dirty flag instead of per-file stat calls. */
 function scanXRefsWithCache(pagesDir: string, _filePath?: string): XRefs {
-  const files = walkFiles(pagesDir);
-
-  // Snapshot current mtimes
-  const currentMtimes = new Map<string, number>();
-  for (const f of files) {
-    try { currentMtimes.set(f, statSync(f).mtimeMs); } catch { /* skip */ }
-  }
-
-  // Validate cache
-  if (xrefCache !== null) {
-    const valid =
-      xrefCache.mtimes.size === currentMtimes.size &&
-      [...currentMtimes.entries()].every(([p, t]) => xrefCache!.mtimes.get(p) === t);
-    if (valid) return { baseDir: pagesDir, refs: xrefCache.refs };
+  if (!xrefCacheDirty && xrefCache !== null) {
+    return xrefCache;
   }
 
   // Rescan all files
+  const files = walkFiles(pagesDir);
   const refs: XRef[] = [];
-  for (const absPath of [...currentMtimes.keys()]) {
+  for (const absPath of files) {
     try {
       const content = readFileSync(absPath, 'utf-8');
       const relPath = relative(pagesDir, absPath).replace(/\\/g, '/');
@@ -260,8 +260,9 @@ function scanXRefsWithCache(pagesDir: string, _filePath?: string): XRefs {
     } catch { /* skip unreadable */ }
   }
 
-  xrefCache = { refs, mtimes: currentMtimes };
-  return { baseDir: pagesDir, refs };
+  xrefCache = { baseDir: pagesDir, refs };
+  xrefCacheDirty = false;
+  return xrefCache;
 }
 
 export function registerXRefApi(app: Express, ctx: ServerContext): void {

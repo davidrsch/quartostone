@@ -82,6 +82,7 @@ const DEFAULT_CONFIG: QuartostoneConfig = {
   port: 0,
   pages_dir: 'pages',
   open_browser: false,
+  allow_code_execution: false,
 };
 
 let workspace: string;
@@ -134,6 +135,26 @@ describe('POST /api/export — validation', () => {
       .send({ path: 'pages/doc.qmd', format: 'html', extraArgs: 'bad' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/extraArgs/i);
+  });
+});
+
+// ── POST /api/export — blocked extraArgs ────────────────────────────────────────
+
+describe('POST /api/export — blocked extraArgs', () => {
+  it('returns 400 when extraArgs contains a blocked argument', async () => {
+    const res = await client
+      .post('/api/export')
+      .send({ path: 'pages/doc.qmd', format: 'html', extraArgs: ['--lua-filter=evil.lua'] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/blocked|unsafe/i);
+  });
+
+  it('returns 400 when extraArgs contains a path-traversal template arg', async () => {
+    const res = await client
+      .post('/api/export')
+      .send({ path: 'pages/doc.qmd', format: 'html', extraArgs: ['--template=../../../etc/passwd'] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/blocked|unsafe/i);
   });
 });
 

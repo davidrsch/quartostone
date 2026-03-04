@@ -26,14 +26,24 @@ import type { ServerContext } from '../index.js';
 
 const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
 
+/** Strip absolute file-system paths and embedded credentials from git error messages. */
+function sanitizeGitError(e: unknown): string {
+  let msg = e instanceof Error ? e.message : String(e);
+  // Remove absolute paths (e.g. /home/user/... or C:\Users\...)
+  msg = msg.replace(/(?:[A-Za-z]:)?[\/\\][^ \t\n"']*/g, '[path]');
+  // Remove embedded credentials (https://user:token@host)
+  msg = msg.replace(/::\/\/[^@\s]+@/g, '://[credentials]@');
+  return msg;
+}
+
 export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);
   const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
 
-  /** Returns true if path is safely within pagesDir. */
+  /** Returns true if path is safely within pagesDir (never the root dir itself). */
   function isPathSafe(rawPath: string): boolean {
     const abs = resolve(join(ctx.cwd, rawPath));
-    return abs.startsWith(pagesDir + sep) || abs === pagesDir;
+    return abs.startsWith(pagesDir + sep);
   }
 
   app.get('/api/git/log', async (req: Request, res: Response) => {
@@ -51,19 +61,24 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         : await git.log({ maxCount: 50 });
       res.json(log.all);
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
   app.post('/api/git/commit', async (req: Request, res: Response) => {
     try {
       const { message } = req.body as { message?: string };
-      if (!message) return res.status(400).json({ error: 'message required' });
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: 'message required' });
+      }
+      if (message.length > 4096) {
+        return res.status(400).json({ error: 'Commit message too long (max 4096 characters)' });
+      }
       await git.add(`${ctx.config.pages_dir}/`);
       const result = await git.commit(message);
       res.json({ ok: true, commit: result.commit });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -78,7 +93,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const diff = sha ? await git.show([sha]) : await git.diff();
       res.json({ diff });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -87,7 +102,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const status = await git.status();
       res.json(status);
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -115,7 +130,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         behind: status.behind,
       });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -124,7 +139,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const pushResult = await git.push('origin');
       res.json({ ok: true, pushed: pushResult.pushed });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -137,12 +152,12 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         summary: { changes: pullResult.summary.changes, insertions: pullResult.summary.insertions, deletions: pullResult.summary.deletions },
       });
     } catch (e) {
-      const msg = String(e);
+      const msg = e instanceof Error ? e.message : String(e);
       const conflict = msg.includes('CONFLICT') || msg.includes('not possible to fast-forward');
       res.status(conflict ? 409 : 500).json({
         error: conflict
           ? 'Cannot fast-forward. Remote has diverged. Pull manually or rebase.'
-          : msg,
+          : sanitizeGitError(e),
         conflict,
       });
     }
@@ -173,7 +188,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       }
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -191,7 +206,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       }));
       res.json({ current: summary.current, branches });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -205,19 +220,20 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       await git.checkoutLocalBranch(name);
       res.json({ ok: true, name });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
   // POST /api/git/checkout  body: { branch: string }
   // Stashes uncommitted changes, switches branch, re-applies stash if any.
   app.post('/api/git/checkout', async (req: Request, res: Response) => {
+    let wasStashed = false;
     try {
       const { branch } = req.body as { branch?: string };
       if (!branch || !/^[\w\-./]+$/.test(branch)) return res.status(400).json({ error: 'valid branch name required' });
 
       const status = await git.status();
-      const wasStashed = !status.isClean();
+      wasStashed = !status.isClean();
 
       if (wasStashed) {
         await git.stash(['push', '-m', `qs-autostash before switching to ${branch}`]);
@@ -236,7 +252,10 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
       res.json({ ok: true, branch, stashed: wasStashed });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      if (wasStashed) {
+        try { await git.stash(['pop']); } catch { /* ignore pop failure */ }
+      }
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -253,7 +272,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       }
       res.json({ ok: true, commit: result.result });
     } catch (e) {
-      const msg = String(e);
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('CONFLICT') || msg.includes('conflict')) {
         // Extract conflict file names from git output
         const conflicts: string[] = [];
@@ -261,9 +280,9 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
           const m = /CONFLICT.*:\s*(.+)$/.exec(line);
           if (m) conflicts.push(m[1].trim());
         }
-        return res.status(409).json({ error: 'Merge conflict', conflicts, details: msg });
+        return res.status(409).json({ error: 'Merge conflict', conflicts, details: sanitizeGitError(e) });
       }
-      res.status(500).json({ error: msg });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -273,7 +292,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       await git.raw(['merge', '--abort']);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -284,7 +303,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const conflicted = status.conflicted.map(f => f);
       res.json({ conflicted });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -292,11 +311,11 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   // Stages all resolved files and creates the merge commit.
   app.post('/api/git/merge-complete', async (_req: Request, res: Response) => {
     try {
-      await git.add('.');
+      await git.add(ctx.config.pages_dir + '/');
       const result = await git.commit('Merge conflict resolved by quartostone');
       res.json({ ok: true, commit: result.commit });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -315,11 +334,11 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const content = await git.show([`${sha}:${path}`]);
       res.json({ content, sha, path });
     } catch (e) {
-      const msg = String(e);
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('does not exist') || msg.includes('bad object') || msg.includes('not found')) {
         return res.status(404).json({ error: 'File not found at that commit' });
       }
-      res.status(500).json({ error: msg });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 
@@ -334,7 +353,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       await git.checkout([sha, '--', path]);
       res.json({ ok: true, sha, path });
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      res.status(500).json({ error: sanitizeGitError(e) });
     }
   });
 }

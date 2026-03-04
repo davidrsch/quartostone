@@ -5,13 +5,13 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "outDir": "dist/client",
-    "rootDir": "src/client",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["src/client/**/*"],
+  "include": ["src/client/**/*", "src/shared/**/*"],
   "exclude": ["node_modules", "dist"]
 }
