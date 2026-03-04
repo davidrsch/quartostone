@@ -119,6 +119,9 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
     if (typeof markdown !== 'string' || typeof format !== 'string') {
       return pandocError(res, 'markdown and format required', 400);
     }
+    if (!format || !/^[\w+-]+$/.test(format)) {
+      return res.status(400).json({ error: 'Invalid or missing format' });
+    }
 
     const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
     const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
@@ -159,6 +162,9 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
     };
     if (!ast || typeof format !== 'string') {
       return pandocError(res, 'ast and format required', 400);
+    }
+    if (!format || !/^[\w+-]+$/.test(format)) {
+      return res.status(400).json({ error: 'Invalid or missing format' });
     }
 
     const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;

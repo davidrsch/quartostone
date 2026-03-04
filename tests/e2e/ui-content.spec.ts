@@ -115,6 +115,19 @@ test.describe('Toolbar state', () => {
 // ── Dirty state ───────────────────────────────────────────────────────────────
 
 test.describe('Dirty state tracking', () => {
+  let originalContent: string;
+
+  test.beforeEach(async ({ request }) => {
+    const r = await request.get('/api/pages/index.qmd');
+    originalContent = ((await r.json()) as { content: string }).content;
+  });
+
+  test.afterEach(async ({ request }) => {
+    if (originalContent !== undefined) {
+      await request.put('/api/pages/index.qmd', { data: { content: originalContent } });
+    }
+  });
+
   test('typing in the editor enables the Save button', async ({ page }) => {
     await page.goto('/');
     await page.locator('#file-tree .tree-item.file').first().click();

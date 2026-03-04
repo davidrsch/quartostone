@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { createServer } from '../../server/index.js';
 import { loadConfig } from '../../server/config.js';
 
-export async function serve(options: { port: string; open: boolean }) {
+export async function serve(options: { port: number | undefined; open: boolean }) {
   const cwd = resolve('.');
   const configPath = resolve(cwd, '_quartostone.yml');
 
@@ -17,7 +17,7 @@ export async function serve(options: { port: string; open: boolean }) {
   }
 
   const config = await loadConfig(configPath);
-  const port = parseInt(options.port) || config.port || 4242;
+  const port = options.port ?? config.port ?? 4242;
 
   // When running from source via tsx, __dirname in the server module resolves
   // to src/server/ instead of dist/server/, so ../client would be wrong.

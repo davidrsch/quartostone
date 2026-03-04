@@ -24,6 +24,8 @@ import { simpleGit } from 'simple-git';
 import { resolve, join, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
 
+const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
+
 export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);
   const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
@@ -68,7 +70,6 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.get('/api/git/diff', async (req: Request, res: Response) => {
     try {
       const sha = req.query.sha as string | undefined;
-      const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
       if (sha && !SAFE_SHA.test(sha)) {
         return res.status(400).json({ error: 'Invalid SHA format' });
       }
@@ -307,7 +308,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const sha  = req.query['sha']  as string | undefined;
       const path = req.query['path'] as string | undefined;
-      if (!sha)  return res.status(400).json({ error: 'sha required' });
+      if (!sha || !SAFE_SHA.test(sha)) return res.status(400).json({ error: 'Invalid or missing sha' });
       if (!path) return res.status(400).json({ error: 'path required' });
       if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
       // git show sha:path
@@ -327,7 +328,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/restore', async (req: Request, res: Response) => {
     try {
       const { sha, path } = req.body as { sha?: string; path?: string };
-      if (!sha)  return res.status(400).json({ error: 'sha required' });
+      if (!sha || !SAFE_SHA.test(sha)) return res.status(400).json({ error: 'Invalid or missing sha' });
       if (!path) return res.status(400).json({ error: 'path required' });
       if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
       await git.checkout([sha, '--', path]);

@@ -236,6 +236,13 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     res.setHeader('Content-Type', mime);
 
     const stream = createReadStream(job.outputPath);
+    stream.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'File read error' });
+      } else {
+        res.destroy();
+      }
+    });
     stream.on('end', () => {
       try { if (job.outDir) rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
       jobs.delete(token);

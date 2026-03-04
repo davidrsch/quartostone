@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const E2E_PORT = parseInt(process.env['E2E_PORT'] ?? '4343', 10);
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
@@ -9,7 +11,7 @@ export default defineConfig({
   // Locally: interactive HTML report only.
   reporter: process.env['CI'] ? [['github'], ['html', { outputFolder: 'playwright-report' }]] : 'html',
   use: {
-    baseURL: 'http://localhost:4343',
+    baseURL: `http://localhost:${E2E_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -20,7 +22,7 @@ export default defineConfig({
   webServer: {
     command: 'npx tsx tests/e2e/fixtures/start-server.ts',
     // /api/health always returns 200 — avoids false 404 when _site/ doesn't exist.
-    url: 'http://localhost:4343/api/health',
+    url: `http://localhost:${E2E_PORT}/api/health`,
     reuseExistingServer: !process.env['CI'],
     timeout: 30_000,
     stdout: 'pipe',

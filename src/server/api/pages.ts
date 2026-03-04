@@ -6,7 +6,7 @@
 // DELETE /api/pages/:path    — delete a page
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, renameSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
 import { join, relative, extname, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
@@ -96,7 +96,8 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
     try {
       const content = readFileSync(filePath, 'utf-8');
-      return res.json({ content });
+      const relPath = relative(pagesDir, filePath).replace(/\\/g, '/').replace(/\.qmd$/, '');
+      return res.json({ content, path: relPath });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
@@ -181,13 +182,16 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const normalized = newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`;
     const filePath = guardAnyPath(normalized, res);
     if (!filePath) return;
-    if (existsSync(filePath)) return res.status(409).json({ error: 'Page already exists' });
     const pageTitle = title ?? newPath.split('/').pop()?.replace('.qmd', '') ?? 'New Page';
+    const content = `---\ntitle: ${JSON.stringify(pageTitle)}\ndate: today\n---\n\n# ${pageTitle}\n`;
     try {
       mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, `---\ntitle: "${pageTitle}"\ndate: today\n---\n\n# ${pageTitle}\n`, 'utf-8');
+      const fd = openSync(filePath, 'wx');
+      writeSync(fd, content);
+      closeSync(fd);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST') return res.status(409).json({ error: 'Page already exists' });
       if (code === 'ENOSPC') return res.status(500).json({ error: 'No space left on device' });
       if (code === 'EACCES') return res.status(500).json({ error: 'Permission denied' });
       return res.status(500).json({ error: 'File system error' });

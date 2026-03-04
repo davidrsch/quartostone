@@ -3,7 +3,7 @@
 // Tests config loading (file missing → defaults, partial YAML → merged) and slug generation.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
+import { writeFileSync, unlinkSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadConfig, generateCommitSlug } from '../../../src/server/config.js';
@@ -22,6 +22,7 @@ describe('loadConfig', () => {
 
   afterEach(() => {
     try { unlinkSync(configPath); } catch { /* already gone */ }
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
   it('returns defaults when the config file does not exist', async () => {

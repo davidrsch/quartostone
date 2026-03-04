@@ -193,8 +193,6 @@ export function buildEditorUIImages() {
 
 // ── Assembled EditorUI ────────────────────────────────────────────────────────
 
-export type EditorServerType = typeof editorServer;
-
 export function buildEditorUI(
   documentPath: string | null,
   onOpenPage?: (path: string) => void,

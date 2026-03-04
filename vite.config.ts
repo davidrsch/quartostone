@@ -3,6 +3,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const serverPort = parseInt(process.env['QUARTOSTONE_PORT'] ?? '4242', 10);
 
 export default defineConfig({
   root: resolve(__dirname, 'src/client'),
@@ -14,8 +15,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:4242',
-      '/ws': { target: 'ws://localhost:4242', ws: true },
+      '/api': { target: `http://localhost:${serverPort}`, changeOrigin: false },
+      '/ws':  { target: `ws://localhost:${serverPort}`,  ws: true },
     },
   },
 });

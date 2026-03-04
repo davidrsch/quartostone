@@ -187,8 +187,11 @@ test.describe('Git commit API', () => {
     const logAfter = await (await request.get('/api/git/log')).json() as unknown[];
     expect((logAfter as unknown[]).length).toBeGreaterThanOrEqual((logBefore as unknown[]).length);
 
-    // Cleanup: delete the page (don't commit the deletion to avoid polluting log)
+    // Cleanup: delete the page and commit the deletion so the repo is left clean.
     await request.delete('/api/pages/e2e-commit-test.qmd');
+    await request.post('/api/git/commit', {
+      data: { message: 'e2e: revert test commit (cleanup)' },
+    });
   });
 });
 
@@ -200,7 +203,7 @@ test.describe('Exec API', () => {
       data: { language: 'python', code: 'print("e2e-ok")' },
     });
     if (res.status() === 500 || res.status() === 501) {
-      testInfo.annotations.push({ type: 'skip', description: 'Python not available in this environment' });
+      testInfo.skip(true, 'Python not available in this environment');
       return;
     }
     expect(res.status()).toBe(200);
@@ -239,8 +242,9 @@ test.describe('Editor UI', () => {
     // The page may show the "not built" fallback if client hasn't been compiled —
     // that's still a valid 200 response, not a server error.
     await expect(page).not.toHaveURL(/error/i);
-    const statusOk = page.url().startsWith('http://localhost:4343');
-    expect(statusOk).toBe(true);
+    const url = new URL(page.url());
+    expect(url.hostname).toBe('localhost');
+    expect(url.pathname).toMatch(/^\/editor/);
   });
 
   test('page title and basic structure present when client is built', async ({ page }) => {

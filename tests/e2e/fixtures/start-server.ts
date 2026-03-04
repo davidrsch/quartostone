@@ -11,7 +11,7 @@ import { loadConfig } from '../../../src/server/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(__dirname, 'workspace');
-const PORT = 4343;
+const PORT = parseInt(process.env['E2E_PORT'] ?? '4343', 10);
 
 // ── Ensure the fixture workspace is a valid git repo ─────────────────────────
 // (The .git directory is gitignored, so it won't exist in a fresh clone.)

@@ -414,26 +414,26 @@ describe('GET /api/preview/ready', () => {
     expect(res.body.error).toMatch(/port/i);
   });
 
-  it('returns { ready: true } when a server is actually listening on the port', async () => {
-    // Spin up a real TCP server to listen on a random port
-    const { createServer } = await import('node:net');
-    const tempServer = createServer();
-    await new Promise<void>(resolve => tempServer.listen(0, '127.0.0.1', resolve));
-    const { port } = tempServer.address() as { port: number };
-
-    try {
-      const res = await client.get(`/api/preview/ready?port=${port}&timeout=3000`);
-      expect(res.status).toBe(200);
-      expect(res.body.ready).toBe(true);
-      expect(res.body.timedOut).toBe(false);
-    } finally {
-      await new Promise<void>(resolve => tempServer.close(() => resolve()));
-    }
+  it('returns 400 (SSRF guard) when port is not registered in an active preview session', async () => {
+    // Port 9999 is not registered in previews — SSRF guard must reject it
+    const res = await client.get('/api/preview/ready?port=9999&timeout=400');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/No active preview session/i);
   });
 
-  it('returns { ready: false, timedOut: true } when nothing listens on the port', async () => {
-    // Port 1 is privileged and will always refuse connection on localhost
-    // Use a very short timeout to make the test fast
+  it('returns { ready: false, timedOut: true } when registered port has no TCP listener', async () => {
+    // Register a fake session so the SSRF guard passes; nothing listens on port 1
+    previews.set('test/fixture.qmd', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      proc: { kill: vi.fn() } as any,
+      port: 1,
+      url: 'http://localhost:1',
+      path: 'test/fixture.qmd',
+      format: 'html',
+      logs: [],
+    });
+
+    // Use a very short timeout so the test finishes quickly
     const res = await client.get('/api/preview/ready?port=1&timeout=400');
     expect(res.status).toBe(200);
     expect(res.body.ready).toBe(false);

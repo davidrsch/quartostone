@@ -197,7 +197,7 @@ test.describe('XRef API', () => {
   });
 
   test('POST /api/xref/index detects figure and table refs in fixture page', async ({ request }) => {
-    const res = await request.post('/api/xref/index', {});
+    const res = await request.post('/api/xref/index', { data: { file: XREF_FIXTURE_PAGE } });
     expect(res.status()).toBe(200);
 
     const body = await res.json() as { refs: Array<{ type: string; id: string; file: string }> };

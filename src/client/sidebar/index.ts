@@ -227,7 +227,13 @@ export async function initSidebar(
     if (activeTagFilter !== null) {
       const banner = document.createElement('div');
       banner.className = 'sidebar-tag-filter-banner';
-      banner.innerHTML = `<span>Tag: <strong>${activeTagFilter}</strong></span>`;
+      banner.textContent = '';
+      const _tagSpan = document.createElement('span');
+      _tagSpan.append('Tag: ');
+      const _tagStrong = document.createElement('strong');
+      _tagStrong.textContent = activeTagFilter;
+      _tagSpan.appendChild(_tagStrong);
+      banner.appendChild(_tagSpan);
       const clearBtn = document.createElement('button');
       clearBtn.className = 'sidebar-tag-filter-clear';
       clearBtn.textContent = '✕ Clear';
@@ -629,7 +635,7 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
   dlg.className = 'qs-dialog';
   dlg.innerHTML = `
     <form method="dialog">
-      <h3>Move \u201c${node.name}\u201d to\u2026</h3>
+      <h3 id="mvdlg-title"></h3>
       <label for="qs-move-target">Destination folder</label>
       <select id="qs-move-target"></select>
       <div class="dialog-actions">
@@ -637,6 +643,8 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
         <button type="button" id="btn-move-cancel">Cancel</button>
       </div>
     </form>`;
+
+  dlg.querySelector<HTMLElement>('#mvdlg-title')!.textContent = `Move \u201c${node.name}\u201d to\u2026`;
 
   const select = dlg.querySelector<HTMLSelectElement>('#qs-move-target')!;
   for (const folder of folders) {
@@ -718,7 +726,15 @@ async function buildTagsSection(
       const chip = document.createElement('button');
       chip.className = `sidebar-tag-chip${activeTag === tag ? ' active' : ''}`;
       chip.type = 'button';
-      chip.innerHTML = `<span class="tag-label">${tag}</span><span class="tag-count">${pages.length}</span>`;
+      chip.textContent = '';
+      const label = document.createElement('span');
+      label.className = 'tag-label';
+      label.textContent = tag;
+      const count = document.createElement('span');
+      count.className = 'tag-count';
+      count.textContent = String(pages.length);
+      chip.appendChild(label);
+      chip.appendChild(count);
       chip.addEventListener('click', () => {
         if (activeTag === tag) {
           // Clicking the active tag clears the filter
@@ -761,9 +777,13 @@ async function buildTrashSection(
       restoreBtn.title = 'Restore';
       restoreBtn.textContent = '↩';
       restoreBtn.addEventListener('click', async () => {
-        const r = await fetch(`/api/trash/restore/${item.id}`, { method: 'POST' });
-        if (r.ok) { await onRefresh(); }
-        else { sidebarToast(`Restore failed: ${((await r.json()) as { error: string }).error}`); }
+        try {
+          const r = await fetch(`/api/trash/restore/${item.id}`, { method: 'POST' });
+          if (r.ok) { await onRefresh(); }
+          else { sidebarToast(`Restore failed: ${((await r.json()) as { error: string }).error}`); }
+        } catch (err) {
+          sidebarToast(`Restore failed: ${String(err)}`);
+        }
       });
 
       const delBtn = document.createElement('button');
@@ -772,9 +792,13 @@ async function buildTrashSection(
       delBtn.textContent = '✕';
       delBtn.addEventListener('click', async () => {
         if (!confirm(`Permanently delete "${item.name}"?`)) return;
-        const r = await fetch(`/api/trash/${item.id}`, { method: 'DELETE' });
-        if (r.ok) { await onRefresh(); }
-        else { sidebarToast('Permanent delete failed'); }
+        try {
+          const r = await fetch(`/api/trash/${item.id}`, { method: 'DELETE' });
+          if (r.ok) { await onRefresh(); }
+          else { sidebarToast('Permanent delete failed'); }
+        } catch (err) {
+          sidebarToast(`Permanent delete failed: ${String(err)}`);
+        }
       });
 
       actions.append(restoreBtn, delBtn);
@@ -873,6 +897,9 @@ export function sortNodes(a: PageNode, b: PageNode): number {
 
 // ── Emoji picker (#95) ────────────────────────────────────────────────────────
 
+let _sidebarPickerClose: ((e: MouseEvent) => void) | null = null;
+let _sidebarPickerKeyDown: ((e: KeyboardEvent) => void) | null = null;
+
 const COMMON_EMOJIS = [
   '📄','📝','📋','📌','📎','📃','📜','📑','🗒','🗓',
   '📅','📆','📊','📈','📉','🗃','🗂','📁','📂','🗄',
@@ -889,6 +916,16 @@ function openEmojiPicker(
   pagePath: string,
   onPick: (emoji: string) => void,
 ): void {
+  // Remove any lingering previous close listeners
+  if (_sidebarPickerClose) {
+    document.removeEventListener('mousedown', _sidebarPickerClose, { capture: true });
+    _sidebarPickerClose = null;
+  }
+  if (_sidebarPickerKeyDown) {
+    document.removeEventListener('keydown', _sidebarPickerKeyDown, { capture: true });
+    _sidebarPickerKeyDown = null;
+  }
+
   // Close existing picker
   document.querySelector('.emoji-picker-popover')?.remove();
 
@@ -906,6 +943,14 @@ function openEmojiPicker(
     btn.addEventListener('click', () => {
       onPick(emoji);
       popover.remove();
+      if (_sidebarPickerClose) {
+        document.removeEventListener('mousedown', _sidebarPickerClose, { capture: true });
+        _sidebarPickerClose = null;
+      }
+      if (_sidebarPickerKeyDown) {
+        document.removeEventListener('keydown', _sidebarPickerKeyDown, { capture: true });
+        _sidebarPickerKeyDown = null;
+      }
       // Persist icon to frontmatter via PATCH-like PUT
       void updatePageIcon(pagePath, emoji);
     });
@@ -920,14 +965,31 @@ function openEmojiPicker(
   popover.style.left = `${rect.left}px`;
   popover.style.top  = `${rect.bottom + 4}px`;
 
-  // Close on outside click
+  // Close on outside click or Escape
   const close = (e: MouseEvent) => {
     if (!popover.contains(e.target as Node) && !(e.target as Node).isEqualNode(anchor)) {
       popover.remove();
       document.removeEventListener('mousedown', close, { capture: true });
+      document.removeEventListener('keydown', handleKey, { capture: true });
+      _sidebarPickerClose = null;
+      _sidebarPickerKeyDown = null;
     }
   };
-  setTimeout(() => document.addEventListener('mousedown', close, { capture: true }), 0);
+  const handleKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      popover.remove();
+      document.removeEventListener('mousedown', close, { capture: true });
+      document.removeEventListener('keydown', handleKey, { capture: true });
+      _sidebarPickerClose = null;
+      _sidebarPickerKeyDown = null;
+    }
+  };
+  _sidebarPickerClose = close;
+  _sidebarPickerKeyDown = handleKey;
+  setTimeout(() => {
+    document.addEventListener('mousedown', close, { capture: true });
+    document.addEventListener('keydown', handleKey, { capture: true });
+  }, 0);
 }
 
 async function updatePageIcon(path: string, icon: string): Promise<void> {

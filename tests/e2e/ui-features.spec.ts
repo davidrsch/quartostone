@@ -1,5 +1,5 @@
-// tests/e2e/phase8.spec.ts
-// Acceptance tests for phase-8 UX polish features (#111–#118).
+// tests/e2e/ui-features.spec.ts
+// Acceptance tests for UI/UX polish features (#111–#118).
 // Each describe block corresponds to one GitHub issue.
 //
 // PREREQUISITE: npm run build:client
@@ -9,6 +9,14 @@ import { test, expect } from '@playwright/test';
 // ── #115 Light/dark theme toggle ──────────────────────────────────────────────
 
 test.describe('#115 Light/dark theme toggle', () => {
+  // Clear localStorage before each test so theme state is always deterministic
+  // regardless of what previous tests may have written.
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
   test('theme button is present in the sidebar header', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#btn-theme')).toBeVisible({ timeout: 8_000 });

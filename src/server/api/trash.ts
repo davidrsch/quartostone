@@ -67,7 +67,11 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
     mkdirSync(dirname(restoreTarget), { recursive: true });
     renameSync(trashFile, restoreTarget);
-    rmSync(metaPath);
+    try {
+      rmSync(metaPath);
+    } catch (err) {
+      return res.status(500).json({ error: String(err) });
+    }
     updateLinkIndexForFile(pagesDir, meta.originalPath);
     updateSearchIndexForFile(pagesDir, meta.originalPath);
     res.json({ ok: true, path: meta.originalPath });
@@ -79,8 +83,12 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return res.status(404).json({ error: 'Not found' });
-    if (existsSync(trashFile)) rmSync(trashFile);
-    rmSync(metaPath);
+    try {
+      if (existsSync(trashFile)) rmSync(trashFile);
+      rmSync(metaPath);
+    } catch (err) {
+      return res.status(500).json({ error: String(err) });
+    }
     res.json({ ok: true });
   });
 }

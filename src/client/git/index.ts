@@ -100,19 +100,23 @@ export async function initGitPanel(
   });
 
   btnRemoteSave.addEventListener('click', async () => {
-    const url = remoteUrlInput.value.trim();
-    if (!url) return;
-    const res = await fetch('/api/git/remote', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    if (res.ok) {
-      remoteDialog.close();
-      await loadRemote();
-    } else {
-      const err = await res.json() as { error?: string };
-      alert(`Failed to set remote: ${err.error ?? 'unknown error'}`);
+    try {
+      const url = remoteUrlInput.value.trim();
+      if (!url) return;
+      const res = await fetch('/api/git/remote', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (res.ok) {
+        remoteDialog.close();
+        await loadRemote();
+      } else {
+        const err = await res.json() as { error?: string };
+        alert(`Failed to set remote: ${err.error ?? 'unknown error'}`);
+      }
+    } catch (err) {
+      alert(`Remote save failed: ${String(err)}`);
     }
   });
 

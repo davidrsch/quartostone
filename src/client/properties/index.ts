@@ -301,6 +301,9 @@ function escAttr(s: string): string {
 
 // ─── Icon field (#95) ─────────────────────────────────────────────────────────
 
+let _propsPickerClose: ((e: MouseEvent) => void) | null = null;
+let _propsPickerKeyDown: ((e: KeyboardEvent) => void) | null = null;
+
 const PROPS_EMOJIS = [
   '📄','📝','📋','📌','📎','📃','📜','📑','🗒','🗓',
   '📅','📆','📊','📈','📉','🗃','🗂','📁','📂','🗄',
@@ -346,6 +349,15 @@ function iconField(currentIcon: string): HTMLElement {
   });
 
   preview.addEventListener('click', () => {
+    // Remove any lingering previous close listeners
+    if (_propsPickerClose) {
+      document.removeEventListener('mousedown', _propsPickerClose, { capture: true });
+      _propsPickerClose = null;
+    }
+    if (_propsPickerKeyDown) {
+      document.removeEventListener('keydown', _propsPickerKeyDown, { capture: true });
+      _propsPickerKeyDown = null;
+    }
     // Close any existing
     document.querySelector('.props-emoji-popover')?.remove();
 
@@ -364,6 +376,14 @@ function iconField(currentIcon: string): HTMLElement {
         hidden.value = e;
         hidden.dispatchEvent(new Event('change', { bubbles: true }));
         popover.remove();
+        if (_propsPickerClose) {
+          document.removeEventListener('mousedown', _propsPickerClose, { capture: true });
+          _propsPickerClose = null;
+        }
+        if (_propsPickerKeyDown) {
+          document.removeEventListener('keydown', _propsPickerKeyDown, { capture: true });
+          _propsPickerKeyDown = null;
+        }
       });
       grid.appendChild(btn);
     }
@@ -378,9 +398,26 @@ function iconField(currentIcon: string): HTMLElement {
       if (!popover.contains(ev.target as Node)) {
         popover.remove();
         document.removeEventListener('mousedown', close, { capture: true });
+        document.removeEventListener('keydown', handleKey, { capture: true });
+        _propsPickerClose = null;
+        _propsPickerKeyDown = null;
       }
     };
-    setTimeout(() => document.addEventListener('mousedown', close, { capture: true }), 0);
+    const handleKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        popover.remove();
+        document.removeEventListener('mousedown', close, { capture: true });
+        document.removeEventListener('keydown', handleKey, { capture: true });
+        _propsPickerClose = null;
+        _propsPickerKeyDown = null;
+      }
+    };
+    _propsPickerClose = close;
+    _propsPickerKeyDown = handleKey;
+    setTimeout(() => {
+      document.addEventListener('mousedown', close, { capture: true });
+      document.addEventListener('keydown', handleKey, { capture: true });
+    }, 0);
   });
 
   row.append(preview, clearBtn, hidden);

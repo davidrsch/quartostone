@@ -66,21 +66,24 @@ function imageDragDropExtension(): Extension {
       if (imageItems.length === 0) return;
       event.preventDefault();
       const insertAt = view.state.selection.main.from;
-      let offset = 0;
-      for (const item of imageItems) {
-        const file = item.getAsFile();
-        if (!file) continue;
-        void uploadImageFile(file).then(url => {
-          if (!url) return;
-          const alt = 'image';
-          const md  = `![${alt}](${url})`;
-          view.dispatch({
-            changes: { from: insertAt + offset, insert: md },
-            selection: { anchor: insertAt + offset + md.length },
-          });
-          offset += md.length;
-        });
-      }
+      void (async () => {
+        let offset = 0;
+        for (const item of imageItems) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          try {
+            const url = await uploadImageFile(file);
+            if (!url) continue;
+            const alt = 'image';
+            const md  = `![${alt}](${url})`;
+            view.dispatch({
+              changes: { from: insertAt + offset, insert: md },
+              selection: { anchor: insertAt + offset + md.length },
+            });
+            offset += md.length;
+          } catch { /* ignore failed upload */ }
+        }
+      })();
     },
   });
 }

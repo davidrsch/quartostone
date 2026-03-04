@@ -259,8 +259,10 @@ describe('createEditor', () => {
       const text = view.state.doc.toString();
       expect(text).toContain('Smoke Test');
     } else {
-      // Mark as skipped by not asserting — log the constraint for visibility
-      console.warn('[editor.test] createEditor smoke skipped — layout unavailable in happy-dom:', error);
+      // Don't silently pass — if error is set, fail with the actual error
+      if (error !== null) throw error;
+      // If view is null for no reason, also fail
+      throw new Error('createEditor returned null view with no error');
     }
   });
 
@@ -281,9 +283,13 @@ describe('createEditor', () => {
         pagePath: 'page.qmd',
         onDirty: () => { dirtyCallCount.n++; },
       });
-    } catch {
-      // Layout unavailable — skip
-      return;
+    } catch (err) {
+      // Only skip if it's an environment/layout limitation, not a real bug
+      const msg = String(err);
+      if (msg.includes('layout') || msg.includes('jsdom') || msg.includes('offsetWidth')) {
+        return; // environment limitation — skip this assertion
+      }
+      throw err; // re-throw real errors
     }
 
     if (!view) return;

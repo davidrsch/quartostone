@@ -102,7 +102,11 @@ export function initBranchPicker(
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'branch-name';
-        nameSpan.innerHTML = `<span class="branch-dot"></span>${b.name}`;
+        const dot = document.createElement('span');
+        dot.className = 'branch-dot';
+        nameSpan.textContent = '';
+        nameSpan.appendChild(dot);
+        nameSpan.appendChild(document.createTextNode(b.name));
 
         item.appendChild(nameSpan);
 
@@ -179,7 +183,12 @@ export function initBranchPicker(
         alert(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
         return;
       }
-      const data = JSON.parse(text) as { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+      let data: { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+      try {
+        data = JSON.parse(text) as { ok?: boolean; commit?: string; error?: string; conflicts?: string[] };
+      } catch {
+        throw new Error('Server returned invalid JSON');
+      }
       alert(`Merged "${branch}" successfully (${data.commit?.slice(0, 7) ?? '?'})`);
     } catch {
       alert('Merge failed: network error');
@@ -192,6 +201,7 @@ export function initBranchPicker(
     if (conflicts.length === 0) {
       try {
         const r = await fetch('/api/git/conflicts');
+        if (!r.ok) throw new Error(`Failed to fetch conflicts: ${r.status}`);
         const d = await r.json() as { conflicted: string[] };
         conflicts = d.conflicted;
       } catch { /* ignore */ }
