@@ -45,11 +45,30 @@ export function buildEditorUIPrefs() {
 
 // ── Display ───────────────────────────────────────────────────────────────────
 
-export function buildEditorDisplay() {
+export function buildEditorDisplay(onOpenPage?: (path: string) => void) {
   return {
     openURL: (url: string) => window.open(url, '_blank', 'noopener'),
-    navigateToXRef: (_file: string, _xref: unknown) => { /* TODO */ },
-    navigateToFile: (_file: string) => { /* TODO */ },
+
+    /**
+     * Navigate to the file that contains a cross-reference.
+     * `xref` is the panmirror XRef object: { file?: string, id?: string, ... }
+     * We open the file that contains the xref; `file` is relative to the project.
+     */
+    navigateToXRef: (file: string, xref: Record<string, unknown>) => {
+      const target = (typeof xref['file'] === 'string' && xref['file'])
+        ? xref['file']
+        : file;
+      if (target && onOpenPage) onOpenPage(target);
+    },
+
+    /**
+     * Navigate to another file referenced from the visual editor
+     * (e.g. a wiki-link or an explicit file path in a link).
+     */
+    navigateToFile: (file: string) => {
+      if (file && onOpenPage) onOpenPage(file);
+    },
+
     showContextMenu: undefined,
   };
 }
@@ -176,10 +195,13 @@ export function buildEditorUIImages() {
 
 export type EditorServerType = typeof editorServer;
 
-export function buildEditorUI(documentPath: string | null) {
+export function buildEditorUI(
+  documentPath: string | null,
+  onOpenPage?: (path: string) => void,
+) {
   return {
     dialogs:  buildEditorDialogs(),
-    display:  buildEditorDisplay(),
+    display:  buildEditorDisplay(onOpenPage),
     context:  buildEditorUIContext(documentPath),
     prefs:    buildEditorUIPrefs(),
     images:   buildEditorUIImages(),

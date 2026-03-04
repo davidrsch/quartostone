@@ -54,6 +54,8 @@ export interface VisualEditorOptions {
   onDirty?: () => void;
   /** Path of the document being edited (for resource resolution) */
   documentPath?: string | null;
+  /** Called when the user clicks a file link or xref link in visual mode */
+  onOpenPage?: (path: string) => void;
 }
 
 export interface VisualEditorInstance {
@@ -83,7 +85,7 @@ export async function createVisualEditor(
 
   const context = {
     server: editorServer,
-    ui: buildEditorUI(opts.documentPath ?? null),
+    ui: buildEditorUI(opts.documentPath ?? null, opts.onOpenPage),
   };
 
   const format = {

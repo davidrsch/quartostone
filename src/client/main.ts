@@ -195,6 +195,7 @@ async function switchMode(mode: 'source' | 'visual') {
       container: editorMountEl,
       initialMarkdown: markdown,
       documentPath: activePath,
+      onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
       onDirty: () => {
         isDirty = true;
         btnSave.disabled = false;
@@ -514,6 +515,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         container: editorMountEl,
         initialMarkdown: data.content ?? '',
         documentPath: path,
+        onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
         onDirty: () => {
           isDirty = true;
           btnSave.disabled = false;
