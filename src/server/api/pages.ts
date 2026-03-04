@@ -244,6 +244,9 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       if (code === 'ENOENT') {
         return res.status(404).json({ error: 'Directory not found' });
       }
+      if (code === 'ENOTDIR') {
+        return res.status(400).json({ error: 'Path is not a directory' });
+      }
       throw err;
     }
     res.json({ ok: true });
