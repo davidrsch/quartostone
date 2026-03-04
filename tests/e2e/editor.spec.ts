@@ -212,8 +212,8 @@ test.describe('Exec API', () => {
     const res = await request.post('/api/exec', {
       data: { language: 'python', code: 'print("e2e-ok")' },
     });
-    if (res.status() === 500 || res.status() === 501) {
-      testInfo.skip(true, 'Python not available in this environment');
+    if (res.status() === 403 || res.status() === 500 || res.status() === 501) {
+      testInfo.skip(true, 'Code execution disabled or Python not available in this environment');
       return;
     }
     expect(res.status()).toBe(200);

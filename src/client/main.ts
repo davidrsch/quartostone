@@ -491,6 +491,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   activeDb?.destroy(); activeDb = null;
   editorMountEl.innerHTML = '';
 
+  ensureTab(path, name);
   activePath = path;
   renderBreadcrumb(path);
   isDirty = false;
