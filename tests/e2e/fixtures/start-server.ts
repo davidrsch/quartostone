@@ -50,7 +50,7 @@ async function main() {
   // the TypeScript source (src/server/), not the compiled output.  Supply the
   // real dist/client/ path so the editor UI is served correctly.
   const clientDist = join(resolve(__dirname, '../../..'), 'dist', 'client');
-  const server = await createServer({ cwd: workspace, config, port: PORT, clientDist });
+  const { server } = await createServer({ cwd: workspace, config, port: PORT, clientDist });
   server.listen(PORT, () => {
     // Playwright waits for this line that matches the `url` it polls, but it actually
     // polls the URL directly — we just need to keep the process alive.
