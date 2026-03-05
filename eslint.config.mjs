@@ -41,5 +41,22 @@ export default tseslint.config(
       // have ~30 intentionally no-await async methods across the codebase.
       '@typescript-eslint/require-await': 'warn',
     },
+  },
+  // Test files access any-typed HTTP response bodies (supertest res.body) and use
+  // various assertion helpers; disabling type-unsafe rules avoids false positives.
+  {
+    files: ['tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      '@typescript-eslint/await-thenable': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/only-throw-error': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+    },
   }
 );
