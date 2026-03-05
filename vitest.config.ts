@@ -32,9 +32,9 @@ export default defineConfig({
         lines:      85,
         functions:  86,
         statements: 84,
-        // branches are harder to reach — error catch paths in createServer/fetch
-        // and unreachable `else` branches require full E2E infrastructure.
-        branches:   70,
+        // branches: incrementally raised as error-path coverage improves.
+        // Remote/push/pull/merge/stashConflict and assets security paths now covered.
+        branches:   73,
       },
     },
   },

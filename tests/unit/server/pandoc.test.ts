@@ -304,4 +304,10 @@ describe('when pandoc is not available', () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/pandoc/i);
   });
+
+  it('POST /api/pandoc/listExtensions returns 503', async () => {
+    const res = await client.post('/api/pandoc/listExtensions').send({ format: 'markdown' });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/pandoc/i);
+  });
 });

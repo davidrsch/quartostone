@@ -155,3 +155,32 @@ describe('GET /assets/:filename', () => {
     expect([400, 404]).toContain(res.status);
   });
 });
+
+// ── Security: SVG upload and path-traversal filename ─────────────────────────
+
+describe('POST /api/assets — security edge cases', () => {
+  it('rejects an SVG upload (not in ALLOWED_EXTS)', async () => {
+    const svgWithScript = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    );
+    const res = await client
+      .post('/api/assets')
+      .attach('file', svgWithScript, { filename: 'evil.svg', contentType: 'image/svg+xml' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('sanitises a path-traversal filename so the file is stored under assets safely', async () => {
+    const res = await client
+      .post('/api/assets')
+      .attach('file', FAKE_PNG, { filename: '../evil.png', contentType: 'image/png' });
+    expect(res.status).toBe(201);
+    // The stored filename must not contain directory separators
+    const stored = res.body.filename as string;
+    expect(stored).not.toContain('..');
+    expect(stored).not.toContain('/');
+    expect(stored).not.toContain('\\');
+    // The file must actually exist inside the assets dir, not outside it
+    expect(existsSync(join(assetsDir, stored))).toBe(true);
+  });
+});

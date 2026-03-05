@@ -265,7 +265,13 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         try {
           await git.stash(['pop']);
         } catch {
-          // Stash pop conflict — leave stash in place, surface warning
+          // Older simple-git versions throw on stash-pop conflict
+          return res.json({ ok: true, branch, stashConflict: true });
+        }
+        // simple-git v3 resolves for stash-pop even when git exits non-zero (conflict).
+        // Detect conflicts via status instead.
+        const afterStatus = await git.status();
+        if (afterStatus.conflicted.length > 0) {
           return res.json({ ok: true, branch, stashConflict: true });
         }
       }

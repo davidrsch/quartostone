@@ -59,4 +59,12 @@ describe('collectQmd', () => {
     const result = collectQmd(tmpDir, tmpDir);
     expect(result).toContain('a/b/c/d/deep.qmd');
   });
+
+  it('collects dotfile-prefixed .qmd files (e.g. .hidden.qmd)', () => {
+    // collectQmd uses extname() which returns '.qmd' for '.hidden.qmd',
+    // so hidden files are included — this test documents that behaviour.
+    writeFileSync(join(tmpDir, '.hidden.qmd'), '');
+    const result = collectQmd(tmpDir, tmpDir);
+    expect(result).toContain('.hidden.qmd');
+  });
 });
