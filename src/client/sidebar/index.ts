@@ -668,6 +668,7 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
   confirmBtn.type = 'submit';
   confirmBtn.textContent = 'Move';
   const cancelBtn = document.createElement('button');
+  cancelBtn.id = 'btn-move-cancel';
   cancelBtn.type = 'button';
   cancelBtn.textContent = 'Cancel';
   actionsDiv.append(confirmBtn, cancelBtn);
