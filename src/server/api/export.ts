@@ -306,6 +306,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
       `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodedName}`
     );
     res.setHeader('Content-Type', mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
 
     const stream = createReadStream(job.outputPath);
     stream.on('error', (_err) => {

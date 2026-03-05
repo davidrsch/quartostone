@@ -292,6 +292,10 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const { branch, message } = req.body as { branch?: string; message?: string };
       if (!branch || !/^[a-zA-Z0-9_][a-zA-Z0-9\-._/]*$/.test(branch)) return badRequest(res, 'valid branch name required');
+      if (message !== undefined) {
+        if (message.length > 1000) return badRequest(res, 'Commit message too long (max 1000 chars)');
+        if (/[\x00-\x08\x0b-\x1f\x7f]/.test(message)) return badRequest(res, 'Commit message contains invalid characters');
+      }
       const mergeMsg = message ?? `Merge branch '${branch}'`;
       const result = await git.merge([branch, '--no-ff', '-m', mergeMsg]);
       if (result.failed) {

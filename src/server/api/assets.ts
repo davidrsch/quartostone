@@ -20,6 +20,18 @@ const ALLOWED_MIMETYPES = new Set([
   'image/avif', 'image/tiff', 'image/bmp', 'image/x-icon',
 ]);
 
+/** Explicit Content-Type map prevents MIME-sniffing attacks on served assets. */
+const ASSET_MIME: Record<string, string> = {
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp':  'image/bmp',
+  '.ico':  'image/x-icon',
+};
+
 /**
  * Registers the assets API:
  *   POST /api/assets  — upload an image to `pages/_assets/`; returns `{ url }`.
@@ -77,6 +89,9 @@ export function registerAssetsApi(app: Express, ctx: ServerContext): void {
     if (!filename) return badRequest(res, 'Invalid filename');
     const filePath = join(assetsDir, filename);
     if (!existsSync(filePath)) return notFound(res, 'Not found');
+    // Explicitly set Content-Type and prevent MIME sniffing (S08)
+    res.setHeader('Content-Type', ASSET_MIME[extname(filename).toLowerCase()] ?? 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.sendFile(filePath);
   });
 }

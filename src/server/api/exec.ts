@@ -4,10 +4,10 @@
 // Each language runs as a sandboxed subprocess; stdout+stderr captured, 30 s timeout
 
 import type { Express, Request, Response } from 'express';
-import { spawn } from 'node:child_process';
 import type { ServerContext } from '../context.js';
 import { badRequest, forbidden, serverError } from '../utils/errorResponse.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
+import { spawnCapture, type SpawnResult } from '../utils/spawnCapture.js';
 
 const EXEC_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT = 1_048_576; // 1 MB per stream
@@ -16,55 +16,13 @@ let activeExecs = 0;
 
 // ── Run a code snippet in a subprocess ───────────────────────────────────────
 
-interface ExecResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  notFound?: boolean;   // true when the command binary was not found (ENOENT)
-}
-
-function runSubprocess(
-  cmd: string,
-  args: string[],
-  cwd: string,
-  timeout: number,
-): Promise<ExecResult> {
-  return new Promise(resolve => {
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    // Rely only on the manual timer (not spawn's built-in timeout) so timedOut
-    // is always set before the close event fires, avoiding a race condition.
-    const proc = spawn(cmd, args, { cwd, shell: false });
-
-    proc.stdout.on('data', (chunk: Buffer) => { if (stdout.length < MAX_OUTPUT) stdout += chunk.toString(); });
-    proc.stderr.on('data', (chunk: Buffer) => { if (stderr.length < MAX_OUTPUT) stderr += chunk.toString(); });
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill();
-    }, timeout);
-
-    proc.on('close', exitCode => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode, timedOut });
-    });
-
-    proc.on('error', (err: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      resolve({
-        stdout, stderr: err.message, exitCode: null, timedOut: false,
-        notFound: err.code === 'ENOENT' || err.message.includes('ENOENT'),
-      });
-    });
-  });
-}
+/** Thin alias so call-sites below don't need to be changed. */
+const runSubprocess = (cmd: string, args: string[], cwd: string, timeout: number) =>
+  spawnCapture(cmd, args, { cwd, timeoutMs: timeout, maxOutputBytes: MAX_OUTPUT });
 
 // ── Language-specific execution ───────────────────────────────────────────────
 
-async function executePython(code: string, cwd: string, timeout: number): Promise<ExecResult> {
+async function executePython(code: string, cwd: string, timeout: number): Promise<SpawnResult> {
   // Wrap code with matplotlib non-interactive backend to avoid window popups
   const wrapped = `
 import sys, warnings
@@ -88,14 +46,15 @@ ${code}
     stderr: 'Python interpreter not found. Install Python and ensure it is on your PATH.',
     exitCode: 127,
     timedOut: false,
+    notFound: true,
   };
 }
 
-async function executeR(code: string, cwd: string, timeout: number): Promise<ExecResult> {
+async function executeR(code: string, cwd: string, timeout: number): Promise<SpawnResult> {
   return runSubprocess('Rscript', ['--vanilla', '-e', code], cwd, timeout);
 }
 
-async function executeJulia(code: string, cwd: string, timeout: number): Promise<ExecResult> {
+async function executeJulia(code: string, cwd: string, timeout: number): Promise<SpawnResult> {
   return runSubprocess('julia', ['--quiet', '-e', code], cwd, timeout);
 }
 
@@ -140,7 +99,7 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
     }
     activeExecs++;
 
-    let result: ExecResult;
+    let result: SpawnResult;
     try {
       switch (language) {
         case 'python':

@@ -10,9 +10,9 @@
 // POST /api/pandoc/citationHTML        body: { ... }                          → string
 
 import type { Express, Request, Response } from 'express';
-import { spawn } from 'node:child_process';
 import type { ServerContext } from '../context.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
+import { spawnCapture } from '../utils/spawnCapture.js';
 
 const PANDOC_TIMEOUT_MS = 30_000;
 const MAX_PANDOC_OUTPUT_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -31,49 +31,13 @@ export function resetCapabilitiesCache(): void {
 
 // ── Subprocess helper ─────────────────────────────────────────────────────────
 
-interface ProcResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
-  notFound?: boolean;
-}
-
-function runPandoc(args: string[], stdin?: string): Promise<ProcResult> {
-  return new Promise(resolve => {
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    const proc = spawn('pandoc', args, { shell: false });
-
-    proc.stdout.on('data', (chunk: Buffer) => { if (stdout.length < MAX_PANDOC_OUTPUT_BYTES) stdout += chunk.toString(); });
-    proc.stderr.on('data', (chunk: Buffer) => { if (stderr.length < MAX_PANDOC_OUTPUT_BYTES) stderr += chunk.toString(); });
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill();
-    }, PANDOC_TIMEOUT_MS);
-
-    proc.on('close', code => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode: code, timedOut });
-    });
-
-    proc.on('error', (err: NodeJS.ErrnoException) => {
-      clearTimeout(timer);
-      resolve({
-        stdout, stderr: err.message, exitCode: null, timedOut: false,
-        notFound: err.code === 'ENOENT',
-      });
-    });
-
-    if (stdin !== undefined) {
-      proc.stdin.write(stdin, 'utf8');
-      proc.stdin.end();
-    }
+/** Thin wrapper around spawnCapture for pandoc invocations. */
+const runPandoc = (args: string[], stdin?: string) =>
+  spawnCapture('pandoc', args, {
+    timeoutMs: PANDOC_TIMEOUT_MS,
+    maxOutputBytes: MAX_PANDOC_OUTPUT_BYTES,
+    ...(stdin !== undefined ? { stdin } : {}),
   });
-}
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
 
