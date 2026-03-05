@@ -18,6 +18,9 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist/client'),
     emptyOutDir: true,
+    // es2022 adds support for top-level await (used in main.ts boot sequence).
+    // All target browsers from 2022+ ship native TLA support.
+    target: 'es2022',
   },
   server: {
     port: 5173,
