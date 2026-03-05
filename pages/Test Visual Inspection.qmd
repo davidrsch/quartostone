@@ -1,0 +1,7 @@
+---
+title: "Test Visual Inspection"
+date: today
+---
+
+# Test Visual Inspection
+This is a visual inspection test. All GET requests seem to be working now.
