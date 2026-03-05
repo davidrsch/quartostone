@@ -24,6 +24,8 @@ import { applyTheme, toggleTheme, storeTheme, resolveInitialTheme } from './them
 import { filterEntries, moveIdx } from './cmdpalette/filter.js';
 import type { PaletteEntry } from './cmdpalette/filter.js';
 import { renderBreadcrumb as _renderBreadcrumb } from './breadcrumb.js';
+import { showToast } from './utils/toast.js';
+import type { ToastKind } from './utils/toast.js';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 const fileTreeEl       = document.getElementById('file-tree')!;
@@ -84,7 +86,8 @@ let historySetPage: ((path: string | null) => void) | null = null;
 let previewPanel: PreviewPanel | null = null;
 let backlinksPanel: BacklinksPanel | null = null;
 let graphView: { open(): void; close(): void; refresh(): void } | null = null;
-let switchingMode = false; // M-4: guard against concurrent mode switches
+let switchingMode = false;    // M-4: guard against concurrent mode switches
+let openPageInProgress = false; // B9: guard against concurrent openPage calls
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
 
 // module-level palette controls (FIX MAIN-05)
@@ -102,16 +105,7 @@ let activePath2: string | null = null;
 const propsPanel = createPropertiesPanel(propertiesBody);
 
 // ─── Toast helper ─────────────────────────────────────────────────────────────
-type ToastKind = 'info' | 'success' | 'error';
-
-function showToast(message: string, kind: ToastKind = 'info', duration = 3500) {
-  const toast = document.createElement('div');
-  toast.className = `toast ${kind}`;
-  toast.textContent = message;
-  toastContainer.appendChild(toast);
-  setTimeout(() => toast.remove(), duration);
-  return toast;
-}
+// showToast is imported from './utils/toast.js' (see top of file)
 
 function showCommitPrompt(autoSlug: string) {
   const toast = document.createElement('div');
@@ -481,6 +475,9 @@ function renderBreadcrumb(path: string | null): void {
 
 // ─── Editor load ────────────────────────────────────────────────────────────── 
 async function openPage(path: string, name: string) {  // M-1: guard against silently discarding unsaved changes
+  if (openPageInProgress) return; // B9: drop concurrent calls
+  openPageInProgress = true;
+  try {
   if (isDirty) {
     const discard = confirm('You have unsaved changes. Discard them?');
     if (!discard) return;
@@ -590,6 +587,9 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       }
     };
     propsPanel.mount(path, getContent, setContent);
+  }
+  } finally {
+    openPageInProgress = false;
   }
 }
 
