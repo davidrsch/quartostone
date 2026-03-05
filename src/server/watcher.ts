@@ -9,6 +9,7 @@ import type { QuartostoneConfig } from './config.js';
 import { generateCommitSlug } from './config.js';
 import { markXRefCacheDirty } from './api/xref.js';
 import { log, warn as logWarn, error as logError } from './utils/logger.js';
+import { sanitizeError } from './utils/errorSanitizer.js';
 
 interface WatcherContext {
   cwd: string;
@@ -34,7 +35,7 @@ export function startWatcher(ctx: WatcherContext) {
     debounceTimer = setTimeout(() => {
       handleChange(filePath).catch(err => {
         try {
-          ctx.broadcast('render:error', { path: filePath, error: String(err) });
+          ctx.broadcast('render:error', { path: filePath, error: sanitizeError(err) });
         } catch (broadcastErr) {
           logError(`[watcher] broadcast failed: ${broadcastErr}`);
         }
@@ -69,7 +70,7 @@ export function startWatcher(ctx: WatcherContext) {
 
     proc.on('close', async (code) => {
       if (code !== 0) {
-        ctx.broadcast('render:error', { path: relPath, error: stderr });
+        ctx.broadcast('render:error', { path: relPath, error: sanitizeError(stderr) });
         return;
       }
 
@@ -83,7 +84,7 @@ export function startWatcher(ctx: WatcherContext) {
           await git.commit(message);
           ctx.broadcast('git:committed', { message });
         } catch (e) {
-          ctx.broadcast('git:error', { error: String(e) });
+          ctx.broadcast('git:error', { error: sanitizeError(e) });
         }
       } else if (ctx.config.commit_mode === 'prompt') {
         // Broadcast a prompt event — the UI will show a toast

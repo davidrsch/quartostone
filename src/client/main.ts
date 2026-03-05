@@ -27,6 +27,7 @@ import { renderBreadcrumb as _renderBreadcrumb } from './breadcrumb.js';
 import { showToast } from './utils/toast.js';
 import type { ToastKind } from './utils/toast.js';
 import { TabBarManager } from './tabbar/index.js';
+import { API } from './api/endpoints.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GIT_STATUS_POLL_INTERVAL_MS = 30_000;  // how often to poll git status in sidebar
@@ -133,7 +134,7 @@ function showCommitPrompt(autoSlug: string) {
     if (!toast.parentNode) return; // user already acted
     toast.remove();
     try {
-      const res = await fetch('/api/git/commit', {
+      const res = await fetch(API.gitCommit, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: autoSlug }),
@@ -160,7 +161,7 @@ btnCommitConfirm.addEventListener('click', async () => {
   if (!message) return;
   commitDialog.close();
   try {
-    const res = await fetch('/api/git/commit', {
+    const res = await fetch(API.gitCommit, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
@@ -345,7 +346,7 @@ btnNewPageConfirm.addEventListener('click', async () => {
   newPageDialog.close();
   if (!name) { showToast('Page name is invalid', 'error'); return; }
   try {
-    const res = await fetch('/api/pages', {
+    const res = await fetch(API.pages, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: name }),
@@ -364,7 +365,7 @@ btnNewFolderConfirm.addEventListener('click', async () => {
   newFolderDialog.close();
   if (!raw) { showToast('Folder name is invalid', 'error'); return; }
   try {
-    const res = await fetch('/api/directories', {
+    const res = await fetch(API.directories, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: raw }),
@@ -391,7 +392,7 @@ btnNewDbConfirm.addEventListener('click', async () => {
   const slug = rawName.replace(/\s+/g, '-').toLowerCase();
   const path = `pages/${slug}.qmd`;
   try {
-    const res = await fetch(`/api/db/create?path=${encodeURIComponent(path)}`, {
+    const res = await fetch(`${API.dbCreate}?path=${encodeURIComponent(path)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: rawName }),
@@ -415,7 +416,7 @@ async function saveCurrentPage() {
   if (content == null) return;
   sbSaveStatus.textContent = 'Saving…';
   try {
-    const res = await fetch(`/api/pages/${encodeURIComponent(activePath)}`, {
+    const res = await fetch(`${API.pages}/${encodeURIComponent(activePath)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -438,7 +439,7 @@ async function saveCurrentPage() {
 // ─── Status bar ───────────────────────────────────────────────────────────────
 async function updateBranchStatus() {
   try {
-    const res = await fetch('/api/git/status');
+    const res = await fetch(API.gitStatus);
     if (!res.ok) {
       sbBranch.textContent = '';
       sbSync.textContent = '';

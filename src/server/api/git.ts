@@ -214,7 +214,8 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/branches', async (req: Request, res: Response) => {
     try {
       const { name } = req.body as { name?: string };
-      if (!name || !/^[\w\-./]+$/.test(name)) {
+      // Must start with alphanumeric/underscore to prevent flag injection (e.g. --force)
+      if (!name || !/^[a-zA-Z0-9_][a-zA-Z0-9\-._/]*$/.test(name)) {
         return badRequest(res, 'valid branch name required');
       }
       await git.checkoutLocalBranch(name);
@@ -230,7 +231,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     let wasStashed = false;
     try {
       const { branch } = req.body as { branch?: string };
-      if (!branch || !/^[\w\-./]+$/.test(branch)) return badRequest(res, 'valid branch name required');
+      if (!branch || !/^[a-zA-Z0-9_][a-zA-Z0-9\-._/]*$/.test(branch)) return badRequest(res, 'valid branch name required');
 
       const status = await git.status();
       wasStashed = !status.isClean();
@@ -264,7 +265,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/merge', async (req: Request, res: Response) => {
     try {
       const { branch, message } = req.body as { branch?: string; message?: string };
-      if (!branch || !/^[\w\-./]+$/.test(branch)) return badRequest(res, 'valid branch name required');
+      if (!branch || !/^[a-zA-Z0-9_][a-zA-Z0-9\-._/]*$/.test(branch)) return badRequest(res, 'valid branch name required');
       const mergeMsg = message ?? `Merge branch '${branch}'`;
       const result = await git.merge([branch, '--no-ff', '-m', mergeMsg]);
       if (result.failed) {

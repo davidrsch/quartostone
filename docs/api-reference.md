@@ -267,7 +267,9 @@ Run `quarto render` on a single file or the whole project.
 
 **Body:** `{ path: string, scope?: 'file'|'project' }`
 
-**Response:** `{ ok: boolean, stdout: string, stderr: string }`
+**Response (success):** `{ ok: true, output: string }` — stdout from quarto.
+
+**Response (failure):** `{ ok: false, error: string }` — sanitized stderr or timeout message.
 
 ---
 
@@ -439,14 +441,16 @@ Force a full reindex of all pages (normally happens automatically on file change
 
 ## WebSocket events
 
-Connect to `ws://localhost:PORT` to receive real-time file-change events.
+Connect to `ws://localhost:PORT/ws` to receive real-time events.
 
-| Event type       | Payload                              | Trigger                                    |
-| ---------------- | ------------------------------------ | ------------------------------------------ |
-| `file_changed`   | `{ path: string }`                   | A `.qmd` file was saved                    |
-| `render_started` | `{ path: string }`                   | `quarto render` started                    |
-| `render_done`    | `{ path: string, ok: boolean }`      | `quarto render` completed                  |
-| `git_changed`    | `{ current: string, files: number }` | Git status changed after a commit or write |
+| Event type        | Payload                              | Trigger                                   |
+| ----------------- | ------------------------------------ | ----------------------------------------- |
+| `file:changed`    | `{ path: string }`                   | A `.qmd` file was saved (render disabled) |
+| `render:complete` | `{ path: string }`                   | `quarto render` completed successfully    |
+| `render:error`    | `{ path: string, error: string }`    | `quarto render` failed                    |
+| `git:committed`   | `{ message: string }`                | Auto-commit completed                     |
+| `git:prompt`      | `{ autoSlug: string, path: string }` | Manual-commit confirmation requested      |
+| `git:error`       | `{ error: string }`                  | Git operation failed                      |
 
 ---
 
@@ -466,11 +470,11 @@ List all soft-deleted pages, sorted newest-first.
 
 Restore a trashed page to its original path.
 
-**Params:** `:id` — alphanumeric trash item identifier.
+**Params:** `:id` — UUID trash item identifier (`xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx` format).
 
 **Response:** `{ ok: true, path: string }` — `path` is the restored location relative to `pages_dir`.
 
-**Errors:** `400` for invalid `id` or corrupt metadata; `404` if the item is not found; `409` if the original path already exists again.
+**Errors:** `400` for invalid/non-UUID `id` or corrupt metadata; `404` if the item is not found; `409` if the original path already exists again.
 
 ---
 
@@ -478,11 +482,11 @@ Restore a trashed page to its original path.
 
 Permanently destroy a trashed page (both the `.qmd` file and its `.meta.json` sidecar).
 
-**Params:** `:id` — alphanumeric trash item identifier.
+**Params:** `:id` — UUID trash item identifier.
 
 **Response:** `{ ok: true }`
 
-**Errors:** `400` for invalid `id`; `404` if not found; `500` on filesystem error.
+**Errors:** `400` for invalid/non-UUID `id`; `404` if not found; `500` on filesystem error.
 
 ---
 

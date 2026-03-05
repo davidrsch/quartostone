@@ -16,14 +16,9 @@ export function sanitizeError(e: unknown): string {
 }
 
 /**
- * Same as sanitizeError but applies git-specific credential stripping
- * (handles git remote URLs with embedded user:token pairs).
+ * Alias for sanitizeError — retained for call-site clarity in git-specific handlers.
+ * Both functions perform identical sanitization; this one signals git context to readers.
  */
 export function sanitizeGitError(e: unknown): string {
-  let msg = e instanceof Error ? e.message : String(e);
-  // Strip embedded git credentials (https://user:token@host)
-  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
-  // Strip absolute paths; negative lookbehind avoids URL scheme matches (https://)
-  msg = msg.replace(/(?<![a-zA-Z:/\\])(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
-  return msg;
+  return sanitizeError(e);
 }

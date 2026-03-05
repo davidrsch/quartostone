@@ -15,6 +15,7 @@ import { createReadStream } from 'node:fs';
 import type { ServerContext } from '../index.js';
 import { badRequest, conflict, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 import { EXPORT_FORMATS } from '../../shared/formats.js';
 
 // Alias for backward compatibility with code that references SUPPORTED_FORMATS.
@@ -131,7 +132,7 @@ function runExport(
     if (msg.includes('ENOENT') || msg.includes('not found')) {
       job.error = 'Quarto is not installed or not on PATH. Install from https://quarto.org';
     } else {
-      job.error = msg;
+      job.error = sanitizeError(msg);
     }
   });
 
@@ -152,7 +153,7 @@ function runExport(
       } else if (stderr.includes('typst') && stderr.includes('not found')) {
         job.error = 'typst is not installed. Install from https://typst.app or via `cargo install typst-cli`.';
       } else {
-        job.error = stderr.trim() || `quarto render exited with code ${String(code)}`;
+        job.error = sanitizeError(stderr.trim()) || `quarto render exited with code ${String(code)}`;
       }
     }
   });
@@ -256,7 +257,11 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     const ext  = extname(job.filename);
     const mime = mimeMap[ext] ?? 'application/octet-stream';
 
-    res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`);
+    // Strip characters that could break the Content-Disposition header value
+    const safeFilename = job.filename.split('').filter(
+      c => c !== '"' && c.charCodeAt(0) !== 13 && c.charCodeAt(0) !== 10 && c !== '\\'
+    ).join('');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
     res.setHeader('Content-Type', mime);
 
     const stream = createReadStream(job.outputPath);

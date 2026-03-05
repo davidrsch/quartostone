@@ -23,6 +23,7 @@ import { registerPandocApi } from './api/pandoc.js';
 import { registerAssetsApi } from './api/assets.js';
 import { registerXRefApi } from './api/xref.js';
 import { startWatcher } from './watcher.js';
+import { sanitizeError } from './utils/errorSanitizer.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -109,9 +110,10 @@ export function createApp(ctx: ServerContext) {
   try { rebuildSearchIndex(pagesDir); } catch { /* empty workspace */ }
 
   // Global error handler — must be registered LAST and must have exactly 4 params
-  // so Express recognises it as an error handler.
+  // so Express recognises it as an error handler. sanitizeError strips paths/credentials
+  // so internal details are never leaked to callers.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = sanitizeError(err);
     if (!res.headersSent) {
       res.status(500).json({ error: message });
     }

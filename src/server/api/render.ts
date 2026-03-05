@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 
 const RENDER_TIMEOUT_MS = 120_000; // max time to wait for quarto render before killing the process
 
@@ -72,7 +73,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       if (code === 0) {
         res.json({ ok: true, output: stdout });
       } else {
-        res.status(500).json({ ok: false, error: stderr || `quarto render exited with code ${code}` });
+        res.status(500).json({ ok: false, error: sanitizeError(stderr) || `quarto render exited with code ${code}` });
       }
     });
   });
