@@ -142,12 +142,18 @@ class OutputWidget extends WidgetType {
     wrap.className = 'cm-cell-output';
 
     if (this.data.loading) {
-      wrap.innerHTML = '<span class="cm-output-loading">Running…</span>';
+      const loadingSpan = document.createElement('span');
+      loadingSpan.className = 'cm-output-loading';
+      loadingSpan.textContent = 'Running…';
+      wrap.appendChild(loadingSpan);
       return wrap;
     }
 
     if (this.data.timedOut) {
-      wrap.innerHTML = '<span class="cm-output-error">⚠ Execution timed out (30s)</span>';
+      const timeoutSpan = document.createElement('span');
+      timeoutSpan.className = 'cm-output-error';
+      timeoutSpan.textContent = '⚠ Execution timed out (30s)';
+      wrap.appendChild(timeoutSpan);
       return wrap;
     }
 
@@ -166,7 +172,10 @@ class OutputWidget extends WidgetType {
     }
 
     if (!this.data.stdout && !this.data.stderr) {
-      wrap.innerHTML = '<span class="cm-output-empty">No output</span>';
+      const emptySpan = document.createElement('span');
+      emptySpan.className = 'cm-output-empty';
+      emptySpan.textContent = 'No output';
+      wrap.appendChild(emptySpan);
     }
 
     return wrap;

@@ -9,6 +9,7 @@ import { stringify as yamlStringify } from 'yaml';
 import type { ServerContext } from '../index.js';
 import { parseFrontmatter } from '../utils/frontmatter.js';
 import type { FieldDef, DbPage } from '../../shared/types.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 
 // Re-export shared types so existing imports from this module keep working.
 export type { FieldDef, DbPage };
@@ -92,16 +93,6 @@ export function serialiseDbFile(page: DbPage): string {
     : '';
 
   return `---\n${fmStr}\n---\n${tableStr}`;
-}
-
-// ── Error sanitization ──────────────────────────────────────────────────────
-
-/** Remove absolute paths and credentials from error messages before sending to the client. */
-function sanitizeError(e: unknown): string {
-  let msg = e instanceof Error ? e.message : String(e);
-  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
-  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
-  return msg;
 }
 
 // ── Route handlers ───────────────────────────────────────────────────────────

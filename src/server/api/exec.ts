@@ -6,6 +6,7 @@
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import type { ServerContext } from '../index.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 
 const EXEC_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT = 1_048_576; // 1 MB per stream
@@ -93,16 +94,6 @@ async function executeR(code: string, cwd: string, timeout: number): Promise<Exe
 
 async function executeJulia(code: string, cwd: string, timeout: number): Promise<ExecResult> {
   return runSubprocess('julia', ['--quiet', '-e', code], cwd, timeout);
-}
-
-// ── Error sanitization ──────────────────────────────────────────────────────
-
-/** Remove absolute paths and credentials from error messages before sending to the client. */
-function sanitizeError(e: unknown): string {
-  let msg = e instanceof Error ? e.message : String(e);
-  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
-  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
-  return msg;
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────

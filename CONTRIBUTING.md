@@ -20,8 +20,8 @@ All issues are tracked on the [project board](https://github.com/users/davidrsch
 The visual editor relies on a local build of [panmirror](../quarto-fork). Clone it as a sibling of this repo:
 
 ```bash
-git clone https://github.com/davidrsch/quarto quartostone-quarto-fork
-# or use the fork at ../quarto-fork relative to this repo
+git clone https://github.com/davidrsch/quarto quarto-fork
+# clones to ../quarto-fork relative to this repo, which is the path the build script expects
 ```
 
 ```bash
@@ -52,6 +52,7 @@ Then open `http://localhost:4242` in your browser.
 ```bash
 npm run typecheck          # server + shared code
 npm run typecheck:client   # client-side TypeScript
+npm run typecheck:all      # validate all TypeScript configs at once
 npm run lint
 ```
 

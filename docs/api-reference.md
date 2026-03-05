@@ -153,6 +153,112 @@ Switch to an existing branch, auto-stashing and re-applying uncommitted changes.
 
 ---
 
+### `GET /api/git/remote`
+
+Return the origin remote URL plus ahead/behind counts (performs a `git fetch --no-tags --prune` to refresh tracking info).
+
+**Response:** `{ url: string, branch: string, tracking: string, ahead: number, behind: number }`
+
+**Errors:** `500` on git failure.
+
+---
+
+### `PATCH /api/git/remote`
+
+Set (or add) the `origin` remote URL.
+
+**Body:** `{ url: string }` — must use `https`, `http`, `ssh`, or `git` protocol; `file://` is rejected.
+
+**Response:** `{ ok: true }`
+
+**Errors:** `400` if `url` is missing, invalid, or uses a disallowed protocol.
+
+---
+
+### `POST /api/git/push`
+
+Push the current branch to `origin`.
+
+**Response:** `{ ok: true, pushed: object }`
+
+**Errors:** `500` on push failure (e.g. authentication error, non-fast-forward).
+
+---
+
+### `POST /api/git/pull`
+
+Pull from `origin` using fast-forward only (`--ff-only`).
+
+**Response:** `{ ok: true, summary: { changes: number, insertions: number, deletions: number } }`
+
+**Errors:** `409` if the remote has diverged and a fast-forward is not possible; `500` on other git errors.
+
+---
+
+### `POST /api/git/merge`
+
+Merge a branch into the current branch (no-fast-forward — always creates a merge commit).
+
+**Body:** `{ branch: string, message?: string }` — `branch` must match `/^[\w\-./]+$/`.
+
+**Response:** `{ ok: true, commit: string }`
+
+**Errors:** `400` for invalid/missing branch; `409` if there are merge conflicts (includes `{ conflicts: string[] }`); `500` on other errors.
+
+---
+
+### `POST /api/git/merge-abort`
+
+Abort an in-progress merge, restoring the pre-merge state.
+
+**Response:** `{ ok: true }`
+
+**Errors:** `500` if there is no merge in progress.
+
+---
+
+### `GET /api/git/conflicts`
+
+List conflicted files in the working tree (useful after a failed merge).
+
+**Response:** `{ conflicted: string[] }` — paths relative to the workspace root.
+
+---
+
+### `POST /api/git/merge-complete`
+
+Stage all pages and create the merge commit after manually resolving conflicts.
+
+**Response:** `{ ok: true, commit: string }`
+
+**Errors:** `500` if git commit fails (e.g. unresolved conflicts remain).
+
+---
+
+### `GET /api/git/show`
+
+Fetch the raw content of a file at a specific commit.
+
+**Query:** `?sha=COMMIT_SHA&path=RELATIVE_PATH` — `sha` must be a 4–64 character hex string; `path` must be within `pages_dir`.
+
+**Response:** `{ content: string, sha: string, path: string }`
+
+**Errors:** `400` for invalid sha or path; `404` if the file did not exist at that commit.
+
+---
+
+### `POST /api/git/restore`
+
+Restore a file in the working tree to its content at a specific commit (HEAD is unchanged).
+
+**Body:** `{ sha: string, path: string }` — `sha` must be 4–64 hex chars; `path` must be within `pages_dir`.
+
+**Response:** `{ ok: true, sha: string, path: string }`
+
+**Errors:** `400` for invalid sha or unsafe path; `500` on git failure.
+
+---
+
 ## Render
 
 ### `POST /api/render`
@@ -341,3 +447,177 @@ Connect to `ws://localhost:PORT` to receive real-time file-change events.
 | `render_started` | `{ path: string }`                    | `quarto render` started                    |
 | `render_done`    | `{ path: string, ok: boolean }`       | `quarto render` completed                  |
 | `git_changed`    | `{ current: string, files: number }`  | Git status changed after a commit or write |
+
+---
+
+## Trash
+
+Soft-deleted pages are moved to `.quartostone/trash/` with a `.meta.json` sidecar file. See [ADR 004](adr/004-trash-soft-delete.md).
+
+### `GET /api/trash`
+
+List all soft-deleted pages, sorted newest-first.
+
+**Response:** `{ id: string, originalPath: string, name: string, deletedAt: string }[]`
+
+---
+
+### `POST /api/trash/restore/:id`
+
+Restore a trashed page to its original path.
+
+**Params:** `:id` — alphanumeric trash item identifier.
+
+**Response:** `{ ok: true, path: string }` — `path` is the restored location relative to `pages_dir`.
+
+**Errors:** `400` for invalid `id` or corrupt metadata; `404` if the item is not found; `409` if the original path already exists again.
+
+---
+
+### `DELETE /api/trash/:id`
+
+Permanently destroy a trashed page (both the `.qmd` file and its `.meta.json` sidecar).
+
+**Params:** `:id` — alphanumeric trash item identifier.
+
+**Response:** `{ ok: true }`
+
+**Errors:** `400` for invalid `id`; `404` if not found; `500` on filesystem error.
+
+---
+
+## Pandoc bridge
+
+Thin proxy routes used by the panmirror visual editor to communicate with the local `pandoc` binary. All routes time out after 30 seconds.
+
+### `POST /api/pandoc/capabilities`
+
+Return pandoc version, API version, available output formats, and highlight languages. The result is cached in memory after the first call.
+
+**Response:** `{ version: string, api_version: number[], output_formats: string, highlight_languages: string }`
+
+**Errors:** `503` if pandoc is not installed.
+
+---
+
+### `POST /api/pandoc/markdownToAst`
+
+Convert Markdown source to a pandoc JSON AST.
+
+**Body:** `{ markdown: string, format: string, options?: string[] }` — `options` is a validated allowlist of safe `--flag` or `--flag=value` arguments; dangerous flags (`--output`, `--filter`, etc.) are silently dropped.
+
+**Response:** Pandoc JSON AST document object.
+
+**Errors:** `400` for missing/invalid body; `503` if pandoc not found; `504` on timeout.
+
+---
+
+### `POST /api/pandoc/astToMarkdown`
+
+Convert a pandoc JSON AST back to the specified Markdown format.
+
+**Body:** `{ ast: object, format: string, options?: string[] }`
+
+**Response:** Markdown string (quoted JSON string).
+
+**Errors:** `400` for missing/invalid body; `503` if pandoc not found; `504` on timeout.
+
+---
+
+### `POST /api/pandoc/listExtensions`
+
+List the pandoc extensions available for a given format.
+
+**Body:** `{ format: string }` — must match `/^[\w+-]+$/`.
+
+**Response:** Newline-separated extension list (plain string).
+
+**Errors:** `400` for invalid format; `503` if pandoc not found.
+
+---
+
+### `POST /api/pandoc/getBibliography`
+
+Stub endpoint — bibliography support is not yet implemented. Returns an empty bibliography structure for panmirror compatibility.
+
+**Response:** `{ etag: string, bibliography: { sources: [], project_biblios: [] } }`
+
+---
+
+### `POST /api/pandoc/addToBibliography`
+
+No-op stub. Returns `true` for panmirror compatibility.
+
+**Response:** `true`
+
+---
+
+### `POST /api/pandoc/citationHTML`
+
+No-op stub. Returns an empty string for panmirror compatibility.
+
+**Response:** `""` (empty string)
+
+---
+
+## Cross-references
+
+Scans all `.qmd` and `.md` files under `pages_dir` for Quarto cross-reference labels (`fig-*`, `tbl-*`, `sec-*`, `eq-*`, `lst-*`, theorem-like envs) and returns them in a shape compatible with the panmirror editor. Results are cached in memory and invalidated by the file watcher.
+
+### `POST /api/xref/index`
+
+Return all cross-reference labels in the project.
+
+**Body:** `{ file?: string }` — `file` is reserved for future scoped scanning; the full project is always scanned.
+
+**Response:**
+```json
+{
+  "baseDir": "/abs/path/to/pages",
+  "refs": [
+    { "file": "intro.qmd", "type": "fig", "id": "myplot", "suffix": "", "title": "My Plot" }
+  ]
+}
+```
+
+---
+
+### `POST /api/xref/forId`
+
+Return the cross-reference entry for a specific label (e.g. `fig-myplot`).
+
+**Body:** `{ file?: string, id: string }` — `id` must be in `type-rest` format (e.g. `"fig-myplot"`).
+
+**Response:** Same shape as `/api/xref/index` but `refs` contains only the matching entry (empty array if not found).
+
+**Errors:** `400` if `id` is missing.
+
+---
+
+## Assets
+
+Handles image uploads used by the panmirror visual editor. Files are stored in `pages/_assets/` and served as static files.
+
+### `POST /api/assets`
+
+Upload an image file. Accepts `multipart/form-data` with a single field named `file`.
+
+**Constraints:**
+- Allowed extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.avif`, `.bmp`, `.ico`
+- Allowed MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, `image/tiff`, `image/bmp`, `image/x-icon`
+- Maximum file size: 20 MB
+
+**Response:** `{ url: string, filename: string }` — `201 Created`. `url` is the path to serve the file (e.g. `/assets/1700000000000_photo.png`).
+
+**Errors:** `400` if no file is uploaded or the file type is not allowed.
+
+---
+
+### `GET /assets/:filename`
+
+Serve a previously uploaded image. This is a static file endpoint, not under `/api/`.
+
+**Response:** The image binary with the appropriate `Content-Type`.
+
+**Errors:** `400` for an empty/invalid filename; `404` if the file does not exist.
+

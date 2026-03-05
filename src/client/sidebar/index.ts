@@ -26,6 +26,12 @@ export interface SidebarOptions {
 
 type SelectCallback = (path: string, name: string) => void;
 
+// ── HTML escaping ───────────────────────────────────────────────────────────────────
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
 function getFavorites(): string[] {
@@ -635,20 +641,19 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
 
   const dlg = document.createElement('dialog');
   dlg.className = 'qs-dialog';
-  dlg.innerHTML = `
-    <form method="dialog">
-      <h3 id="mvdlg-title"></h3>
-      <label for="qs-move-target">Destination folder</label>
-      <select id="qs-move-target"></select>
-      <div class="dialog-actions">
-        <button type="submit" id="btn-move-confirm">Move</button>
-        <button type="button" id="btn-move-cancel">Cancel</button>
-      </div>
-    </form>`;
 
-  dlg.querySelector<HTMLElement>('#mvdlg-title')!.textContent = `Move \u201c${node.name}\u201d to\u2026`;
+  const form = document.createElement('form');
+  form.method = 'dialog';
 
-  const select = dlg.querySelector<HTMLSelectElement>('#qs-move-target')!;
+  const titleEl = document.createElement('h3');
+  titleEl.innerHTML = `Move \u201c${escHtml(node.name)}\u201d to\u2026`;
+
+  const labelEl = document.createElement('label');
+  labelEl.htmlFor = 'qs-move-target';
+  labelEl.textContent = 'Destination folder';
+
+  const select = document.createElement('select');
+  select.id = 'qs-move-target';
   for (const folder of folders) {
     const opt = document.createElement('option');
     opt.value = folder.path;
@@ -657,9 +662,22 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
     select.appendChild(opt);
   }
 
-  dlg.querySelector('#btn-move-cancel')!.addEventListener('click', () => dlg.close());
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'dialog-actions';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'submit';
+  confirmBtn.textContent = 'Move';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.textContent = 'Cancel';
+  actionsDiv.append(confirmBtn, cancelBtn);
+
+  form.append(titleEl, labelEl, select, actionsDiv);
+  dlg.appendChild(form);
+
+  cancelBtn.addEventListener('click', () => dlg.close());
   dlg.addEventListener('close', () => dlg.remove());
-  dlg.querySelector('form')!.addEventListener('submit', (e) => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
     const targetFolder = select.value;
     dlg.close();

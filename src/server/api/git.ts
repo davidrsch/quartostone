@@ -23,18 +23,9 @@ import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
 import { resolve, join, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { sanitizeGitError } from '../utils/errorSanitizer.js';
 
 const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
-
-/** Strip absolute file-system paths and embedded credentials from git error messages. */
-function sanitizeGitError(e: unknown): string {
-  let msg = e instanceof Error ? e.message : String(e);
-  // Remove absolute paths (e.g. /home/user/... or C:\Users\...)
-  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
-  // Remove embedded credentials (https://user:token@host)
-  msg = msg.replace(/::\/\/[^@\s]+@/g, '://[credentials]@');
-  return msg;
-}
 
 export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);

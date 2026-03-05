@@ -151,10 +151,11 @@ Full JSON Schema: [`docs/config.schema.json`](docs/config.schema.json).
 | `pages_dir` | `pages` | Directory (relative to workspace root) where `.qmd` files live |
 | `render_on_save` | `true` | Run `quarto render` automatically on every save |
 | `render_scope` | `file` | `file` = render only the changed file; `project` = render everything |
-| `watch_interval_ms` | `500` | Debounce window in milliseconds for the file watcher |
+| `watch_interval_ms` | `300` | Debounce window in milliseconds for the file watcher |
 | `commit_mode` | `prompt` | `auto` = commit immediately; `prompt` = show confirm toast; `manual` = never auto-commit |
 | `commit_message_auto` | `qs-{alphanum8}` | Template for auto-generated commit messages |
 | `open_browser` | `true` | Open the browser automatically on `quartostone serve` |
+| `allow_code_execution` | `false` | Enables `POST /api/exec`; defaults to `false` for security — only set `true` in trusted local environments |
 
 ---
 
@@ -220,6 +221,9 @@ npm run test:coverage    # Generate coverage report
 | [001](docs/adr/001-runtime-node-vs-deno.md) | Node.js 22 LTS over Deno 2 |
 | [002](docs/adr/002-visual-editor-approach.md) | Tiptap over extracting panmirror from quarto-vscode |
 | [003](docs/adr/003-structured-data-file-schema.md) | YAML front matter + Markdown table for database pages |
+| [004](docs/adr/004-trash-soft-delete.md) | Soft-delete via `.quartostone/trash` directory |
+| [005](docs/adr/005-websocket-event-protocol.md) | Raw WebSocket (`ws` library) for real-time events |
+| [006](docs/adr/006-in-memory-link-index.md) | In-memory wiki-link index with file-change rebuild |
 
 ---
 

@@ -51,6 +51,16 @@
       "type": "boolean",
       "default": true,
       "description": "Whether to automatically open the browser when 'quartostone serve' starts."
+    },
+    "allow_code_execution": {
+      "type": "boolean",
+      "default": false,
+      "description": "When false (default) the POST /api/exec endpoint returns 403. Set to true to enable executing Python/R/Julia code cells. Defaults to false for security — only enable in trusted local environments."
+    },
+    "exec_timeout_ms": {
+      "type": "integer",
+      "minimum": 1000,
+      "description": "Subprocess execution timeout in milliseconds for POST /api/exec. Defaults to 30000 (30 seconds). Primarily useful for tests or long-running notebook cells."
     }
   }
 }
