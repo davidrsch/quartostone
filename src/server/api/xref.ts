@@ -15,7 +15,7 @@
 import type { Express, Request, Response } from 'express';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest } from '../utils/errorResponse.js';
 
 // ── XRef types ────────────────────────────────────────────────────────────────
@@ -204,11 +204,8 @@ export function walkFiles(dir: string): string[] {
  * Scan all Quarto/Markdown files under `pagesDir` for cross-reference labels.
  *
  * @param pagesDir Absolute path to the pages directory (used as `baseDir`).
- * @param _filePath Optional hint — reserved for future scoped scanning; currently
- *   always scans the full project so the visual editor can resolve references
- *   defined in other documents.
  */
-export function scanXRefsInProject(pagesDir: string, _filePath?: string): XRefs {
+export function scanXRefsInProject(pagesDir: string): XRefs {
   const files = walkFiles(pagesDir);
   const refs: XRef[] = [];
 
@@ -246,7 +243,7 @@ export function resetXrefCache(): void {
 }
 
 /** Scan XRefs using a watcher-driven dirty flag instead of per-file stat calls. */
-function scanXRefsWithCache(pagesDir: string, _filePath?: string): XRefs {
+function scanXRefsWithCache(pagesDir: string): XRefs {
   if (!xrefCacheDirty && xrefCache !== null) {
     return xrefCache;
   }
@@ -276,8 +273,8 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
    * Returns XRefs (full project scan; file is currently unused but reserved).
    */
   app.post('/api/xref/index', (req: Request, res: Response) => {
-    const { file } = req.body as { file?: string };
-    res.json(scanXRefsWithCache(pagesDir, file));
+    void req.body; // file hint ignored — always scans full project
+    res.json(scanXRefsWithCache(pagesDir));
   });
 
   /**
@@ -286,10 +283,10 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
    * Returns XRefs filtered to that specific id.
    */
   app.post('/api/xref/forId', (req: Request, res: Response) => {
-    const { file, id } = req.body as { file?: string; id?: string };
+    const { id } = req.body as { id?: string };
     if (!id) return badRequest(res, 'id is required');
 
-    const index = scanXRefsWithCache(pagesDir, file);
+    const index = scanXRefsWithCache(pagesDir);
     const matchingRefs = index.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);
     res.json({ ...index, refs: matchingRefs });
   });

@@ -12,6 +12,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { runCellExtension } from './runWidget.js';
+import { API } from '../api/endpoints.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 1_000; // debounce delay before auto-saving after last keystroke
 
@@ -22,7 +23,7 @@ async function uploadImageFile(file: File): Promise<string | null> {
   const form = new FormData();
   form.append('file', file, file.name);
   try {
-    const res = await fetch('/api/assets', { method: 'POST', body: form });
+    const res = await fetch(API.assets, { method: 'POST', body: form });
     if (!res.ok) return null;
     const data = (await res.json()) as { url: string };
     return data.url;

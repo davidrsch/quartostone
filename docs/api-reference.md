@@ -98,7 +98,10 @@ Delete an empty directory.
 
 Returns the last 50 commits.
 
-**Query:** `?n=N` to limit to N commits.
+**Query:**
+
+- `?n=N` — limit to N commits.
+- `?path=<filepath>` — (optional) limit history to commits that touched the given file path (relative to workspace root).
 
 **Response:** `{ hash: string, date: string, message: string, author_name: string }[]`
 
@@ -303,6 +306,18 @@ Stop a running preview.
 
 - Without `path`: `{ running: boolean, count: number }` — whether any preview is active.
 - With `path`: `{ running: boolean, url?: string, path?: string }` — state for a specific file.
+
+---
+
+### `GET /api/preview/ready`
+
+Polls until the Quarto preview server at the given port accepts TCP connections.
+
+**Query:** `?port=<n>&timeout=<ms>` — `port` is required; `timeout` defaults to 5000 ms (max 30000).
+
+**Response:** `{ ready: boolean, timedOut: boolean }`
+
+**Errors:** `400` if `port` is missing or if there is no active preview session on that port (SSRF guard).
 
 ---
 

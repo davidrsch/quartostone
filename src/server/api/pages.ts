@@ -7,9 +7,9 @@
 
 import type { Express, Request, Response } from 'express';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync, realpathSync } from 'node:fs';
-import { join, relative, extname, dirname } from 'node:path';
+import { join, relative, extname, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
@@ -49,8 +49,19 @@ function buildTree(dir: string, rootDir: string, depth = 0): PageNode[] {
   return nodes;
 }
 
+/**
+ * Registers the pages/directory management API:
+ *   GET    /api/pages        — list all .qmd files under pages_dir
+ *   POST   /api/pages        — create a new page
+ *   GET    /api/pages/*      — read a page's markdown content
+ *   PUT    /api/pages/*      — write (save) a page
+ *   PATCH  /api/pages/*      — rename a page
+ *   DELETE /api/pages/*      — delete a page
+ *   POST   /api/directories  — create a new subdirectory
+ *   DELETE /api/directories/*— delete an empty directory
+ */
 export function registerPagesApi(app: Express, ctx: ServerContext) {
-  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
+  const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
 
   /** Returns the resolved absolute path for a .qmd file, or null after sending 400. */
   function guardPath(rawSuffix: string, res: Response): string | null {

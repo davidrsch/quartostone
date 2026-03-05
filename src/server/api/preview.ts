@@ -12,7 +12,7 @@ import type { ChildProcess } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createServer, createConnection } from 'node:net';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { PREVIEW_FORMATS } from '../../shared/formats.js';

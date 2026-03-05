@@ -36,9 +36,10 @@ export async function serve(options: { port: number | undefined; open: boolean }
   // to src/server/ instead of dist/server/, so ../client would be wrong.
   // Explicitly resolve the built client directory from the workspace root.
   const clientDist = resolve(cwd, 'dist', 'client');
-  const server = await createServer({ cwd, config, port, clientDist });
+  const { server, token } = await createServer({ cwd, config, port, clientDist });
   server.listen(port, '127.0.0.1', () => {
     console.log(`\n✓ Quartostone running at http://localhost:${port}`);
+    console.log(`  Auth token: ${token}  (also available at GET /api/session)`);
     const shouldOpen = options.open !== undefined ? options.open : config.open_browser;
     if (shouldOpen) {
       openBrowser(`http://localhost:${port}`);

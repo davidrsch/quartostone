@@ -11,7 +11,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
 
 const PANDOC_TIMEOUT_MS = 30_000;
@@ -98,6 +98,16 @@ function sanitisePandocOptions(rawOptions: unknown): string[] {
 }
 // ── Route registration ────────────────────────────────────────────────────────
 
+/**
+ * Registers the Pandoc proxy API used by the PanMirror visual editor:
+ *   POST /api/pandoc/capabilities    — return Pandoc version and supported formats.
+ *   POST /api/pandoc/markdownToAst   — convert Markdown to a PanDoc AST (JSON).
+ *   POST /api/pandoc/astToMarkdown   — convert a PanDoc AST back to Markdown.
+ *   POST /api/pandoc/listExtensions  — list format extensions.
+ *   POST /api/pandoc/getBibliography — return a stub bibliography result.
+ *   POST /api/pandoc/addToBibliography — stub; always returns true.
+ *   POST /api/pandoc/citationHTML    — return formatted citation HTML.
+ */
 export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // GET /api/pandoc/capabilities

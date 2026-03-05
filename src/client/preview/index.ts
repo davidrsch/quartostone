@@ -3,9 +3,11 @@
  * Communicates with the server /api/preview/* routes.
  */
 
+import { API } from '../api/endpoints.js';
+
 export interface PreviewPanel {
   /** Call when the active page path changes; starts/updates preview if active. */
-  setPage(path: string | null): void;
+  setPage(path: string | null): void | Promise<void>;
   /** Programmatically stop the preview and hide the pane. */
   stop(): void;
   /** Whether the preview pane is currently visible. */
@@ -63,7 +65,7 @@ export function initPreviewPanel(): PreviewPanel {
     setError(null);
 
     try {
-      const res = await fetch('/api/preview/start', {
+      const res = await fetch(API.previewStart, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -78,7 +80,7 @@ export function initPreviewPanel(): PreviewPanel {
 
       // #118 — Use server-side TCP readiness poll instead of client-side fetch polling.
       // The server checks the TCP port directly which is more reliable than a CORS fetch.
-      const readyRes = await fetch(`/api/preview/ready?port=${data.port}&timeout=20000`);
+      const readyRes = await fetch(`${API.previewReady}?port=${data.port}&timeout=20000`);
       if (!readyRes.ok) {
         setError(`Preview server readiness check failed (HTTP ${readyRes.status})`);
         return;
@@ -98,7 +100,7 @@ export function initPreviewPanel(): PreviewPanel {
 
   async function stopPreview(path: string): Promise<void> {
     try {
-      await fetch('/api/preview/stop', {
+      await fetch(API.previewStop, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),

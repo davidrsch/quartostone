@@ -4,11 +4,15 @@
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { createServer as createHttpServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { QuartostoneConfig } from './config.js';
+export type { ServerContext } from './context.js';
+import type { ServerContext } from './context.js';
 import { registerPagesApi } from './api/pages.js';
 import { registerGitApi } from './api/git.js';
 import { registerRenderApi } from './api/render.js';
@@ -24,19 +28,10 @@ import { registerAssetsApi } from './api/assets.js';
 import { registerXRefApi } from './api/xref.js';
 import { startWatcher } from './watcher.js';
 import { sanitizeError } from './utils/errorSanitizer.js';
+import { warn } from './utils/logger.js';
 
 // __dirname equivalent in ESM — resolves to dist/server/ after compilation
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-export interface ServerContext {
-  cwd: string;
-  config: QuartostoneConfig;
-  port: number;
-  /** Explicit path to the built editor client (dist/client/). Useful when the
-   * server is loaded from source via tsx and __dirname resolves to src/server/
-   * instead of the compiled dist/server/. */
-  clientDist?: string;
-}
 
 /**
  * Create and configure the Express application with all API routes.
@@ -45,6 +40,9 @@ export interface ServerContext {
 export function createApp(ctx: ServerContext) {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
+
+  // Security headers — disable CSP and COEP to avoid breaking the editor UI
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
   // CORS — only allow same-origin requests (localhost:port). Reject cross-origin requests.
   app.use((req, res, next) => {
@@ -57,14 +55,45 @@ export function createApp(ctx: ServerContext) {
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     }
     if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
     next();
   });
 
-  // Health-check endpoint — always returns 200. Used by Playwright webServer readiness probe.
+  // Health-check: kept inline as it's trivial and always stays here.
+  // All other routes are registered via register*Api() helpers.
+  // See A15 in __audit_arch.md for the rationale.
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+  // Public endpoint: browser client calls this once on startup to obtain the session token.
+  app.get('/api/session', (_req: Request, res: Response) => {
+    res.json({ token: ctx.token ?? null });
+  });
+
+  // Authentication middleware — enforces Bearer token on all /api/* routes.
+  // Disabled in test mode when ctx.token is undefined.
+  // /health and /session are always public.
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (!ctx.token) { next(); return; }
+    if (req.path === '/health' || req.path === '/session') { next(); return; }
+    const auth = req.headers['authorization'];
+    if (auth !== `Bearer ${ctx.token}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    next();
+  });
+
+  // Rate limiting on expensive/long-running endpoints
+  const expensiveLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please slow down.' },
+  });
+  app.use(['/api/render', '/api/export', '/api/exec', '/api/pandoc'], expensiveLimiter);
 
   // Serve rendered site at /
   const siteDir = join(ctx.cwd, '_site');
@@ -91,6 +120,13 @@ export function createApp(ctx: ServerContext) {
 
   // Register API routes
   registerPagesApi(app, ctx);
+  // GET /api/config — returns non-sensitive server configuration for the client
+  app.get('/api/config', (_req: Request, res: Response) => {
+    res.json({
+      pages_dir: ctx.config.pages_dir,
+      commit_message_auto: ctx.config.commit_message_auto,
+    });
+  });
   registerGitApi(app, ctx);
   registerRenderApi(app, ctx);
   registerDbApi(app, ctx);
@@ -106,8 +142,12 @@ export function createApp(ctx: ServerContext) {
 
   // Build in-memory indexes on startup
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
-  try { rebuildLinkIndex(pagesDir); } catch { /* empty workspace */ }
-  try { rebuildSearchIndex(pagesDir); } catch { /* empty workspace */ }
+  try { rebuildLinkIndex(pagesDir); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') warn(`Link index build failed: ${sanitizeError(e)}`);
+  }
+  try { rebuildSearchIndex(pagesDir); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') warn(`Search index build failed: ${sanitizeError(e)}`);
+  }
 
   // Global error handler — must be registered LAST and must have exactly 4 params
   // so Express recognises it as an error handler. sanitizeError strips paths/credentials
@@ -122,8 +162,9 @@ export function createApp(ctx: ServerContext) {
   return app;
 }
 
-export async function createServer(ctx: ServerContext) {
-  const app = createApp(ctx);
+export async function createServer(ctx: ServerContext): Promise<{ server: ReturnType<typeof createHttpServer>; token: string }> {
+  const token = randomBytes(32).toString('hex');
+  const app = createApp({ ...ctx, token });
 
   // Create HTTP + WebSocket server for live-reload
   const httpServer = createHttpServer(app);
@@ -149,5 +190,5 @@ export async function createServer(ctx: ServerContext) {
   // Start file watcher
   startWatcher({ ...ctx, broadcast });
 
-  return httpServer;
+  return { server: httpServer, token };
 }

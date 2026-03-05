@@ -1,5 +1,13 @@
 // src/client/main.ts
-// Application entry point — wires sidebar, editor, git panel, properties panel.
+// Application entry point for the quartostone single-page editor.
+//
+// Responsibilities:
+//   • Boot: fetch /api/config, /api/session, resolve theme.
+//   • DOM wiring: sidebar, source editor (CodeMirror), visual editor (PanMirror),
+//     database view, properties panel, command palette, split-pane.
+//   • State management: active page path, editor mode, dirty flag, auto-commit timer.
+//   • Git integration: status poll, branch picker, commit dialog, push/pull.
+//   • Live-reload: server-sent events forwarded to sidebar/editor/git panel.
 
 import { createEditor, connectLiveReload } from './editor/index.js';
 import { createVisualEditor } from './visual/index.js';
@@ -23,22 +31,36 @@ import type { EditorView } from '@codemirror/view';
 import { applyTheme, toggleTheme, storeTheme, resolveInitialTheme } from './theme.js';
 import { filterEntries, moveIdx } from './cmdpalette/filter.js';
 import type { PaletteEntry } from './cmdpalette/filter.js';
-import { renderBreadcrumb as _renderBreadcrumb } from './breadcrumb.js';
+import { renderBreadcrumb as renderBreadcrumbPure } from './breadcrumb.js';
 import { showToast } from './utils/toast.js';
 import type { ToastKind } from './utils/toast.js';
 import { TabBarManager } from './tabbar/index.js';
 import { API } from './api/endpoints.js';
+import { initToken, apiFetch } from './api/request.js';
+import { STORAGE_KEYS } from './storage.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GIT_STATUS_POLL_INTERVAL_MS = 30_000;  // how often to poll git status in sidebar
 const AUTO_COMMIT_DELAY_MS        = 30_000;  // idle delay before auto-commit fires
 const SAVE_STATUS_CLEAR_DELAY_MS  = 2_000;   // duration the save status badge stays visible
+/** Q26/Q32: single source of truth for auto-commit message prefix. */
+const QS_SLUG_PREFIX = 'qs-';
+/** Q26: generate a random auto-commit slug with the canonical prefix. */
+function makeAutoSlug(): string { return `${QS_SLUG_PREFIX}${Math.random().toString(36).slice(2, 10)}`; }
+
+// ─── DOM helpers ─────────────────────────────────────────────────────────────
+// Q03: throws a clear error instead of a cryptic TypeError when a required element is missing.
+function ensureEl<T extends HTMLElement = HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`[quartostone] Required DOM element #${id} not found`);
+  return el as T;
+}
 
 // ─── DOM references ───────────────────────────────────────────────────────────
-const fileTreeEl       = document.getElementById('file-tree')!;
-const editorMountEl    = document.getElementById('editor-mount')!;
-const noPageMessageEl  = document.getElementById('no-page-message')!;
-const pageTitleEl      = document.getElementById('current-page-title')!;
+const fileTreeEl       = ensureEl('file-tree');
+const editorMountEl    = ensureEl('editor-mount');
+const noPageMessageEl  = ensureEl('no-page-message');
+const pageTitleEl      = ensureEl('current-page-title');
 const btnSave          = document.getElementById('btn-save') as HTMLButtonElement;
 const btnCommit        = document.getElementById('btn-commit') as HTMLButtonElement;
 const btnNewPage       = document.getElementById('btn-new-page') as HTMLButtonElement;
@@ -47,11 +69,11 @@ const btnModeSource    = document.getElementById('btn-mode-source') as HTMLButto
 const btnModeVisual    = document.getElementById('btn-mode-visual') as HTMLButtonElement;
 const btnProperties    = document.getElementById('btn-properties') as HTMLButtonElement;
 const btnCloseProps    = document.getElementById('btn-close-props') as HTMLButtonElement;
-const propertiesPanel  = document.getElementById('properties-panel')!;
-const propertiesBody   = document.getElementById('properties-body')!;
+const propertiesPanel  = ensureEl('properties-panel');
+const propertiesBody   = ensureEl('properties-body');
 const gitPanelEl       = document.getElementById('git-panel')!;
 const historyPanelEl   = document.getElementById('history-panel')!;
-const toastContainer   = document.getElementById('toast-container')!;
+const toastContainer   = ensureEl('toast-container');
 const commitDialog     = document.getElementById('commit-dialog') as HTMLDialogElement;
 const commitMsgInput   = document.getElementById('commit-msg') as HTMLInputElement;
 const btnCommitConfirm = document.getElementById('btn-commit-confirm') as HTMLButtonElement;
@@ -96,6 +118,7 @@ let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false;    // M-4: guard against concurrent mode switches
 let openPageInProgress = false; // B9: guard against concurrent openPage calls
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
+let serverPagesDir = 'pages'; // overridden at boot time via GET /api/config (Q29)
 
 // module-level palette controls (FIX MAIN-05)
 let openCmdPalette: () => void  = () => {};
@@ -109,7 +132,7 @@ let focusedPane: 'primary' | 'secondary' = 'primary';
 let activeView2: EditorView | null = null;
 let activePath2: string | null = null;
 
-const propsPanel = createPropertiesPanel(propertiesBody);
+const propertiesController = createPropertiesPanel(propertiesBody);
 
 // ─── Toast helper ─────────────────────────────────────────────────────────────
 // showToast is imported from './utils/toast.js' (see top of file)
@@ -134,7 +157,7 @@ function showCommitPrompt(autoSlug: string) {
     if (!toast.parentNode) return; // user already acted
     toast.remove();
     try {
-      const res = await fetch(API.gitCommit, {
+      const res = await apiFetch(API.gitCommit, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: autoSlug }),
@@ -161,7 +184,7 @@ btnCommitConfirm.addEventListener('click', async () => {
   if (!message) return;
   commitDialog.close();
   try {
-    const res = await fetch(API.gitCommit, {
+    const res = await apiFetch(API.gitCommit, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
@@ -209,7 +232,7 @@ async function switchMode(mode: 'source' | 'visual') {
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
         // update cache asynchronously so properties panel stays mostly fresh
-        activeVisual?.getMarkdown().then(md => { visualMarkdownCache = md; }).catch(() => {});
+        activeVisual?.getMarkdown().then(md => { visualMarkdownCache = md; }).catch(err => console.warn('[VisualEditor] getMarkdown failed:', err));
       },
     });
 
@@ -286,7 +309,7 @@ btnProperties.addEventListener('click', () => {
   if (!hidden && activePath) {
     const getContent = () =>
       editorMode === 'visual' && activeVisual
-        ? visualMarkdownCache
+        ? activeVisual.getMarkdown()   // Q34: live fetch instead of stale cache
         : (activeView ? activeView.state.doc.toString() : '');
     const setContent = async (newContent: string) => {
       if (editorMode === 'source' && activeView) {
@@ -299,14 +322,14 @@ btnProperties.addEventListener('click', () => {
         await activeVisual.setMarkdown(newContent);
       }
     };
-    propsPanel.mount(activePath, getContent, setContent);
+    propertiesController.mount(getContent, setContent);
   }
 });
 
 btnCloseProps.addEventListener('click', () => {
   propertiesPanel.classList.add('hidden');
   btnProperties.classList.remove('active');
-  propsPanel.unmount();
+  propertiesController.unmount();
 });
 
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
@@ -316,8 +339,7 @@ btnSave.addEventListener('click', async () => {
 });
 
 btnCommit.addEventListener('click', () => {
-  const slug = `qs-${Math.random().toString(36).slice(2, 10)}`;
-  openCommitDialog(slug);
+  openCommitDialog(makeAutoSlug());
 });
 
 btnNewPage.addEventListener('click', () => {
@@ -346,7 +368,7 @@ btnNewPageConfirm.addEventListener('click', async () => {
   newPageDialog.close();
   if (!name) { showToast('Page name is invalid', 'error'); return; }
   try {
-    const res = await fetch(API.pages, {
+    const res = await apiFetch(API.pages, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: name }),
@@ -365,7 +387,7 @@ btnNewFolderConfirm.addEventListener('click', async () => {
   newFolderDialog.close();
   if (!raw) { showToast('Folder name is invalid', 'error'); return; }
   try {
-    const res = await fetch(API.directories, {
+    const res = await apiFetch(API.directories, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: raw }),
@@ -392,7 +414,7 @@ btnNewDbConfirm.addEventListener('click', async () => {
   const slug = rawName.replace(/\s+/g, '-').toLowerCase();
   const path = `pages/${slug}.qmd`;
   try {
-    const res = await fetch(`${API.dbCreate}?path=${encodeURIComponent(path)}`, {
+    const res = await apiFetch(`${API.dbCreate}?path=${encodeURIComponent(path)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: rawName }),
@@ -416,7 +438,7 @@ async function saveCurrentPage() {
   if (content == null) return;
   sbSaveStatus.textContent = 'Saving…';
   try {
-    const res = await fetch(`${API.pages}/${encodeURIComponent(activePath)}`, {
+    const res = await apiFetch(`${API.pages}/${encodeURIComponent(activePath)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -439,7 +461,7 @@ async function saveCurrentPage() {
 // ─── Status bar ───────────────────────────────────────────────────────────────
 async function updateBranchStatus() {
   try {
-    const res = await fetch(API.gitStatus);
+    const res = await apiFetch(API.gitStatus);
     if (!res.ok) {
       sbBranch.textContent = '';
       sbSync.textContent = '';
@@ -521,7 +543,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   if (editorMode === 'visual') {
     // Fetch content then open in visual mode — C-2: add error handling
     try {
-      const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
+      const res = await apiFetch(`/api/pages/${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json() as { content?: string };
       activeVisual = await createVisualEditor({
@@ -592,7 +614,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         await activeVisual.setMarkdown(newContent);
       }
     };
-    propsPanel.mount(path, getContent, setContent);
+    propertiesController.mount(getContent, setContent);
   }
   } finally {
     openPageInProgress = false;
@@ -678,7 +700,7 @@ connectLiveReload((event, data) => {
   }
   if (event === 'git:prompt') {
     const d = data as { autoSlug?: string };
-    showCommitPrompt(d.autoSlug ?? 'qs-xxxxxxxx');
+    showCommitPrompt(d.autoSlug ?? `${QS_SLUG_PREFIX}xxxxxxxx`);
   }
   if (event === 'git:committed') {
     refreshGit?.();
@@ -688,6 +710,9 @@ connectLiveReload((event, data) => {
 });
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+// S01: Fetch the session token before any authenticated API call.
+await initToken();
+
 initSidebar(fileTreeEl, (path, name) => {
   addRecentPage(path, name);
   if (splitActive && focusedPane === 'secondary') {
@@ -788,7 +813,7 @@ document.addEventListener('keydown', e => {
   // Ctrl+Shift+G — open commit dialog (L-1)
   if (mod && e.shiftKey && e.key === 'G') {
     e.preventDefault();
-    if (activePath) openCommitDialog(`qs-${Math.random().toString(36).slice(2, 10)}`);
+    if (activePath) openCommitDialog(makeAutoSlug());
   }
   // Ctrl+Shift+E — toggle visual/source editor mode
   if (mod && e.shiftKey && e.key === 'E') {

@@ -1,9 +1,11 @@
 // src/client/theme.ts
 // Light/dark theme helpers — extracted for unit testing (#115).
 
+import { STORAGE_KEYS } from './storage.js';
+
 export type Theme = 'dark' | 'light';
 
-const THEME_KEY = 'qs_theme';
+const THEME_KEY = STORAGE_KEYS.theme;
 
 /** Apply a theme to the document root. Updates the button text/title if provided. */
 export function applyTheme(

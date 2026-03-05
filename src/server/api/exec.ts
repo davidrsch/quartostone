@@ -5,7 +5,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, forbidden, serverError } from '../utils/errorResponse.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
 

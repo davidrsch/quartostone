@@ -1,6 +1,8 @@
 // src/client/branches/index.ts
 // Branch picker — lists local branches, create/switch from the toolbar.
 
+import { API } from '../api/endpoints.js';
+
 interface BranchEntry {
   name: string;
   current: boolean;
@@ -75,7 +77,7 @@ export function initBranchPicker(
     if (!name) return;
     newBranchDialog.close();
     try {
-      const res = await fetch('/api/git/branches', {
+      const res = await fetch(API.gitBranches, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -100,7 +102,7 @@ export function initBranchPicker(
     _renderingBranches = true;
     branchListEl.innerHTML = '<div style="padding:6px 12px;font-size:12px;color:var(--text-dim)">Loading…</div>';
     try {
-      const res = await fetch('/api/git/branches');
+      const res = await fetch(API.gitBranches);
       if (!res.ok) throw new Error('branches failed');
       const data: BranchesResponse = await res.json();
 
@@ -153,7 +155,7 @@ export function initBranchPicker(
 
   async function switchBranch(branch: string) {
     try {
-      const res = await fetch('/api/git/checkout', {
+      const res = await fetch(API.gitCheckout, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch }),
@@ -175,7 +177,7 @@ export function initBranchPicker(
   async function mergeBranch(branch: string) {
     if (!confirm(`Merge "${branch}" into the current branch?`)) return;
     try {
-      const res = await fetch('/api/git/merge', {
+      const res = await fetch(API.gitMerge, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch }),
@@ -211,7 +213,7 @@ export function initBranchPicker(
     let conflicts = initialConflicts;
     if (conflicts.length === 0) {
       try {
-        const r = await fetch('/api/git/conflicts');
+        const r = await fetch(API.gitConflicts);
         if (!r.ok) throw new Error(`Failed to fetch conflicts: ${r.status}`);
         const d = await r.json() as { conflicted: string[] };
         conflicts = d.conflicted;
@@ -263,7 +265,7 @@ export function initBranchPicker(
       completeBtn.disabled = true;
       completeBtn.textContent = 'Completing…';
       try {
-        const r = await fetch('/api/git/merge-complete', { method: 'POST' });
+        const r = await fetch(API.gitMergeComplete, { method: 'POST' });
         const d = await r.json() as { ok?: boolean; commit?: string; error?: string };
         if (r.ok) {
           overlay.remove();
@@ -289,7 +291,7 @@ export function initBranchPicker(
       abortBtn.disabled = true;
       abortBtn.textContent = 'Aborting…';
       try {
-        const r = await fetch('/api/git/merge-abort', { method: 'POST' });
+        const r = await fetch(API.gitMergeAbort, { method: 'POST' });
         if (r.ok) {
           overlay.remove();
           toast('Merge aborted — working tree restored.', 'success');
@@ -314,7 +316,7 @@ export function initBranchPicker(
 
   async function refresh() {
     try {
-      const res = await fetch('/api/git/branches');
+      const res = await fetch(API.gitBranches);
       if (!res.ok) return;
       const data: BranchesResponse = await res.json();
       pickerLabel.textContent = data.current;

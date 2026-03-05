@@ -8,7 +8,7 @@ import type { Express, Request, Response } from 'express';
 import multer from 'multer';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, notFound } from '../utils/errorResponse.js';
 
 const ALLOWED_EXTS = new Set([
@@ -20,6 +20,14 @@ const ALLOWED_MIMETYPES = new Set([
   'image/avif', 'image/tiff', 'image/bmp', 'image/x-icon',
 ]);
 
+/**
+ * Registers the assets API:
+ *   POST /api/assets  — upload an image to `pages/_assets/`; returns `{ url }`.
+ *   GET  /assets/:file — serve uploaded images (registered via `express.static`).
+ *
+ * Only image MIME types and extensions are accepted; path traversal is prevented
+ * by multer's filename filter combined with a basename check.
+ */
 export function registerAssetsApi(app: Express, ctx: ServerContext): void {
   const assetsDir = join(ctx.cwd, ctx.config.pages_dir, '_assets');
   mkdirSync(assetsDir, { recursive: true });

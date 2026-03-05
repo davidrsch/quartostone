@@ -6,7 +6,7 @@ import type { Express, Request, Response } from 'express';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { parseFrontmatter } from '../utils/frontmatter.js';
 import type { FieldDef, DbPage } from '../../shared/types.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
@@ -122,13 +122,18 @@ async function resolveAndCheck(cwd: string, pagesDir: string, rawPath: string | 
 
 // ── Register routes ──────────────────────────────────────────────────────────
 
+/**
+ * Registers the database (.qmd table) API:
+ *   GET    /api/db?path=    — read a database page (schema + rows)
+ *   PUT    /api/db?path=    — save a database page
+ *   POST   /api/db/create   — create a new empty database page
+ */
 export function registerDbApi(app: Express, ctx: ServerContext) {
-  const { cwd } = ctx;
-  const pagesDir = join(cwd, ctx.config.pages_dir);
+  const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
 
   // GET /api/db?path=pages/tasks.qmd  → { schema, rows }
   app.get('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const content = await readFile(abs, 'utf-8');
@@ -149,7 +154,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
 
   // PUT /api/db?path=pages/tasks.qmd  body: { schema, rows }
   app.put('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const { schema, rows } = req.body as DbPage;
@@ -171,7 +176,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
   // POST /api/db/create?path=...  body: { title, schema? }
   // Creates a new database .qmd file
   app.post('/api/db/create', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
     if (!abs) return;
     try {
       const { title = 'Untitled Database', schema } = req.body as {

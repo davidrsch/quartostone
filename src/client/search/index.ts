@@ -3,6 +3,8 @@
  * Opens on Ctrl+P / Cmd+P or via SearchOverlay.open().
  */
 
+import { API } from '../api/endpoints.js';
+
 export interface SearchOverlay {
   open(): void;
   close(): void;
@@ -142,7 +144,7 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
     const q = inputEl.value.trim();
     if (!q) { renderResults([]); return; }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`${API.search}?q=${encodeURIComponent(q)}`);
       if (!res.ok) { renderResults([]); return; }
       const data = await res.json() as SearchResult[];
       renderResults(data);

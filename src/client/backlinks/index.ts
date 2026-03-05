@@ -3,9 +3,11 @@
  * Shows pages that link TO the currently-open page using [[wiki links]] syntax.
  */
 
+import { API } from '../api/endpoints.js';
+
 export interface BacklinksPanel {
   /** Update the panel for a new page (or clear when null) */
-  setPage(path: string | null): void;
+  setPage(path: string | null): void | Promise<void>;
   /** Refresh backlinks for the current page (e.g., after save) */
   refresh(): void;
 }
@@ -69,7 +71,7 @@ export function initBacklinksPanel(
   async function load(path: string): Promise<void> {
     containerEl.innerHTML = '<p class="bl-empty">Loading…</p>';
     try {
-      const res = await fetch(`/api/links/backlinks?path=${encodeURIComponent(path)}`);
+      const res = await fetch(`${API.linksBacklinks}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error(res.statusText);
       const entries = await res.json() as BacklinkEntry[];
       render(entries);
@@ -82,7 +84,7 @@ export function initBacklinksPanel(
     setPage(path): void {
       currentPath = path;
       if (path) {
-        void load(path);
+        void load(path); // fire-and-forget: errors logged internally
       } else {
         render([]);
       }

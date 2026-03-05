@@ -34,6 +34,17 @@ interface RemoteInfo {
 
 type CommitCallback = (defaultMsg: string) => void;
 
+/**
+ * Initialises the Git sidebar panel.
+ *
+ * Renders the current branch, staged/unstaged file list, commit history,
+ * inline diff viewer, and remote push/pull controls inside `containerEl`.
+ *
+ * @param containerEl  Host element for the git panel.
+ * @param onCommitRequest  Called when the user requests a commit; receives a
+ *   suggested auto-generated commit message.
+ * @returns An object with a `refresh()` method to force a status/log reload.
+ */
 export async function initGitPanel(
   containerEl: HTMLElement,
   onCommitRequest: CommitCallback,

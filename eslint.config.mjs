@@ -17,8 +17,14 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts'],
     rules: {
+      // Q06: promote to 'error' deferred — too many exported functions lack return-type
+      // annotations; changing to 'error' would fail CI until all are annotated.
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // Q41: surface unhandled floating promises (fire-and-forget should use `void`)
+      '@typescript-eslint/no-floating-promises': 'warn',
+      // Q42: enforce `import type` for type-only imports
+      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
     },
   }
 );

@@ -34,18 +34,18 @@
     "chokidar": "^3.6.0",
     "commander": "^12.1.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
     "multer": "^2.1.0",
     "simple-git": "^3.27.0",
     "ws": "^8.18.0",
     "yaml": "^2.7.0"
   },
   "devDependencies": {
-    "concurrently": "^9.0.0",
     "@codemirror/lang-markdown": "^6.3.2",
     "@codemirror/lang-yaml": "^6.1.1",
     "@codemirror/language-data": "^6.5.1",
     "@playwright/test": "^1.58.2",
-
     "@types/express": "^5.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.0.0",
@@ -53,6 +53,7 @@
     "@types/ws": "^8.5.13",
     "@vitest/coverage-v8": "^4.0.18",
     "codemirror": "^6.0.1",
+    "concurrently": "^9.0.0",
     "eslint": "^9.0.0",
     "happy-dom": "^20.8.3",
     "prettier": "^3.5.0",

@@ -8,7 +8,7 @@
 import type { Express, Request, Response } from 'express';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { collectQmd } from '../utils/qmdFiles.js';
 import { getTitleWithFallback } from '../utils/frontmatter.js';
 import type { SearchResult } from '../../shared/types.js';
@@ -53,10 +53,6 @@ function stripMarkdown(raw: string): string {
   return text;
 }
 
-function extractFrontMatterTitle(raw: string, fallback: string): string {
-  return getTitleWithFallback(raw, fallback);
-}
-
 function tokenize(text: string): string[] {
   return text.toLowerCase().match(/[a-z0-9_-]{2,}/g) ?? [];
 }
@@ -92,7 +88,7 @@ function indexFile(pagesDir: string, relPath: string): void {
   catch { index.delete(relPath); return; }
 
   const slug = basename(relPath, '.qmd');
-  const title = extractFrontMatterTitle(raw, slug);
+  const title = getTitleWithFallback(raw, slug);
   const body  = stripMarkdown(raw);
 
   // Boost title tokens (appear effectively 5× in token list)

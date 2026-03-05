@@ -151,6 +151,37 @@ npm run test:e2e
 
 ---
 
+## Troubleshooting
+
+### "No \_quartostone.yml found"
+
+Run `quartostone init` first, or `cd` into your workspace directory.
+
+### Port already in use
+
+Change the port in `_quartostone.yml`:
+
+```yaml
+port: 4243
+```
+
+Or pass `--port 4243` on the command line.
+
+### Editor not built
+
+Run `npm run build:client` from the project root.
+
+### Quarto not found
+
+Install [Quarto](https://quarto.org/docs/get-started/) and ensure it is on your `PATH`.
+Run `quarto --version` to verify.
+
+### Auth token prompt
+
+On startup, quartostone prints an auth token. The browser editor reads it automatically via `GET /api/session`. CLI tools must include `Authorization: Bearer <token>` in every API request.
+
+---
+
 ## Editor what you can do
 
 ### Pages
@@ -217,6 +248,7 @@ Full JSON Schema: [`docs/config.schema.json`](docs/config.schema.json).
 | `commit_message_auto`  | `qs-{alphanum8}` | Template for auto-generated commit messages                                                                |
 | `open_browser`         | `true`           | Open the browser automatically on `quartostone serve`                                                      |
 | `allow_code_execution` | `false`          | Enables `POST /api/exec`; defaults to `false` for security — only set `true` in trusted local environments |
+| `exec_timeout_ms`      | `30000`          | Timeout in milliseconds for code execution (exec API).                                                     |
 
 ---
 

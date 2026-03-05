@@ -47,7 +47,6 @@ export const API = {
 
   // Export
   exportStart: '/api/export',
-  exportFormats: '/api/export/formats',
   exportStatus: '/api/export/status',
   exportDownload: '/api/export/download',
 
@@ -76,6 +75,14 @@ export const API = {
   // DB
   db: '/api/db',
   dbCreate: '/api/db/create',
+
+  // Server config (Q29)
+  config: '/api/config',
+
+  // Pages rename (base path — append /<path> for PATCH /api/pages/<path>)
+  pagesRename: '/api/pages',
+  // Directories delete (base path — append /<path> for DELETE /api/directories/<path>)
+  directoriesDelete: '/api/directories',
 } as const;
 
 export type ApiEndpoint = typeof API[keyof typeof API];

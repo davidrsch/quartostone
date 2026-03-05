@@ -12,7 +12,7 @@ import { join, basename, extname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, conflict, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
@@ -162,6 +162,15 @@ function runExport(
 
 // ── Register routes ───────────────────────────────────────────────────────────
 
+/**
+ * Registers the export API:
+ *   POST /api/export              — start an async `quarto render` job; returns `{ token }`.
+ *   GET  /api/export/status?token — poll job status (`pending` | `running` | `done` | `error`).
+ *   GET  /api/export/download?token — stream the rendered file, then delete the temp output.
+ *
+ * Jobs are kept in an in-memory store keyed by UUID token.
+ * Extra CLI arguments are validated against an allowlist before being forwarded to Quarto.
+ */
 export function registerExportApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
 

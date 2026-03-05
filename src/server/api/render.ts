@@ -4,7 +4,7 @@
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
@@ -13,6 +13,9 @@ const RENDER_TIMEOUT_MS = 120_000; // max time to wait for quarto render before 
 
 export function registerRenderApi(app: Express, ctx: ServerContext) {
   app.post('/api/render', (req: Request, res: Response) => {
+    // The `responded` flag is a safe deduplication guard in Node.js's single-threaded
+    // event loop. No race condition is possible. An AbortController could be used for
+    // cleaner cancellation semantics (see audit finding Q35).
     let responded = false;
     const { path: filePath, scope } = req.body as { path?: string; scope?: 'file' | 'project' };
 

@@ -5,6 +5,7 @@
 import { focusAdjacentTreeItem } from '../treeNav.js';
 import { showToast } from '../utils/toast.js';
 import { escHtml } from '../utils/escape.js';
+import { STORAGE_KEYS } from '../storage.js';
 
 export interface PageNode {
   name: string;
@@ -30,11 +31,11 @@ type SelectCallback = (path: string, name: string) => void;
 // ── localStorage helpers ──────────────────────────────────────────────────────
 
 function getFavorites(): string[] {
-  try { return JSON.parse(localStorage.getItem('qs_favorites') ?? '[]') as string[]; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.favorites) ?? '[]') as string[]; }
   catch { return []; }
 }
 function setFavorites(favs: string[]): void {
-  localStorage.setItem('qs_favorites', JSON.stringify(favs));
+  localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favs));
 }
 function isFavorite(path: string): boolean { return getFavorites().includes(path); }
 function toggleFavorite(path: string): void {
@@ -45,14 +46,14 @@ function toggleFavorite(path: string): void {
 }
 
 function getRecent(): Array<{ path: string; name: string }> {
-  try { return JSON.parse(localStorage.getItem('qs_recent') ?? '[]') as Array<{ path: string; name: string }>; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.recent) ?? '[]') as Array<{ path: string; name: string }>; }
   catch { return []; }
 }
 export function addRecentPage(path: string, name: string): void {
   let recent = getRecent().filter(r => r.path !== path);
   recent.unshift({ path, name });
   recent = recent.slice(0, 10);
-  localStorage.setItem('qs_recent', JSON.stringify(recent));
+  localStorage.setItem(STORAGE_KEYS.recent, JSON.stringify(recent));
 }
 
 // ── Context menu ──────────────────────────────────────────────────────────────

@@ -4,7 +4,9 @@
 import { escAttr } from '../utils/escape.js';
 
 export interface PropertiesPanel {
-  mount: (pagePath: string, getContent: () => string | Promise<string>, setContent: (s: string) => void) => void;
+  // Q25: parseFrontmatter / serializeFrontmatter duplicated here and in
+  // src/server/utils/frontmatter.ts — candidate for extraction to src/shared/frontmatter.ts.
+  mount: (getContent: () => string | Promise<string>, setContent: (s: string) => void) => void;
   unmount: () => void;
 }
 
@@ -103,7 +105,6 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
   let currentSet: ((s: string) => void) | null = null;
 
   function mount(
-    _pagePath: string,
     getContent: () => string | Promise<string>,
     setContent: (s: string) => void,
   ) {

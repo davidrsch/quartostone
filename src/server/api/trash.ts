@@ -9,10 +9,12 @@ import {
   existsSync, rmSync, renameSync, realpathSync,
 } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile } from './search.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface TrashMeta {
   id: string;
@@ -21,6 +23,15 @@ export interface TrashMeta {
   deletedAt: string;
 }
 
+/**
+ * Registers the trash (soft-delete) API:
+ *   GET    /api/trash             — list all soft-deleted pages.
+ *   POST   /api/trash/restore/:id — restore a page to its original path.
+ *   DELETE /api/trash/:id         — permanently destroy a trashed page.
+ *
+ * Deleted files are moved to `.quartostone/trash/` with a UUID-named metadata
+ * sidecar. Restoration prevents clobbering an existing live file.
+ */
 export function registerTrashApi(app: Express, ctx: ServerContext) {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
   const trashDir = join(ctx.cwd, '.quartostone', 'trash');
@@ -45,7 +56,6 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.post('/api/trash/restore/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!id || !UUID_RE.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
@@ -84,7 +94,6 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.delete('/api/trash/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!id || !UUID_RE.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);

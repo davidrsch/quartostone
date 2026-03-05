@@ -22,7 +22,7 @@
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
 import { resolve, join } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { sanitizeGitError } from '../utils/errorSanitizer.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
@@ -43,9 +43,28 @@ function gitWithTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
   ]);
 }
 
+/**
+ * Registers the Git integration API:
+ *   GET  /api/git/status         — working-tree status
+ *   GET  /api/git/log            — commit history (optional ?path=)
+ *   GET  /api/git/branches       — list branches
+ *   POST /api/git/checkout       — switch branch (with auto-stash)
+ *   POST /api/git/commit         — stage all and commit
+ *   POST /api/git/push           — push to remote
+ *   POST /api/git/pull           — pull from remote
+ *   GET  /api/git/remote         — list remotes
+ *   POST /api/git/remote         — add/update remote
+ *   GET  /api/git/diff           — unstaged diff or commit diff
+ *   GET  /api/git/show           — file content at a commit (SHA + path)
+ *   POST /api/git/restore        — restore file to HEAD
+ *   GET  /api/git/conflicts      — list conflicting files
+ *   POST /api/git/merge          — merge a branch
+ *   POST /api/git/merge-abort    — abort an in-progress merge
+ *   POST /api/git/merge-complete — complete a resolved merge
+ */
 export function registerGitApi(app: Express, ctx: ServerContext) {
-  const git = simpleGit(ctx.cwd);
   const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
+  const git = simpleGit(ctx.cwd);
 
   app.get('/api/git/log', async (req: Request, res: Response) => {
     try {
@@ -84,7 +103,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
   app.get('/api/git/diff', async (req: Request, res: Response) => {
     try {
-      const sha = req.query['sha'] as string | undefined;
+      const sha = typeof req.query['sha'] === 'string' ? req.query['sha'] : undefined;
       if (sha && !SAFE_SHA.test(sha)) {
         return badRequest(res, 'Invalid SHA format');
       }
@@ -326,8 +345,8 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   // Returns the content of `path` at commit `sha`.
   app.get('/api/git/show', async (req: Request, res: Response) => {
     try {
-      const sha  = req.query['sha']  as string | undefined;
-      const path = req.query['path'] as string | undefined;
+      const sha  = typeof req.query['sha']  === 'string' ? req.query['sha']  : undefined;
+      const path = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
       if (!sha || !SAFE_SHA.test(sha)) return badRequest(res, 'Invalid or missing sha');
       if (!path) return badRequest(res, 'path required');
       if (path.includes(':') || path.startsWith('-')) return badRequest(res, 'Invalid path');

@@ -8,13 +8,26 @@ import { buildEditorUI } from './editorUI.js';
 
 // ── Global type declaration for the UMD bundle ────────────────────────────────
 
+interface PanmirrorEditorInstance {
+  subscribe(event: string, callback: () => void): () => void;
+  setMarkdown(markdown: string, options: unknown, keepHistory: boolean): Promise<void>;
+  getMarkdown(options: unknown): Promise<{ code: string }>;
+  destroy(): void;
+}
+
+interface PanmirrorEditorClass {
+  create(
+    container: HTMLElement,
+    context: unknown,
+    format: unknown,
+    options: unknown,
+  ): Promise<PanmirrorEditorInstance>;
+}
+
 declare global {
   interface Window {
     Panmirror?: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      Editor: any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      UITools: any;
+      Editor: PanmirrorEditorClass;
     };
   }
 }
@@ -108,7 +121,7 @@ export async function createVisualEditor(
     outerScrollContainer: false,
   };
 
-  const editor = await PanmirrorEditor.create(
+  const editor: PanmirrorEditorInstance = await PanmirrorEditor.create(
     opts.container,
     context,
     format,
@@ -126,7 +139,7 @@ export async function createVisualEditor(
   return {
     async getMarkdown(): Promise<string> {
       const result = await editor.getMarkdown(PANDOC_WRITER_OPTIONS);
-      return (result.code as string) ?? '';
+      return result.code ?? '';
     },
 
     async setMarkdown(md: string): Promise<void> {

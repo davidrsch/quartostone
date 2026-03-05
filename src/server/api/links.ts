@@ -9,7 +9,7 @@
 import type { Express, Request, Response } from 'express';
 import { readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
-import type { ServerContext } from '../index.js';
+import type { ServerContext } from '../context.js';
 import { badRequest } from '../utils/errorResponse.js';
 import { collectQmd } from '../utils/qmdFiles.js';
 import { getTitleWithFallback, getTags } from '../utils/frontmatter.js';
@@ -73,8 +73,8 @@ function scanFile(relPath: string, absPath: string, allPagePaths: string[]): voi
   const excerptLine = bodyText.split('\n').map(l => l.trim()).find(l => l.length > 2 && !l.startsWith('#')) ?? '';
   pageMeta.set(relPath, {
     path:    relPath,
-    title:   extractTitle(content, slug),
-    tags:    extractTags(content),
+    title:   getTitleWithFallback(content, slug),
+    tags:    getTags(content),
     excerpt: excerptLine.slice(0, 120),
   });
 

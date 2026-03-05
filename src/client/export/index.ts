@@ -4,6 +4,7 @@
  */
 
 import { showToast } from '../utils/toast.js';
+import { API } from '../api/endpoints.js';
 
 interface ExportJobStatus {
   token: string;
@@ -106,7 +107,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
     let token: string;
     try {
-      const res = await fetch('/api/export', {
+      const res = await fetch(API.exportStart, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, format, extraArgs }),
@@ -142,7 +143,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
       let job: ExportJobStatus;
       try {
-        const res = await fetch(`/api/export/status?token=${encodeURIComponent(token)}`);
+        const res = await fetch(`${API.exportStatus}?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
           clearInterval(id);
           showToast('Export poll failed', 'error', 6000);
@@ -168,7 +169,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
   function triggerDownload(token: string, filename: string): void {
     const a = document.createElement('a');
-    a.href = `/api/export/download?token=${encodeURIComponent(token)}`;
+    a.href = `${API.exportDownload}?token=${encodeURIComponent(token)}`;
     a.download = filename;
     document.body.appendChild(a);
     a.click();

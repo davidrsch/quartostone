@@ -5,6 +5,7 @@
  */
 
 import { API } from '../api/endpoints.js';
+import { STORAGE_KEYS } from '../storage.js';
 
 interface GraphNode {
   id:       string;
@@ -38,6 +39,16 @@ const SPRING_K     = 0.04;
 const DAMPING      = 0.82;
 const TICK_DT      = 0.016;
 
+/**
+ * Initialises the linked-pages graph panel using a simple spring-force layout.
+ *
+ * Renders an interactive canvas showing nodes (pages) and edges (links between
+ * them). Clicking a node calls `onOpenPage` to navigate to that page.
+ *
+ * @param panelEl    Host `<div>` element for the graph canvas and controls.
+ * @param onOpenPage  Callback invoked when the user clicks a graph node.
+ * @returns Object with `open()`, `close()`, and `refresh()` controls.
+ */
 export function initGraphPanel(
   panelEl:    HTMLElement,
   onOpenPage: OpenPageFn,
@@ -101,7 +112,7 @@ export function initGraphPanel(
     const ch = canvas.height;
     nodes.forEach((n, i) => {
       // Try to restore saved position from localStorage
-      const saved = localStorage.getItem(`qs-graph-${n.id}`);
+      const saved = localStorage.getItem(STORAGE_KEYS.graphNode(n.id));
       if (saved) {
         try {
           const { x, y } = JSON.parse(saved) as { x: number; y: number };
@@ -123,7 +134,7 @@ export function initGraphPanel(
 
   function savePositions(): void {
     for (const n of nodes) {
-      localStorage.setItem(`qs-graph-${n.id}`, JSON.stringify({ x: n.x, y: n.y }));
+      localStorage.setItem(STORAGE_KEYS.graphNode(n.id), JSON.stringify({ x: n.x, y: n.y }));
     }
   }
 
