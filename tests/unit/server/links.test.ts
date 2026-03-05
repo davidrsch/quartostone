@@ -16,6 +16,7 @@ import {
   rebuildLinkIndex,
   updateLinkIndexForFile,
   removeLinkIndexForFile,
+  resetLinkIndex,
 } from '../../../src/server/api/links.js';
 
 // ── Standard config ───────────────────────────────────────────────────────────
@@ -42,9 +43,8 @@ beforeEach(() => {
   execSync('git config user.email "test@t.com"', { cwd: workspace });
   execSync('git config user.name "test"', { cwd: workspace });
 
-  // Reset in-memory index before each test by clearing the Maps
-  forwardLinks.clear();
-  pageMeta.clear();
+  // Reset the full in-memory index (clears Maps + private _cachedPaths/_stemMap)
+  resetLinkIndex();
 
   const app = createApp({ cwd: workspace, config: DEFAULT_CONFIG, port: 0 });
   client = supertest(app);
@@ -52,8 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(workspace, { recursive: true, force: true });
-  forwardLinks.clear();
-  pageMeta.clear();
+  resetLinkIndex();
 });
 
 // ── /api/links/backlinks ──────────────────────────────────────────────────────

@@ -6,8 +6,9 @@
 // DELETE /api/pages/:path    — delete a page
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync, realpathSync } from 'node:fs';
-import { join, relative, extname, dirname, resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync, realpathSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
+import { join, relative, extname, dirname, basename, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ServerContext } from '../context.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
@@ -18,36 +19,52 @@ import { resolveInsideDir, PathTraversalError, isInsideDir } from '../utils/path
 import { getFrontmatterKey } from '../utils/frontmatter.js';
 import type { PageNode } from '../../shared/types.js';
 
-function buildTree(dir: string, rootDir: string, depth = 0): PageNode[] {
+/** Validates page icons — prevents stored XSS (S06).
+ *  Accepts: 1-2 emoji glyphs  OR  a kebab/snake-case icon name (e.g. "house", "pencil").
+ *  Excludes all HTML special characters (< > " ' & ;). */
+const SAFE_ICON_RE = /^(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}]{1,2}|[a-z0-9_-]{1,50})$/iu;
+
+/** Reserved path segments that must not appear in user-supplied page paths. */
+const RESERVED_SEGMENTS = new Set(['.git', '.quartostone', 'node_modules']);
+
+async function buildTree(dir: string, rootDir: string, depth = 0): Promise<PageNode[]> {
   if (depth > 20) return [];  // prevent infinite recursion / symlink cycles
-  const entries = readdirSync(dir, { withFileTypes: true });
-  const nodes: PageNode[] = [];
-  for (const entry of entries) {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const nodePromises = entries.map(async (entry): Promise<PageNode | null> => {
     const full = join(dir, entry.name);
     const rel = relative(rootDir, full).replace(/\\/g, '/');
-    // S19: Guard against symlinks pointing outside the pages directory
+    // Guard against symlinks pointing outside the pages directory
     if (entry.isSymbolicLink()) {
       try {
         const real = realpathSync(full);
-        if (!isInsideDir(rootDir, real)) continue;
+        if (!isInsideDir(rootDir, real)) return null;
       } catch {
-        continue; // broken symlink
+        return null; // broken symlink
       }
     }
     if (entry.isDirectory()) {
-      nodes.push({ name: entry.name, path: rel, type: 'folder', children: buildTree(full, rootDir, depth + 1) });
+      const children = await buildTree(full, rootDir, depth + 1);
+      return { name: entry.name, path: rel, type: 'folder', children };
     } else if (entry.isFile() && extname(entry.name) === '.qmd') {
       let icon: string | undefined;
       try {
-        const content = readFileSync(full, 'utf-8');
-        icon = getFrontmatterKey(content, 'icon');
+        const content = await readFile(full, 'utf-8');
+        const rawIcon = getFrontmatterKey(content, 'icon');
+        if (rawIcon && SAFE_ICON_RE.test(rawIcon)) icon = rawIcon;
       } catch { /* ignore */ }
       const node: PageNode = { name: entry.name.replace(/\.qmd$/, ''), path: rel, type: 'file' };
       if (icon) node.icon = icon;
-      nodes.push(node);
+      return node;
     }
-  }
-  return nodes;
+    return null;
+  });
+  const results = await Promise.all(nodePromises);
+  return results.filter((n): n is PageNode => n !== null);
 }
 
 /**
@@ -91,9 +108,9 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     }
   }
 
-  app.get('/api/pages', (_req: Request, res: Response) => {
+  app.get('/api/pages', async (_req: Request, res: Response) => {
     try {
-      const tree = buildTree(pagesDir, pagesDir);
+      const tree = await buildTree(pagesDir, pagesDir);
       res.json(tree);
     } catch (e) {
       serverError(res, sanitizeError(e));
@@ -140,6 +157,12 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const rawOld = req.params[0] as string;
     const { newPath } = req.body as { newPath?: string };
     if (!newPath) return badRequest(res, 'newPath required');
+
+    // Validate the new path: length, control chars, reserved segment names (S10)
+    if (newPath.length > 1024) return badRequest(res, 'Path too long');
+    if (/[\x00-\x1f]/.test(newPath)) return badRequest(res, 'Path contains invalid characters');
+    const pathSegments = newPath.replace(/\.qmd$/, '').split('/');
+    if (pathSegments.some(s => RESERVED_SEGMENTS.has(s))) return badRequest(res, 'Path uses a reserved name');
 
     // Detect whether the target is a .qmd file or a directory
     let oldAbs: string;
@@ -194,6 +217,11 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   app.post('/api/pages', (req: Request, res: Response) => {
     const { path: newPath, title } = req.body as { path: string; title?: string };
     if (!newPath) return badRequest(res, 'path required');
+    // Validate path (same rules as rename)
+    if (newPath.length > 1024) return badRequest(res, 'Path too long');
+    if (/[\x00-\x1f]/.test(newPath)) return badRequest(res, 'Path contains invalid characters');
+    const newPathSegments = newPath.replace(/\.qmd$/, '').split('/');
+    if (newPathSegments.some(s => RESERVED_SEGMENTS.has(s))) return badRequest(res, 'Path uses a reserved name');
     const normalized = newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`;
     const filePath = guardAnyPath(normalized, res);
     if (!filePath) return;

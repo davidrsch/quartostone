@@ -96,7 +96,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  // resetAllMocks clears both call history AND queued mockImplementationOnce
+  // implementations, preventing stale mocks from leaking into the next test.
+  vi.resetAllMocks();
   rmSync(workspace, { recursive: true, force: true });
 });
 

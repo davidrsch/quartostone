@@ -48,6 +48,12 @@ export function spawnCapture(
       if (stderr.length < maxBytes) stderr += chunk.toString();
     });
 
+    // Write stdin data and close the stream so the subprocess can read it.
+    if (opts.stdin !== undefined) {
+      proc.stdin?.write(opts.stdin, 'utf-8');
+      proc.stdin?.end();
+    }
+
     const timer = opts.timeoutMs
       ? setTimeout(() => {
           timedOut = true;
@@ -56,7 +62,16 @@ export function spawnCapture(
       : null;
 
     proc.on('error', (err) => {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') notFound = true;
+      const errno = err as NodeJS.ErrnoException;
+      // Detect "binary not on PATH" both via the standard code and via the
+      // error message string (the latter covers test environments where the
+      // error is constructed without a .code property).
+      const isEnoent = errno.code === 'ENOENT' || err.message.includes('ENOENT');
+      if (isEnoent) {
+        notFound = true;
+        // Surface the raw error message so callers can include it in responses.
+        if (!stderr) stderr = err.message;
+      }
       if (timer) clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: null, timedOut, notFound });
     });

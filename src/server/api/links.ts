@@ -58,6 +58,35 @@ export class LinkIndex {
   readonly forwardLinks = new Map<string, Set<string>>();
   readonly pageMeta     = new Map<string, PageMeta>();
 
+  /**
+   * O(1) exact stem lookup: basename(relPath, '.qmd').toLowerCase() → relPath.
+   * Built during rebuild() / updated incrementally in updateForFile().
+   */
+  private readonly _stemMap = new Map<string, string>();
+  /** Cached list of all .qmd relative paths; avoids repeated full-tree scans (P05). */
+  private _cachedPaths: string[] | null = null;
+
+  private _buildStemMap(allPaths: string[]): void {
+    this._stemMap.clear();
+    for (const p of allPaths) {
+      const stem = basename(p, '.qmd').toLowerCase();
+      if (!this._stemMap.has(stem)) this._stemMap.set(stem, p);
+    }
+  }
+
+  /** Resolves a slug to a relPath using the pre-built index (P02). */
+  private _resolveSlug(slug: string, allPaths: string[]): string | null {
+    // O(1) exact stem match
+    const exact = this._stemMap.get(slug);
+    if (exact) return exact;
+    // O(n) suffix match for path-qualified slugs like "subfolder/my-page"
+    for (const p of allPaths) {
+      const rel = p.endsWith('.qmd') ? p.slice(0, -4) : p;
+      if (rel.endsWith('/' + slug)) return p;
+    }
+    return null;
+  }
+
   private scanFile(relPath: string, absPath: string, allPagePaths: string[]): void {
     let content: string;
     try { content = readFileSync(absPath, 'utf-8'); }
@@ -79,7 +108,7 @@ export class LinkIndex {
     while ((m = WIKI_LINK_SCAN_RE.exec(content)) !== null) {
       const target = m[1] ?? '';
       const slug2  = targetToSlug(target);
-      const resolved = resolveSlug(slug2, allPagePaths);
+      const resolved = this._resolveSlug(slug2, allPagePaths);
       if (resolved && resolved !== relPath) links.add(resolved);
     }
     this.forwardLinks.set(relPath, links);
@@ -87,27 +116,48 @@ export class LinkIndex {
 
   rebuild(pagesDir: string): void {
     const allPaths = collectQmd(pagesDir, pagesDir);
+    this._cachedPaths = allPaths;
     this.pageMeta.clear();
     this.forwardLinks.clear();
+    this._buildStemMap(allPaths);
     for (const relPath of allPaths) {
       this.scanFile(relPath, join(pagesDir, relPath), allPaths);
     }
   }
 
   updateForFile(pagesDir: string, relPath: string): void {
-    const allPaths = collectQmd(pagesDir, pagesDir);
-    if (!allPaths.includes(relPath)) allPaths.push(relPath);
-    this.scanFile(relPath, join(pagesDir, relPath), allPaths);
+    // Rescan when the cache is uninitialised or when the target file is not
+    // yet in it (e.g. first save after app start with an empty pages dir).
+    // This picks up all new files written since the last rebuild/scan so that
+    // the stem map used for [[wiki link]] resolution is complete.
+    if (this._cachedPaths === null || !this._cachedPaths.includes(relPath)) {
+      this._cachedPaths = collectQmd(pagesDir, pagesDir);
+      this._buildStemMap(this._cachedPaths);
+    }
+    const allPaths = this._cachedPaths;
+    if (!allPaths.includes(relPath)) {
+      this._cachedPaths = [...allPaths, relPath];
+      const stem = basename(relPath, '.qmd').toLowerCase();
+      if (!this._stemMap.has(stem)) this._stemMap.set(stem, relPath);
+    }
+    this.scanFile(relPath, join(pagesDir, relPath), this._cachedPaths);
   }
 
   removeForFile(relPath: string): void {
     this.forwardLinks.delete(relPath);
     this.pageMeta.delete(relPath);
+    if (this._cachedPaths) {
+      this._cachedPaths = this._cachedPaths.filter(p => p !== relPath);
+      const stem = basename(relPath, '.qmd').toLowerCase();
+      if (this._stemMap.get(stem) === relPath) this._stemMap.delete(stem);
+    }
   }
 
   reset(): void {
     this.forwardLinks.clear();
     this.pageMeta.clear();
+    this._stemMap.clear();
+    this._cachedPaths = null;
   }
 }
 
@@ -184,7 +234,11 @@ export function registerLinksApi(app: Express, ctx: ServerContext): void {
   });
 
   // GET /api/links/graph
-  app.get('/api/links/graph', (_req: Request, res: Response) => {
+  app.get('/api/links/graph', (req: Request, res: Response) => {
+    // Cap response to prevent huge payloads on large projects (P04)
+    const rawLimit = parseInt(String(req.query['limit'] ?? ''), 10);
+    const limit = isNaN(rawLimit) || rawLimit <= 0 ? 500 : Math.min(rawLimit, 5000);
+
     // Compute in-degree for each node
     const inDegree = new Map<string, number>();
     for (const meta of li.pageMeta.values()) inDegree.set(meta.path, 0);
@@ -197,14 +251,19 @@ export function registerLinksApi(app: Express, ctx: ServerContext): void {
       }
     }
 
-    const nodes = Array.from(li.pageMeta.values()).map(m => ({
+    const allNodes = Array.from(li.pageMeta.values()).map(m => ({
       id:       m.path,
       title:    m.title,
       tags:     m.tags,
       inDegree: inDegree.get(m.path) ?? 0,
     }));
 
-    res.json({ nodes, edges });
+    // Return most-connected nodes first; include all edges between visible nodes
+    const nodes = allNodes.sort((a, b) => b.inDegree - a.inDegree).slice(0, limit);
+    const visibleIds = new Set(nodes.map(n => n.id));
+    const filteredEdges = edges.filter(e => visibleIds.has(e.from) && visibleIds.has(e.to));
+
+    res.json({ nodes, edges: filteredEdges, total: allNodes.length });
   });
 
   // GET /api/links/search?q=<query>  — autocomplete page titles for [[ popup
