@@ -12,12 +12,12 @@ review and restore recently deleted items.
 
 ## Decision Drivers
 
-| Factor                                           | Weight |
-| ------------------------------------------------ | ------ |
-| Recovery from accidental deletion                | High   |
-| Git-friendliness (deletions visible in history)  | High   |
-| Simplicity (no database, no extra dependencies)  | High   |
-| Interoperability with the existing file watcher  | Medium |
+| Factor                                          | Weight |
+| ----------------------------------------------- | ------ |
+| Recovery from accidental deletion               | High   |
+| Git-friendliness (deletions visible in history) | High   |
+| Simplicity (no database, no extra dependencies) | High   |
+| Interoperability with the existing file watcher | Medium |
 
 ## Decision
 
@@ -56,9 +56,11 @@ and the deletion is visible in `git log`.
 ## Alternatives Considered
 
 ### Immediate hard delete
+
 Simple but irrecoverable within the app. Dismissed because accidental deletion is a
 common user mistake in note-taking apps.
 
 ### Git-only soft delete (move to untracked branch)
+
 More complex, requires Git operations for every delete/restore, and breaks the mental
 model of the working tree as the source of truth.

@@ -77,7 +77,7 @@ function pandocError(res: Response, detail: string, code = 500) {
 }
 // ── Shared option sanitiser ───────────────────────────────────────────────────
 
-const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[^\s;|&`$<>'"\\]+)?$/;
+const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[a-zA-Z0-9\-_.@/=:,+]+)?$/u;
 const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
 
 function sanitisePandocOptions(rawOptions: unknown): string[] {

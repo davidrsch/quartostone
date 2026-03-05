@@ -62,12 +62,15 @@ CORS complications.
 ## Alternatives Considered
 
 ### Socket.IO
+
 Adds automatic reconnection and room support, but brings a large client bundle and
 a separate protocol layer on top of WebSocket. Overkill for a single-user local tool.
 
 ### Server-Sent Events (SSE)
+
 Unidirectional only, which is sufficient for current needs, but SSE connections are
 sometimes poorly handled by proxies and would complicate future bi-directional use.
 
 ### Long-polling
+
 High latency, high server overhead for frequent file-change events. Dismissed early.

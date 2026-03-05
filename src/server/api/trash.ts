@@ -6,7 +6,7 @@
 import type { Express, Request, Response } from 'express';
 import {
   readdirSync, readFileSync, mkdirSync,
-  existsSync, rmSync, renameSync,
+  existsSync, rmSync, renameSync, realpathSync,
 } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
@@ -23,6 +23,8 @@ export interface TrashMeta {
 export function registerTrashApi(app: Express, ctx: ServerContext) {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
   const trashDir = join(ctx.cwd, '.quartostone', 'trash');
+  let realPagesDir: string;
+  try { realPagesDir = realpathSync(pagesDir); } catch { realPagesDir = resolve(pagesDir); }
 
   function listMeta(): TrashMeta[] {
     if (!existsSync(trashDir)) return [];
@@ -56,8 +58,9 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
     if (!existsSync(trashFile)) return res.status(404).json({ error: 'Trashed file missing from disk' });
 
     const restoreTarget = resolve(join(pagesDir, meta.originalPath));
-    const safePagesDir = resolve(pagesDir);
-    if (!restoreTarget.startsWith(safePagesDir + sep) && restoreTarget !== safePagesDir) {
+    let realRestoreTarget: string;
+    try { realRestoreTarget = realpathSync(restoreTarget); } catch { realRestoreTarget = restoreTarget; }
+    if (!realRestoreTarget.startsWith(realPagesDir + sep) && realRestoreTarget !== realPagesDir) {
       return res.status(400).json({ error: 'Invalid restore path' });
     }
 

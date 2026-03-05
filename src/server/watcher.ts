@@ -31,9 +31,13 @@ export function startWatcher(ctx: WatcherContext) {
     markXRefCacheDirty();
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      handleChange(filePath).catch(err =>
-        ctx.broadcast('render:error', { path: filePath, error: String(err) })
-      );
+      handleChange(filePath).catch(err => {
+        try {
+          ctx.broadcast('render:error', { path: filePath, error: String(err) });
+        } catch (broadcastErr) {
+          console.error('[watcher] broadcast failed:', broadcastErr);
+        }
+      });
     }, ctx.config.watch_interval_ms);
   });
 

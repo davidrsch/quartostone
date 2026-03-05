@@ -12,13 +12,13 @@ an **on-disk JSON index file**, and a **pure in-memory map** rebuilt from source
 
 ## Decision Drivers
 
-| Factor                                                  | Weight |
-| ------------------------------------------------------- | ------ |
-| Query latency (backlinks, graph, autocomplete)          | High   |
-| Zero external runtime dependencies                      | High   |
-| Correctness after file changes                          | High   |
-| Workspace size (QuartoStone targets ≤ ~10 000 pages)    | Medium |
-| Persistence across server restarts                      | Low    |
+| Factor                                               | Weight |
+| ---------------------------------------------------- | ------ |
+| Query latency (backlinks, graph, autocomplete)       | High   |
+| Zero external runtime dependencies                   | High   |
+| Correctness after file changes                       | High   |
+| Workspace size (QuartoStone targets ≤ ~10 000 pages) | Medium |
+| Persistence across server restarts                   | Low    |
 
 ## Decision
 
@@ -62,10 +62,12 @@ full-text engine is needed.
 ## Alternatives Considered
 
 ### SQLite (better-sqlite3)
+
 Persistent, supports complex queries. But adds a native addon build step, complicates
 distribution (`npm pack`), and is unnecessary at the target workspace scale.
 
 ### On-disk JSON index file
+
 Avoids the native dependency but introduces read/write races, invalidation logic, and
 a stale-file problem when the server is not running during external file edits.
 Rebuilding from source on startup is simpler and equally fast.

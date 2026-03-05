@@ -441,12 +441,12 @@ Force a full reindex of all pages (normally happens automatically on file change
 
 Connect to `ws://localhost:PORT` to receive real-time file-change events.
 
-| Event type       | Payload                               | Trigger                                    |
-| ---------------- | ------------------------------------- | ------------------------------------------ |
-| `file_changed`   | `{ path: string }`                    | A `.qmd` file was saved                    |
-| `render_started` | `{ path: string }`                    | `quarto render` started                    |
-| `render_done`    | `{ path: string, ok: boolean }`       | `quarto render` completed                  |
-| `git_changed`    | `{ current: string, files: number }`  | Git status changed after a commit or write |
+| Event type       | Payload                              | Trigger                                    |
+| ---------------- | ------------------------------------ | ------------------------------------------ |
+| `file_changed`   | `{ path: string }`                   | A `.qmd` file was saved                    |
+| `render_started` | `{ path: string }`                   | `quarto render` started                    |
+| `render_done`    | `{ path: string, ok: boolean }`      | `quarto render` completed                  |
+| `git_changed`    | `{ current: string, files: number }` | Git status changed after a commit or write |
 
 ---
 
@@ -571,12 +571,11 @@ Return all cross-reference labels in the project.
 **Body:** `{ file?: string }` — `file` is reserved for future scoped scanning; the full project is always scanned.
 
 **Response:**
+
 ```json
 {
   "baseDir": "/abs/path/to/pages",
-  "refs": [
-    { "file": "intro.qmd", "type": "fig", "id": "myplot", "suffix": "", "title": "My Plot" }
-  ]
+  "refs": [{ "file": "intro.qmd", "type": "fig", "id": "myplot", "suffix": "", "title": "My Plot" }]
 }
 ```
 
@@ -603,6 +602,7 @@ Handles image uploads used by the panmirror visual editor. Files are stored in `
 Upload an image file. Accepts `multipart/form-data` with a single field named `file`.
 
 **Constraints:**
+
 - Allowed extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.avif`, `.bmp`, `.ico`
 - Allowed MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml`, `image/avif`, `image/tiff`, `image/bmp`, `image/x-icon`
 - Maximum file size: 20 MB
@@ -620,4 +620,3 @@ Serve a previously uploaded image. This is a static file endpoint, not under `/a
 **Response:** The image binary with the appropriate `Content-Type`.
 
 **Errors:** `400` for an empty/invalid filename; `404` if the file does not exist.
-

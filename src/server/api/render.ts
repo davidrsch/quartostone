@@ -9,10 +9,12 @@ import { isInsideDir } from '../utils/pathGuard.js';
 
 export function registerRenderApi(app: Express, ctx: ServerContext) {
   app.post('/api/render', (req: Request, res: Response) => {
+    let responded = false;
     const { path: filePath, scope } = req.body as { path?: string; scope?: 'file' | 'project' };
 
     // Validate scope
     if (scope !== undefined && scope !== 'file' && scope !== 'project') {
+      responded = true;
       return res.status(400).json({ error: 'Invalid scope' });
     }
 
@@ -22,6 +24,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
     if (renderScope === 'file') {
       // Validate filePath is a non-empty string
       if (typeof filePath !== 'string' || filePath.trim() === '') {
+        responded = true;
         return res.status(400).json({ error: 'filePath required when scope is file' });
       }
 
@@ -29,6 +32,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
 
       // Reject path traversal attacks
       if (!isInsideDir(pagesRoot, filePath)) {
+        responded = true;
         return res.status(400).json({ error: 'Path outside pages directory' });
       }
 
@@ -52,13 +56,16 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
 
     // Timeout: kill the child process after 120 s
     const timer = setTimeout(() => {
+      if (responded) return;
       child.kill();
+      responded = true;
       res.status(500).json({ ok: false, error: 'Render timed out' });
     }, 120_000);
 
     child.on('close', (code: number | null) => {
       clearTimeout(timer);
-      if (res.headersSent) return;
+      if (responded) return;
+      responded = true;
       if (code === 0) {
         res.json({ ok: true, output: stdout });
       } else {
