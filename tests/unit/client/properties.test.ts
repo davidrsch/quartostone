@@ -126,7 +126,7 @@ describe('serializeFrontmatter', () => {
   });
 
   it('skips fields whose value is undefined, null, or empty string', () => {
-    const out = serializeFrontmatter({ title: 'Valid', description: '', author: undefined });
+    const out = serializeFrontmatter({ title: 'Valid', description: '', author: undefined as unknown as string });
     expect(out).not.toContain('description:');
     expect(out).not.toContain('author:');
     expect(out).toContain('title: Valid');

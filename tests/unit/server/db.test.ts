@@ -138,9 +138,9 @@ describe('serialiseDbFile', () => {
 
     expect(reparsed).not.toBeNull();
     expect(reparsed!.rows).toHaveLength(2);
-    expect(reparsed!.rows[0]).toMatchObject({ title: 'Issue 1', status: 'Open' });
-    expect(reparsed!.rows[1]).toMatchObject({ title: 'Issue 2', status: 'Closed' });
-    expect(reparsed!.schema[1].options).toEqual(['Open', 'Closed']);
+    expect(reparsed!.rows[0]!).toMatchObject({ title: 'Issue 1', status: 'Open' });
+    expect(reparsed!.rows[1]!).toMatchObject({ title: 'Issue 2', status: 'Closed' });
+    expect(reparsed!.schema[1]!.options).toEqual(['Open', 'Closed']);
   });
 
   it('serialises a page with no rows to only a header + separator', () => {
@@ -173,7 +173,7 @@ schema:
 `;
     const result = parseDbFile(content);
     expect(result).not.toBeNull();
-    expect(result!.schema[0].type).toBe('text');
+    expect(result!.schema[0]!.type).toBe('text');
   });
 
   it('handles select fields with no options array', () => {
@@ -191,8 +191,8 @@ schema:
 `;
     const result = parseDbFile(content);
     expect(result).not.toBeNull();
-    expect(result!.schema[0].type).toBe('select');
-    expect((result!.schema[0] as { options?: string[] }).options).toBeUndefined();
+    expect(result!.schema[0]!.type).toBe('select');
+    expect((result!.schema[0]! as { options?: string[] }).options).toBeUndefined();
   });
 
   it('handles a db page with empty schema (no fields)', () => {
@@ -222,6 +222,6 @@ describe('pipe character round-trip', () => {
     // Parsing it back should restore the original value
     const reparsed = parseDbFile(serialised);
     expect(reparsed).not.toBeNull();
-    expect(reparsed!.rows[0].notes).toBe('A|B');
+    expect(reparsed!.rows[0]!['notes']).toBe('A|B');
   });
 });

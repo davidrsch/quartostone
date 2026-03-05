@@ -105,7 +105,7 @@ describe('renderBreadcrumb — nested path', () => {
     const segs = Array.from(el.querySelectorAll<HTMLElement>('.bc-seg'));
     const current = segs.filter(s => s.classList.contains('bc-current'));
     expect(current).toHaveLength(1);
-    expect(current[0].textContent).toBe('c');
+    expect(current[0]!.textContent).toBe('c');
   });
 
   it('sets aria-current="false" on non-current segments', () => {
@@ -119,9 +119,9 @@ describe('renderBreadcrumb — nested path', () => {
     const el = makeContainer();
     renderBreadcrumb('notes/research/intro.qmd', el);
     const segs = Array.from(el.querySelectorAll<HTMLElement>('.bc-seg'));
-    expect(segs[0].title).toBe('notes');
-    expect(segs[1].title).toBe('notes/research');
-    expect(segs[2].title).toBe('notes/research/intro');
+    expect(segs[0]!.title).toBe('notes');
+    expect(segs[1]!.title).toBe('notes/research');
+    expect(segs[2]!.title).toBe('notes/research/intro');
   });
 });
 
@@ -153,10 +153,10 @@ describe('renderBreadcrumb — onFolderClick', () => {
 
     const segs = Array.from(el.querySelectorAll<HTMLElement>('.bc-seg:not(.bc-current)'));
     // Click "notes" (index 0)
-    segs[0].click();
+    segs[0]!.click();
     expect(onClick).toHaveBeenCalledWith('notes');
     // Click "research" (index 1)
-    segs[1].click();
+    segs[1]!.click();
     expect(onClick).toHaveBeenCalledWith('notes/research');
   });
 

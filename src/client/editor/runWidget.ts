@@ -108,7 +108,7 @@ class RunButtonWidget extends WidgetType {
     private readonly onRun: (block: CodeBlock) => void,
   ) { super(); }
 
-  eq(other: RunButtonWidget) { return other.block.from === this.block.from; }
+  override eq(other: RunButtonWidget) { return other.block.from === this.block.from; }
 
   toDOM() {
     const btn = document.createElement('button');
@@ -122,7 +122,7 @@ class RunButtonWidget extends WidgetType {
     return btn;
   }
 
-  ignoreEvent() { return false; }
+  override ignoreEvent() { return false; }
 }
 
 // ── Output widget ──────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ class RunButtonWidget extends WidgetType {
 class OutputWidget extends WidgetType {
   constructor(private readonly data: OutputData) { super(); }
 
-  eq(other: OutputWidget) {
+  override eq(other: OutputWidget) {
     return other.data.blockFrom === this.data.blockFrom
       && other.data.loading === this.data.loading
       && other.data.stdout === this.data.stdout
@@ -181,7 +181,7 @@ class OutputWidget extends WidgetType {
     return wrap;
   }
 
-  ignoreEvent() { return true; }
+  override ignoreEvent() { return true; }
 }
 
 // ── ViewPlugin — builds decoration set ────────────────────────────────────────

@@ -128,7 +128,7 @@ describe('GET /api/pages', () => {
     const res = await client.get('/api/pages');
     const nodes = (res.body as { name: string }[]).filter(n => n.name !== '_assets');
     expect(nodes).toHaveLength(1);
-    expect(nodes[0].name).toBe('page');
+    expect(nodes[0]!.name).toBe('page');
   });
 });
 

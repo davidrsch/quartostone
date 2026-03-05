@@ -11,6 +11,7 @@ import {
 import { join, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../context.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 import { updateLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile } from './search.js';
 
@@ -85,7 +86,7 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
     try {
       rmSync(metaPath);
     } catch (err) {
-      return serverError(res, String(err));
+      return serverError(res, sanitizeError(err));
     }
     updateLinkIndexForFile(pagesDir, meta.originalPath);
     updateSearchIndexForFile(pagesDir, meta.originalPath);

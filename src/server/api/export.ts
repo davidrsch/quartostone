@@ -147,7 +147,8 @@ function runExport(
   const proc = spawn('quarto', args, { cwd, shell: false });
 
   let stderr = '';
-  proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+  const MAX_EXPORT_STDERR = 2 * 1024 * 1024; // 2 MB cap — prevents heap exhaustion
+  proc.stderr.on('data', (chunk: Buffer) => { if (stderr.length < MAX_EXPORT_STDERR) stderr += chunk.toString(); });
   proc.stdout.on('data', () => { /* discard */ });
 
   proc.on('error', (err) => {
@@ -297,11 +298,13 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     const ext  = extname(job.filename);
     const mime = mimeMap[ext] ?? 'application/octet-stream';
 
-    // Strip characters that could break the Content-Disposition header value
-    const safeFilename = job.filename.split('').filter(
-      c => c !== '"' && c.charCodeAt(0) !== 13 && c.charCodeAt(0) !== 10 && c !== '\\'
-    ).join('');
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    // Use RFC 5987 encoding to prevent header injection via special chars
+    const asciiSafe = job.filename.replace(/[^\w.-]/g, '_');
+    const encodedName = encodeURIComponent(job.filename);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodedName}`
+    );
     res.setHeader('Content-Type', mime);
 
     const stream = createReadStream(job.outputPath);

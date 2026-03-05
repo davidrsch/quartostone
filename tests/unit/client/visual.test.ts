@@ -343,7 +343,7 @@ describe('createVisualEditor', () => {
     };
   }
 
-  let mockEditorInstance: MockEditorInstance;
+  let mockEditorInstance!: MockEditorInstance;
 
   beforeEach(() => {
     mockEditorInstance = buildMockEditor();
@@ -397,7 +397,7 @@ describe('createVisualEditor', () => {
 
     // Called once for initial load, once more for our call
     const calls = mockEditorInstance.setMarkdown.mock.calls;
-    expect(calls[calls.length - 1][0]).toBe('## World\n');
+    expect(calls[calls.length - 1]![0]).toBe('## World\n');
   });
 
   it('onDirty callback is invoked when the editor fires an Update event', async () => {
@@ -418,7 +418,7 @@ describe('createVisualEditor', () => {
 
     expect(mockEditorInstance.destroy).toHaveBeenCalledOnce();
     // The subscribe mock returns a vi.fn() as the unsubscribe handle
-    const unsubscribe = mockEditorInstance.subscribe.mock.results[0].value as ReturnType<typeof vi.fn>;
+    const unsubscribe = mockEditorInstance.subscribe.mock.results[0]!.value as ReturnType<typeof vi.fn>;
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 

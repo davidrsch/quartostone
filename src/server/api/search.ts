@@ -207,7 +207,7 @@ export function registerSearchApi(app: Express, ctx: ServerContext): void {
 
   // GET /api/search?q=<query>
   app.get('/api/search', (req: Request, res: Response) => {
-    const q = (typeof req.query['q'] === 'string' ? req.query['q'] : '') ?? '';
+    const q = typeof req.query['q'] === 'string' ? req.query['q'] : '';
     if (!q.trim()) return res.json([]);
     res.json(si.search(q));
   });

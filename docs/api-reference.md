@@ -4,6 +4,36 @@ All endpoints are served by the local Quartostone dev server (default: `http://l
 
 ---
 
+## Authentication
+
+Quartostone generates a random Bearer token at startup. All API requests must include it:
+
+```
+Authorization: Bearer <token>
+```
+
+The token is printed to the terminal on startup. The browser editor fetches it automatically via `GET /api/session`.
+
+### `GET /api/session`
+
+Returns the server's auth token. **Only reachable from loopback (127.0.0.1 / ::1)** — requests from remote hosts receive `403 Forbidden`. This prevents remote callers from obtaining the token.
+
+**Response:** `{ token: string }`
+
+**Errors:** `403` if the request originates from a non-loopback address.
+
+### WebSocket (`/ws`)
+
+Establish a WebSocket connection for live-reload events:
+
+```
+ws://localhost:4242/ws?token=<token>
+```
+
+The `?token=` query parameter must match the server token. Connections without or with a mismatched token are rejected with close code `1008 (Policy Violation)`.
+
+---
+
 ## Health
 
 ### `GET /api/health`

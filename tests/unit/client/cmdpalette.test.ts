@@ -30,7 +30,7 @@ describe('filterEntries', () => {
   it('filters by case-insensitive substring match', () => {
     const result = filterEntries(SAMPLE, 'save');
     expect(result).toHaveLength(1);
-    expect(result[0].label).toBe('Save');
+    expect(result[0]!.label).toBe('Save');
   });
 
   it('is case-insensitive', () => {
@@ -53,7 +53,7 @@ describe('filterEntries', () => {
     const action = () => {};
     const entries: PaletteEntry[] = [{ icon: '💾', label: 'Save', hint: 'Ctrl+S', action }];
     const result = filterEntries(entries, 'save');
-    expect(result[0].action).toBe(action);
+    expect(result[0]!.action).toBe(action);
   });
 });
 

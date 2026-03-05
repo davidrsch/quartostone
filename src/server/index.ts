@@ -67,7 +67,14 @@ export function createApp(ctx: ServerContext) {
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
   // Public endpoint: browser client calls this once on startup to obtain the session token.
-  app.get('/api/session', (_req: Request, res: Response) => {
+  // Restricted to loopback connections — reachable only from the local machine.
+  app.get('/api/session', (req: Request, res: Response) => {
+    const addr = req.socket.remoteAddress;
+    const isLoopback = addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+    if (!isLoopback) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
     res.json({ token: ctx.token ?? null });
   });
 
@@ -94,6 +101,16 @@ export function createApp(ctx: ServerContext) {
     message: { error: 'Too many requests, please slow down.' },
   });
   app.use(['/api/render', '/api/export', '/api/exec', '/api/pandoc'], expensiveLimiter);
+
+  // Rate limit git network operations (push/pull) — each involves external TCP I/O
+  const gitNetworkLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many git network requests, please slow down.' },
+  });
+  app.use(['/api/git/push', '/api/git/pull'], gitNetworkLimiter);
 
   // Serve rendered site at /
   const siteDir = join(ctx.cwd, '_site');
@@ -171,6 +188,16 @@ export async function createServer(ctx: ServerContext): Promise<{ server: Return
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
   wss.on('connection', (_ws, req) => {
+    // Validate Bearer token for WebSocket connections (prevents non-browser eavesdropping)
+    // Use `token` (the variable generated in this scope), not ctx.token (which is undefined here).
+    if (token) {
+      const url = new URL(req.url ?? '', 'http://localhost');
+      const t = url.searchParams.get('token');
+      if (t !== token) {
+        _ws.close(1008, 'Unauthorized');
+        return;
+      }
+    }
     const origin = req.headers['origin'];
     const allowedOrigin = `http://localhost:${ctx.config.port}`;
     if (origin && origin !== allowedOrigin) {

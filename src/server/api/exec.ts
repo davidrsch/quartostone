@@ -129,6 +129,11 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
       return;
     }
 
+    if (typeof language !== 'string') {
+      badRequest(res, 'language is required');
+      return;
+    }
+
     if (activeExecs >= MAX_CONCURRENT_EXECS) {
       res.status(429).json({ error: 'Too many concurrent executions. Try again later.' });
       return;

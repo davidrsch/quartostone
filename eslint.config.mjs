@@ -40,6 +40,10 @@ export default tseslint.config(
       // Downgraded: stub methods implementing async interface contracts (e.g. visual editorUI)
       // have ~30 intentionally no-await async methods across the codebase.
       '@typescript-eslint/require-await': 'warn',
+      // Q14: ensure switch statements are exhaustive over union/enum types
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      // Q16: require return-await inside try/catch to preserve stack traces
+      '@typescript-eslint/return-await': ['error', 'in-try-catch'],
     },
   },
   // Test files access any-typed HTTP response bodies (supertest res.body) and use

@@ -57,9 +57,10 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
 
     let stdout = '';
     let stderr = '';
+    const MAX_RENDER_OUTPUT = 5 * 1024 * 1024; // 5 MB cap — prevents heap exhaustion
 
-    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.stdout?.on('data', (chunk: Buffer) => { if (stdout.length < MAX_RENDER_OUTPUT) stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk: Buffer) => { if (stderr.length < MAX_RENDER_OUTPUT) stderr += chunk.toString(); });
 
     // Timeout: kill the child process after 120 s
     const timer = setTimeout(() => {

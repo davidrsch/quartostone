@@ -18,6 +18,9 @@ export function getAuthHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${_token}` };
 }
 
+/** Return the current session token (used for WebSocket query-string auth). */
+export function getToken(): string | null { return _token; }
+
 /** Drop-in replacement for fetch() that adds the Bearer auth header. */
 export function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const headers: Record<string, string> = {

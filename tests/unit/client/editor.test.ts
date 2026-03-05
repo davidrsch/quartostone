@@ -169,33 +169,33 @@ describe('connectLiveReload', () => {
   it('connects to ws://<location.host>/ws on call', () => {
     connectLiveReload(() => {});
     expect(wsInstances).toHaveLength(1);
-    expect(wsInstances[0].url).toBe('ws://localhost:4343/ws');
+    expect(wsInstances[0]!.url).toBe('ws://localhost:4343/ws');
   });
 
   it('calls onEvent with the event name from the message', () => {
     const received: [string, unknown][] = [];
     connectLiveReload((event, data) => received.push([event, data]));
 
-    wsInstances[0].onmessage?.({ data: JSON.stringify({ event: 'reload', data: { path: 'index.qmd' } }) });
+    wsInstances[0]!.onmessage?.({ data: JSON.stringify({ event: 'reload', data: { path: 'index.qmd' } }) });
     expect(received).toHaveLength(1);
-    expect(received[0][0]).toBe('reload');
-    expect((received[0][1] as { path: string }).path).toBe('index.qmd');
+    expect(received[0]![0]).toBe('reload');
+    expect((received[0]![1] as { path: string }).path).toBe('index.qmd');
   });
 
   it('calls onEvent with undefined data when data is absent', () => {
     const received: [string, unknown][] = [];
     connectLiveReload((event, data) => received.push([event, data]));
 
-    wsInstances[0].onmessage?.({ data: JSON.stringify({ event: 'ping' }) });
-    expect(received[0][0]).toBe('ping');
-    expect(received[0][1]).toBeUndefined();
+    wsInstances[0]!.onmessage?.({ data: JSON.stringify({ event: 'ping' }) });
+    expect(received[0]![0]).toBe('ping');
+    expect(received[0]![1]).toBeUndefined();
   });
 
   it('reconnects after the socket closes (after 2000 ms delay)', () => {
     connectLiveReload(() => {});
     expect(wsInstances).toHaveLength(1);
 
-    wsInstances[0].close(); // triggers onclose → setTimeout(connect, 2000)
+    wsInstances[0]!.close(); // triggers onclose → setTimeout(connect, 2000)
 
     // Advance to just before the reconnect delay — should NOT have reconnected yet
     vi.advanceTimersByTime(1999);
@@ -204,14 +204,14 @@ describe('connectLiveReload', () => {
     // Now advance past the threshold — reconnect must fire
     vi.advanceTimersByTime(1);
     expect(wsInstances).toHaveLength(2);
-    expect(wsInstances[1].url).toBe('ws://localhost:4343/ws');
+    expect(wsInstances[1]!.url).toBe('ws://localhost:4343/ws');
   });
 
   it('forwards multiple events in sequence', () => {
     const received: string[] = [];
     connectLiveReload((event) => received.push(event));
 
-    const ws = wsInstances[0];
+    const ws = wsInstances[0]!;
     ws.onmessage?.({ data: JSON.stringify({ event: 'save' }) });
     ws.onmessage?.({ data: JSON.stringify({ event: 'reload' }) });
     ws.onmessage?.({ data: JSON.stringify({ event: 'error' }) });

@@ -82,9 +82,29 @@ npm run test:e2e
 - ESLint for lint (`npm run lint`)
 - Commit messages: use conventional commits (`feat:`, `fix:`, `chore:`, `docs:`)
 
+## Environment Variables
+
+| Variable           | Default | Description                                                                   |
+| ------------------ | ------- | ----------------------------------------------------------------------------- |
+| `QUARTOSTONE_PORT` | `4242`  | Override the server port (takes precedence over `_quartostone.yml`)           |
+| `E2E_PORT`         | `4243`  | Port used by Playwright E2E tests to avoid clashing with a running dev server |
+
+## CI Pipeline
+
+Pull requests and pushes to `main` run four GitHub Actions jobs:
+
+| Job                    | What it checks                                                                                |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| **Lint & Typecheck**   | `typecheck:all` (server + client + test configs), ESLint, Prettier format check, `npm audit`  |
+| **Unit & Integration** | Vitest tests + Supertest API tests with coverage; uploads `coverage/` artifact                |
+| **Build**              | `npm run build` (server/CLI) + `npm run build:client` (Vite); uploads `client-dist/` artifact |
+| **E2E**                | Playwright Chromium tests (depends on Unit and Build jobs); uploads `playwright-report/`      |
+
+All jobs have a `timeout-minutes` cap; a concurrency group cancels stale runs on the same branch.
+
 ## Pull Requests
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes with tests where applicable
-3. Ensure `npm run typecheck` and `npm run lint` pass
+3. Ensure `npm run typecheck:all` and `npm run lint` pass
 4. Open a PR and link the related issue

@@ -11,6 +11,7 @@ import { join, relative, extname, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ServerContext } from '../context.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
 import { resolveInsideDir, PathTraversalError, isInsideDir } from '../utils/pathGuard.js';
@@ -95,7 +96,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       const tree = buildTree(pagesDir, pagesDir);
       res.json(tree);
     } catch (e) {
-      serverError(res, String(e));
+      serverError(res, sanitizeError(e));
     }
   });
 

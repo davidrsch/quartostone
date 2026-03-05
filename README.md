@@ -204,12 +204,16 @@ On startup, quartostone prints an auth token. The browser editor reads it automa
 
 ### Keyboard shortcuts
 
-| Shortcut             | Action                           |
-| -------------------- | -------------------------------- |
-| `Ctrl+S` / `S`       | Save current page                |
-| `Ctrl+Shift+E` / `E` | Toggle source visual editor mode |
-| `Ctrl+Shift+G` / `G` | Open commit dialog               |
-| `Ctrl+Shift+P` / `P` | Toggle preview panel             |
+| Shortcut       | Action                             |
+| -------------- | ---------------------------------- |
+| `Ctrl+S`       | Save current page                  |
+| `Ctrl+Shift+E` | Toggle source / visual editor mode |
+| `Ctrl+Shift+G` | Open commit dialog                 |
+| `Ctrl+Shift+P` | Toggle preview panel               |
+| `Ctrl+P`       | Open page search / quick switcher  |
+| `Ctrl+K`       | Open command palette               |
+| `Ctrl+\`       | Toggle sidebar                     |
+| `Ctrl+Shift+B` | Build / export current page        |
 
 ### Git workflow
 

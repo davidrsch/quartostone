@@ -106,7 +106,7 @@ describe('resolveInitialTheme', () => {
   it('falls back to dark when nothing is stored and matchMedia unavailable', () => {
     // happy-dom does not implement matchMedia; it throws or returns undefined
     const origMatchMedia = window.matchMedia;
-    (window as unknown as Record<string, unknown>).matchMedia = undefined;
+    (window as unknown as Record<string, unknown>)['matchMedia'] = undefined;
     try {
       expect(resolveInitialTheme()).toBe('dark');
     } finally {

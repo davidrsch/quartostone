@@ -183,8 +183,8 @@ describe('init() — git operations', () => {
     const dir = join(rootTmp, 'bad-git-ws');
     // Allow git init and git add, but fail on commit
     vi.mocked(execSync)
-      .mockImplementationOnce(() => undefined)   // git init
-      .mockImplementationOnce(() => undefined)   // git add
+      .mockImplementationOnce(() => Buffer.from(''))   // git init
+      .mockImplementationOnce(() => Buffer.from(''))   // git add
       .mockImplementationOnce(() => { throw new Error('nothing to commit'); });
 
     await expect(init('test', { dir })).resolves.toBeUndefined();

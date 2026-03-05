@@ -58,24 +58,24 @@ describe('sortNodes', () => {
   it('sorts folders before files', () => {
     const items = [FILE_A, FOLDER_NOTES, FILE_B, FOLDER_EMPTY];
     const sorted = [...items].sort(sortNodes);
-    expect(sorted[0].type).toBe('folder');
-    expect(sorted[1].type).toBe('folder');
-    expect(sorted[2].type).toBe('file');
-    expect(sorted[3].type).toBe('file');
+    expect(sorted[0]!.type).toBe('folder');
+    expect(sorted[1]!.type).toBe('folder');
+    expect(sorted[2]!.type).toBe('file');
+    expect(sorted[3]!.type).toBe('file');
   });
 
   it('sorts files alphabetically by name', () => {
     const items = [FILE_B, FILE_A];
     const sorted = [...items].sort(sortNodes);
-    expect(sorted[0].name).toBe('alpha.qmd');
-    expect(sorted[1].name).toBe('beta.qmd');
+    expect(sorted[0]!.name).toBe('alpha.qmd');
+    expect(sorted[1]!.name).toBe('beta.qmd');
   });
 
   it('sorts folders alphabetically by name', () => {
     const items = [FOLDER_NOTES, FOLDER_EMPTY];
     const sorted = [...items].sort(sortNodes);
-    expect(sorted[0].name).toBe('empty');
-    expect(sorted[1].name).toBe('notes');
+    expect(sorted[0]!.name).toBe('empty');
+    expect(sorted[1]!.name).toBe('notes');
   });
 
   it('treats equal-type equal-name nodes as equal (returns 0 or locale order)', () => {
@@ -93,7 +93,7 @@ describe('filterNodesByPaths', () => {
     const filtered = filterNodesByPaths(TREE, paths);
     // FILE_A is at top level; FILE_B and FOLDER_NOTES/gamma are not in set
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].path).toBe('alpha');
+    expect(filtered[0]!.path).toBe('alpha');
   });
 
   it('keeps a folder if any descendant file matches', () => {
@@ -101,10 +101,10 @@ describe('filterNodesByPaths', () => {
     const filtered = filterNodesByPaths(TREE, paths);
     // Should keep FOLDER_NOTES (with FILE_C) but drop FILE_A, FILE_B, FOLDER_EMPTY
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].type).toBe('folder');
-    expect(filtered[0].path).toBe('notes');
-    expect(filtered[0].children).toHaveLength(1);
-    expect(filtered[0].children![0].path).toBe('notes/gamma');
+    expect(filtered[0]!.type).toBe('folder');
+    expect(filtered[0]!.path).toBe('notes');
+    expect(filtered[0]!.children).toHaveLength(1);
+    expect(filtered[0]!.children![0]!.path).toBe('notes/gamma');
   });
 
   it('drops empty folders after filtering', () => {
@@ -217,7 +217,7 @@ describe('addRecentPage', () => {
     addRecentPage('beta',  'beta.qmd');
     addRecentPage('alpha', 'alpha.qmd');
     const stored = JSON.parse(localStorage.getItem('qs_recent') ?? '[]') as Array<{ path: string; name: string }>;
-    expect(stored[0].path).toBe('alpha');
+    expect(stored[0]!.path).toBe('alpha');
     expect(stored.filter(r => r.path === 'alpha')).toHaveLength(1);
   });
 
@@ -278,7 +278,7 @@ describe('initSidebar DOM rendering', () => {
     await initSidebar(container, vi.fn(), { getActivePath: () => 'alpha' });
     const activeItems = container.querySelectorAll('.tree-item.active');
     expect(activeItems.length).toBeGreaterThanOrEqual(1);
-    expect(activeItems[0].getAttribute('aria-label')).toBe('alpha.qmd');
+    expect(activeItems[0]!.getAttribute('aria-label')).toBe('alpha.qmd');
   });
 
   it('shows an error message when the API fails', async () => {

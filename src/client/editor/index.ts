@@ -13,6 +13,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { runCellExtension } from './runWidget.js';
 import { API } from '../api/endpoints.js';
+import { getToken } from '../api/request.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 1_000; // debounce delay before auto-saving after last keystroke
 
@@ -245,7 +246,12 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
 export function connectLiveReload(onEvent: (event: string, data: unknown) => void) {
   function connect() {
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+    // Pass the session token as a query parameter so the server can validate it.
+    const token = getToken();
+    const wsUrl = token
+      ? `${wsProtocol}//${location.host}/ws?token=${encodeURIComponent(token)}`
+      : `${wsProtocol}//${location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
     ws.onmessage = (msg) => {
       try {
         const payload = JSON.parse(msg.data as string) as { event: string; data?: unknown };

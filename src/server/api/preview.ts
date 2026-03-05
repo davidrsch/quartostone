@@ -140,6 +140,7 @@ function startPreview(
   const args = [
     'preview', absPath,
     '--no-browser',
+    '--host', '127.0.0.1', // bind to loopback only — prevent LAN exposure
     '--port', String(port),
     '--to', format,
   ];

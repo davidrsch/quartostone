@@ -371,6 +371,7 @@ function cellEditor(field: FieldDef, value: string): string {
       return `<input type="checkbox" data-field="${esc(field.id)}" class="db-cell-check"${value === 'true' ? ' checked' : ''} />`;
     case 'number':
       return `<input type="number" data-field="${esc(field.id)}" class="db-cell-input" value="${esc(value)}" />`;
+    case 'text':
     default:
       return `<input type="text" data-field="${esc(field.id)}" class="db-cell-input" value="${esc(value)}" />`;
   }

@@ -137,7 +137,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
       // Fetch to update tracking info (non-failing)
       try {
-        await git.fetch(['--no-tags', '--prune', 'origin']);
+        await gitWithTimeout('fetch', () => git.fetch(['--no-tags', '--prune', 'origin']));
       } catch { /* no network / no remote */ }
 
       const status = await git.status();
@@ -189,7 +189,8 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         return badRequest(res, 'url is required');
       }
       // Disallow local file:// remotes and validate basic URL format
-      const allowedProtocols = ['https:', 'ssh:', 'git:'];
+      // 'git:' protocol (port 9418) is unencrypted and unauthenticated — excluded.
+      const allowedProtocols = ['https:', 'ssh:'];
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(url);
@@ -197,7 +198,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         return badRequest(res, 'Invalid remote URL');
       }
       if (!allowedProtocols.includes(parsedUrl.protocol)) {
-        return badRequest(res, 'Remote URL must use https, ssh, or git protocol');
+        return badRequest(res, 'Remote URL must use https or ssh protocol');
       }
       // Set or add remote
       try {
@@ -326,7 +327,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.get('/api/git/conflicts', async (_req: Request, res: Response) => {
     try {
       const status = await git.status();
-      const conflicted = status.conflicted.map(f => f);
+      const conflicted = [...status.conflicted];
       res.json({ conflicted });
     } catch (e) {
       serverError(res, sanitizeGitError(e));
