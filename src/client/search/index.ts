@@ -18,6 +18,8 @@ interface SearchResult {
 
 type OpenPageFn = (path: string, title: string) => void;
 
+const SEARCH_DEBOUNCE_MS = 200; // debounce delay before firing search request
+
 export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
   // Create overlay DOM
   const overlay = document.createElement('div');
@@ -63,7 +65,7 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
 
   inputEl.addEventListener('input', () => {
     if (debounceTimer !== null) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(runSearch, 200);
+    debounceTimer = setTimeout(runSearch, SEARCH_DEBOUNCE_MS);
   });
 
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {

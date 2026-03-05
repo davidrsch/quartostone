@@ -13,6 +13,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { runCellExtension } from './runWidget.js';
 
+const AUTOSAVE_DEBOUNCE_MS = 1_000; // debounce delay before auto-saving after last keystroke
+
 // ── Image drag-drop upload (#96) ──────────────────────────────────────────────
 
 /** Uploads a File to /api/assets and returns the URL, or null on failure. */
@@ -190,7 +192,7 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
       savePage(opts.pagePath, content)
         .then(() => opts.onSave?.(content))
         .catch((err: unknown) => opts.onSaveError?.(err instanceof Error ? err : new Error(String(err))));
-    }, 1000);
+    }, AUTOSAVE_DEBOUNCE_MS);
   });
 
   const saveOnCtrlS: Extension = keymap.of([

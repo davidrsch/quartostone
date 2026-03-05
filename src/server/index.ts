@@ -43,7 +43,7 @@ export interface ServerContext {
  */
 export function createApp(ctx: ServerContext) {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '1mb' }));
 
   // CORS — only allow same-origin requests (localhost:port). Reject cross-origin requests.
   app.use((req, res, next) => {

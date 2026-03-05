@@ -8,6 +8,8 @@ import type { ServerContext } from '../index.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 
+const RENDER_TIMEOUT_MS = 120_000; // max time to wait for quarto render before killing the process
+
 export function registerRenderApi(app: Express, ctx: ServerContext) {
   app.post('/api/render', (req: Request, res: Response) => {
     let responded = false;
@@ -61,7 +63,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       child.kill();
       responded = true;
       res.status(500).json({ ok: false, error: 'Render timed out' });
-    }, 120_000);
+    }, RENDER_TIMEOUT_MS);
 
     child.on('close', (code: number | null) => {
       clearTimeout(timer);

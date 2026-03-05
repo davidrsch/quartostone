@@ -45,7 +45,8 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.post('/api/trash/restore/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    if (!id || !/^[a-z0-9]+$/.test(id)) return badRequest(res, 'Invalid id');
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_RE.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return notFound(res, 'Trashed item not found');
@@ -83,7 +84,8 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.delete('/api/trash/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    if (!id || !/^[a-z0-9]+$/.test(id)) return badRequest(res, 'Invalid id');
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_RE.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
     if (!existsSync(metaPath)) return notFound(res, 'Not found');

@@ -29,6 +29,20 @@ import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
 
 const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
 
+// Wraps a git operation with a hard timeout so network-level hangs don't block the server.
+const GIT_NETWORK_TIMEOUT_MS = 30_000;
+function gitWithTimeout<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`git ${label} timed out after ${GIT_NETWORK_TIMEOUT_MS / 1000}s`)),
+        GIT_NETWORK_TIMEOUT_MS,
+      )
+    ),
+  ]);
+}
+
 export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);
   const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
@@ -122,7 +136,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
   app.post('/api/git/push', async (_req: Request, res: Response) => {
     try {
-      const pushResult = await git.push('origin');
+      const pushResult = await gitWithTimeout('push', () => git.push('origin'));
       res.json({ ok: true, pushed: pushResult.pushed });
     } catch (e) {
       serverError(res, sanitizeGitError(e));
@@ -132,7 +146,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/pull', async (_req: Request, res: Response) => {
     try {
       // Fast-forward only — if not FF-able, return error with message
-      const pullResult = await git.pull('origin', undefined, ['--ff-only']);
+      const pullResult = await gitWithTimeout('pull', () => git.pull('origin', undefined, ['--ff-only']));
       res.json({
         ok: true,
         summary: { changes: pullResult.summary.changes, insertions: pullResult.summary.insertions, deletions: pullResult.summary.deletions },

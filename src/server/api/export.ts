@@ -36,14 +36,15 @@ const SAFE_ARG = /^--[\w-]+(=[\w.,:-]+)?$/;
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
 interface ExportJob {
-  token:     string;
-  status:    JobStatus;
-  outputPath?: string;
-  outDir?:     string;
-  filename?:   string;
-  error?:      string;
-  stderr:      string;
-  createdAt:   number;
+  token:          string;
+  status:         JobStatus;
+  outputPath?:    string;
+  outDir?:        string;
+  filename?:      string;
+  error?:         string;
+  stderr:         string;
+  createdAt:      number;
+  downloadStarted?: number; // Set when streaming begins; prevents cleanup race
 }
 
 const jobs = new Map<string, ExportJob>();
@@ -57,10 +58,13 @@ function purgeOldJobs(): void {
   }
 }
 
-// Time-based cleanup: purge jobs and their temp dirs older than 30 minutes
+// Time-based cleanup: purge jobs and their temp dirs older than 30 minutes.
+// Jobs with an active download (started < 60s ago) are skipped to avoid racing with streams.
 setInterval(() => {
   const cutoff = Date.now() - 30 * 60 * 1000;
+  const downloadGrace = Date.now() - 60 * 1000;
   for (const [id, job] of jobs.entries()) {
+    if (job.downloadStarted && job.downloadStarted > downloadGrace) continue; // still streaming
     if (job.createdAt && job.createdAt < cutoff) {
       jobs.delete(id);
       if (job.outDir) {
@@ -240,6 +244,8 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!existsSync(job.outputPath)) {
       return res.status(410).json({ error: 'Output file no longer exists' });
     }
+
+    job.downloadStarted = Date.now();
 
     const mimeMap: Record<string, string> = {
       '.html': 'text/html',

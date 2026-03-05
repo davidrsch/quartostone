@@ -60,15 +60,22 @@ function serializeMarkdownTable(schema: FieldDef[], rows: Record<string, string>
 
 // ── Parse / serialise a database .qmd file ───────────────────────────────────
 
+const VALID_FIELD_TYPES: ReadonlySet<string> = new Set(['text', 'select', 'date', 'checkbox', 'number']);
 
 function normaliseSchema(raw: unknown): FieldDef[] {
   if (!Array.isArray(raw)) return [];
-  return (raw as Record<string, unknown>[]).map(f => ({
-    id:      String(f['id'] ?? f['name'] ?? 'field').toLowerCase().replace(/\s+/g, '_'),
-    name:    String(f['name'] ?? f['id'] ?? 'Field'),
-    type:    (f['type'] as FieldDef['type']) ?? 'text',
-    options: Array.isArray(f['options']) ? (f['options'] as string[]).map(String) : undefined,
-  }));
+  return (raw as Record<string, unknown>[]).map(f => {
+    const rawType = String(f['type'] ?? 'text').toLowerCase();
+    const type: FieldDef['type'] = VALID_FIELD_TYPES.has(rawType)
+      ? (rawType as FieldDef['type'])
+      : 'text'; // unknown types silently fall back to text
+    return {
+      id:      String(f['id'] ?? f['name'] ?? 'field').toLowerCase().replace(/\s+/g, '_'),
+      name:    String(f['name'] ?? f['id'] ?? 'Field'),
+      type,
+      options: Array.isArray(f['options']) ? (f['options'] as string[]).map(String) : undefined,
+    };
+  });
 }
 
 export function parseDbFile(content: string): DbPage | null {

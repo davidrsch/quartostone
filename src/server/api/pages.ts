@@ -8,6 +8,7 @@
 import type { Express, Request, Response } from 'express';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
 import { join, relative, extname, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { ServerContext } from '../index.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
@@ -202,7 +203,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
 
     // Soft-delete: move file to .quartostone/trash/ instead of permanent removal
     const trashDir = join(ctx.cwd, '.quartostone', 'trash');
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const id = randomUUID();
     const relPath = relative(pagesDir, filePath).replace(/\\/g, '/');
     try {
       mkdirSync(trashDir, { recursive: true });

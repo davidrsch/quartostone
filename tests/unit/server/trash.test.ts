@@ -51,6 +51,20 @@ afterEach(() => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Pre-generated UUID v4 fixtures for tests (real UUIDs pass the validation guard)
+const UUIDS = {
+  older:      '00000000-0000-4000-8000-000000000001',
+  newer:      '00000000-0000-4000-8000-000000000002',
+  okItem:     '00000000-0000-4000-8000-000000000003',
+  restore1:   '00000000-0000-4000-8000-000000000004',
+  restore2:   '00000000-0000-4000-8000-000000000005',
+  conflict:   '00000000-0000-4000-8000-000000000006',
+  noMeta:     '00000000-0000-4000-8000-000000000007',
+  noQmd:      '00000000-0000-4000-8000-000000000008',
+  del1:       '00000000-0000-4000-8000-000000000009',
+  metaOnly:   '00000000-0000-4000-8000-00000000000a',
+} as const;
+
 function seedTrashItem(id: string, originalPath: string, content = '# deleted'): TrashMeta {
   mkdirSync(trashDir, { recursive: true });
   const meta: TrashMeta = {
@@ -74,10 +88,10 @@ describe('GET /api/trash', () => {
   });
 
   it('returns trashed items sorted newest-first', async () => {
-    const older = seedTrashItem('aaa', 'old.qmd');
+    const older = seedTrashItem(UUIDS.older, 'old.qmd');
     // Ensure second item has a later timestamp
     await new Promise(r => setTimeout(r, 5));
-    const newer = seedTrashItem('bbb', 'new.qmd');
+    const newer = seedTrashItem(UUIDS.newer, 'new.qmd');
 
     const res = await client.get('/api/trash');
     expect(res.status).toBe(200);
@@ -90,13 +104,13 @@ describe('GET /api/trash', () => {
   it('skips malformed meta files gracefully', async () => {
     mkdirSync(trashDir, { recursive: true });
     writeFileSync(join(trashDir, 'broken.meta.json'), '{not valid json', 'utf-8');
-    seedTrashItem('ok1', 'good.qmd');
+    seedTrashItem(UUIDS.okItem, 'good.qmd');
 
     const res = await client.get('/api/trash');
     expect(res.status).toBe(200);
     // Only the valid item is returned
     expect(res.body).toHaveLength(1);
-    expect(res.body[0].id).toBe('ok1');
+    expect(res.body[0].id).toBe(UUIDS.okItem);
   });
 });
 
@@ -104,49 +118,49 @@ describe('GET /api/trash', () => {
 
 describe('POST /api/trash/restore/:id', () => {
   it('restores a trashed file to its original path', async () => {
-    seedTrashItem('r1', 'restored.qmd', '# Restored content');
+    seedTrashItem(UUIDS.restore1, 'restored.qmd', '# Restored content');
 
-    const res = await client.post('/api/trash/restore/r1');
+    const res = await client.post(`/api/trash/restore/${UUIDS.restore1}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, path: 'restored.qmd' });
     // File should now exist in pages dir
     expect(existsSync(join(pagesDir, 'restored.qmd'))).toBe(true);
     // Meta and trashed file should be gone
-    expect(existsSync(join(trashDir, 'r1.meta.json'))).toBe(false);
-    expect(existsSync(join(trashDir, 'r1.qmd'))).toBe(false);
+    expect(existsSync(join(trashDir, `${UUIDS.restore1}.meta.json`))).toBe(false);
+    expect(existsSync(join(trashDir, `${UUIDS.restore1}.qmd`))).toBe(false);
   });
 
   it('restores a trashed file into a subdirectory', async () => {
-    seedTrashItem('r2', 'sub/nested.qmd', '# Nested');
+    seedTrashItem(UUIDS.restore2, 'sub/nested.qmd', '# Nested');
 
-    const res = await client.post('/api/trash/restore/r2');
+    const res = await client.post(`/api/trash/restore/${UUIDS.restore2}`);
     expect(res.status).toBe(200);
     expect(existsSync(join(pagesDir, 'sub', 'nested.qmd'))).toBe(true);
   });
 
   it('returns 404 when meta file does not exist', async () => {
-    const res = await client.post('/api/trash/restore/nonexistent');
+    const res = await client.post(`/api/trash/restore/${UUIDS.noMeta}`);
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
   });
 
   it('returns 404 when meta exists but the .qmd file is missing', async () => {
     mkdirSync(trashDir, { recursive: true });
-    const meta: TrashMeta = { id: 'nomf', originalPath: 'gone.qmd', name: 'gone', deletedAt: new Date().toISOString() };
-    writeFileSync(join(trashDir, 'nomf.meta.json'), JSON.stringify(meta), 'utf-8');
+    const meta: TrashMeta = { id: UUIDS.noQmd, originalPath: 'gone.qmd', name: 'gone', deletedAt: new Date().toISOString() };
+    writeFileSync(join(trashDir, `${UUIDS.noQmd}.meta.json`), JSON.stringify(meta), 'utf-8');
     // No .qmd file written intentionally
 
-    const res = await client.post('/api/trash/restore/nomf');
+    const res = await client.post(`/api/trash/restore/${UUIDS.noQmd}`);
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/missing/i);
   });
 
   it('returns 409 when the original path already exists in pages', async () => {
-    seedTrashItem('r3', 'conflict.qmd');
+    seedTrashItem(UUIDS.conflict, 'conflict.qmd');
     // Create the file at the original path to simulate conflict
     writeFileSync(join(pagesDir, 'conflict.qmd'), '# conflict', 'utf-8');
 
-    const res = await client.post('/api/trash/restore/r3');
+    const res = await client.post(`/api/trash/restore/${UUIDS.conflict}`);
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/already exists/i);
   });
@@ -156,28 +170,28 @@ describe('POST /api/trash/restore/:id', () => {
 
 describe('DELETE /api/trash/:id', () => {
   it('permanently deletes a trashed item', async () => {
-    seedTrashItem('del1', 'todelete.qmd');
+    seedTrashItem(UUIDS.del1, 'todelete.qmd');
 
-    const res = await client.delete('/api/trash/del1');
+    const res = await client.delete(`/api/trash/${UUIDS.del1}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
-    expect(existsSync(join(trashDir, 'del1.meta.json'))).toBe(false);
-    expect(existsSync(join(trashDir, 'del1.qmd'))).toBe(false);
+    expect(existsSync(join(trashDir, `${UUIDS.del1}.meta.json`))).toBe(false);
+    expect(existsSync(join(trashDir, `${UUIDS.del1}.qmd`))).toBe(false);
   });
 
   it('returns 404 when item is not found', async () => {
-    const res = await client.delete('/api/trash/ghost');
+    const res = await client.delete(`/api/trash/${UUIDS.noMeta}`);
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
   });
 
   it('still succeeds when only meta exists and .qmd is already gone', async () => {
     mkdirSync(trashDir, { recursive: true });
-    const meta: TrashMeta = { id: 'metaonly', originalPath: 'x.qmd', name: 'x', deletedAt: new Date().toISOString() };
-    writeFileSync(join(trashDir, 'metaonly.meta.json'), JSON.stringify(meta), 'utf-8');
+    const meta: TrashMeta = { id: UUIDS.metaOnly, originalPath: 'x.qmd', name: 'x', deletedAt: new Date().toISOString() };
+    writeFileSync(join(trashDir, `${UUIDS.metaOnly}.meta.json`), JSON.stringify(meta), 'utf-8');
     // No .qmd file
 
-    const res = await client.delete('/api/trash/metaonly');
+    const res = await client.delete(`/api/trash/${UUIDS.metaOnly}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
   });

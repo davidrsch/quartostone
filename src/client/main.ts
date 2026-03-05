@@ -28,6 +28,11 @@ import { showToast } from './utils/toast.js';
 import type { ToastKind } from './utils/toast.js';
 import { TabBarManager } from './tabbar/index.js';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const GIT_STATUS_POLL_INTERVAL_MS = 30_000;  // how often to poll git status in sidebar
+const AUTO_COMMIT_DELAY_MS        = 30_000;  // idle delay before auto-commit fires
+const SAVE_STATUS_CLEAR_DELAY_MS  = 2_000;   // duration the save status badge stays visible
+
 // ─── DOM references ───────────────────────────────────────────────────────────
 const fileTreeEl       = document.getElementById('file-tree')!;
 const editorMountEl    = document.getElementById('editor-mount')!;
@@ -140,7 +145,7 @@ function showCommitPrompt(autoSlug: string) {
         updateBranchStatus();
       }
     } catch { /* silent best-effort */ }
-  }, 30000);
+  }, AUTO_COMMIT_DELAY_MS);
 }
 
 // ─── Commit dialog ────────────────────────────────────────────────────────────
@@ -226,7 +231,7 @@ async function switchMode(mode: 'source' | 'visual') {
         if (activePath) primaryTabs.markDirty(activePath, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
-        setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+        setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
         refreshGit?.();
         updateBranchStatus();
       },
@@ -423,7 +428,7 @@ async function saveCurrentPage() {
     isDirty = false;
     btnSave.disabled = true;
     sbSaveStatus.textContent = 'Saved';
-    setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+    setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
   } catch {
     showToast('Save failed', 'error');
     sbSaveStatus.textContent = '';
@@ -545,7 +550,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         primaryTabs.markDirty(path, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
-        setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
+        setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
         refreshGit?.();
         updateBranchStatus();
       },
@@ -767,7 +772,7 @@ sbSync.addEventListener('click', () => {
 updateBranchStatus();
 
 // Refresh git status every 30s
-setInterval(updateBranchStatus, 30_000);
+setInterval(updateBranchStatus, GIT_STATUS_POLL_INTERVAL_MS);
 
 // Global keyboard shortcuts (B4: AbortController for cleanup)
 const kbdController = new AbortController();

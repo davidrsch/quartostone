@@ -3,24 +3,27 @@
 
 /**
  * Converts an unknown caught value to a safe, non-leaking error string.
- * Strips absolute file-system paths and embedded credentials.
+ * Strips embedded credentials and absolute file-system paths.
+ * Credentials are stripped first so URL paths are not partially exposed.
  */
 export function sanitizeError(e: unknown): string {
   let msg = e instanceof Error ? e.message : String(e);
-  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
+  // Strip embedded credentials (must run before path stripping to avoid exposing URL paths)
   msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
+  // Strip absolute file-system paths; negative lookbehind avoids matching URL schemes (https://)
+  msg = msg.replace(/(?<![a-zA-Z:/\\])(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
   return msg;
 }
 
 /**
- * Same as sanitizeError but uses git-specific credential stripping
+ * Same as sanitizeError but applies git-specific credential stripping
  * (handles git remote URLs with embedded user:token pairs).
  */
 export function sanitizeGitError(e: unknown): string {
   let msg = e instanceof Error ? e.message : String(e);
-  // Remove absolute paths (e.g. /home/user/... or C:\Users\...)
-  msg = msg.replace(/(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
-  // Remove embedded credentials (https://user:token@host)
-  msg = msg.replace(/::\/\/[^@\s]+@/g, '://[credentials]@');
+  // Strip embedded git credentials (https://user:token@host)
+  msg = msg.replace(/https?:\/\/[^@\s]+@/gi, 'https://<credentials>@');
+  // Strip absolute paths; negative lookbehind avoids URL scheme matches (https://)
+  msg = msg.replace(/(?<![a-zA-Z:/\\])(?:[A-Za-z]:)?[/\\][^ \t\n"']*/g, '[path]');
   return msg;
 }
