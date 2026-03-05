@@ -62,6 +62,30 @@ Delete a page.
 
 ---
 
+## Directories
+
+### `POST /api/directories`
+
+Create a new directory (including nested parents).
+
+**Body:** `{ path: string }` — relative to `pages_dir`.
+
+**Response:** `{ ok: true, path: string }` — `201 Created`
+
+**Errors:** `400` if `path` is missing, invalid, or traverses outside `pages_dir`; `409` if the directory already exists.
+
+---
+
+### `DELETE /api/directories/*`
+
+Delete an empty directory.
+
+**Response:** `{ ok: true }` — `200 OK`
+
+**Errors:** `400` if the path traverses outside `pages_dir` or the target is a file (not a directory); `404` if the directory does not exist; `409` if the directory is not empty.
+
+---
+
 ## Git
 
 ### `GET /api/git/status`
@@ -212,6 +236,8 @@ Run a code snippet in an isolated subprocess.
 
 - Python falls back from `python` → `python3` automatically on ENOENT.
 - Timeout is 30 seconds; `timedOut: true` if exceeded.
+
+**Errors:** `403` if `allow_code_execution` is `false` in `_quartostone.yml`; `500`/`501` if the interpreter is not installed.
 
 ---
 

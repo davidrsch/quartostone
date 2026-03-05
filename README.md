@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/client/public/logo.png" alt="Quartostone" width="120" />
+</p>
+
 # Quartostone
 
 > A Notion-like, Git-native knowledge base built on Quarto.
@@ -182,6 +186,7 @@ Full REST API and WebSocket event reference: [`docs/api-reference.md`](docs/api-
 | Group | Endpoints |
 | --- | --- |
 | Pages | `GET/PUT/POST/DELETE /api/pages` |
+| Directories | `POST /api/directories`, `DELETE /api/directories/*` |
 | Git | `/api/git/status`, `/log`, `/diff`, `/commit`, `/branches`, `/checkout` |
 | Exec | `POST /api/exec`  run Python / R / Julia cells |
 | Export | `POST /api/export`, `GET /api/export/status`, `GET /api/export/download` |

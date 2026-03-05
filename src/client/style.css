@@ -55,10 +55,20 @@ html, body {
 }
 
 .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-heading);
   letter-spacing: 0.02em;
+}
+
+.logo-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 #file-tree {
