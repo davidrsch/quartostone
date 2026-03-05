@@ -38,15 +38,13 @@ import { TabBarManager } from './tabbar/index.js';
 import { API } from './api/endpoints.js';
 import { initToken, apiFetch } from './api/request.js';
 import { STORAGE_KEYS } from './storage.js';
+import { activePath, isDirty, editorMode, setActivePath, setIsDirty, setEditorMode } from './state/editorState.js';
+import { updateBranchStatus, initStatusBar } from './ui/statusBar.js';
+import { openCommitDialog, initCommitDialog, showCommitPrompt, makeAutoSlug } from './ui/commitDialog.js';
+import { registerKeyboardShortcuts } from './keyboard.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const GIT_STATUS_POLL_INTERVAL_MS = 30_000;  // how often to poll git status in sidebar
-const AUTO_COMMIT_DELAY_MS        = 30_000;  // idle delay before auto-commit fires
 const SAVE_STATUS_CLEAR_DELAY_MS  = 2_000;   // duration the save status badge stays visible
-/** Q26/Q32: single source of truth for auto-commit message prefix. */
-const QS_SLUG_PREFIX = 'qs-';
-/** Q26: generate a random auto-commit slug with the canonical prefix. */
-function makeAutoSlug(): string { return `${QS_SLUG_PREFIX}${Math.random().toString(36).slice(2, 10)}`; }
 
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
 // Q03: throws a clear error instead of a cryptic TypeError when a required element is missing.
@@ -73,13 +71,6 @@ const propertiesPanel  = ensureEl('properties-panel');
 const propertiesBody   = ensureEl('properties-body');
 const gitPanelEl       = document.getElementById('git-panel')!;
 const historyPanelEl   = document.getElementById('history-panel')!;
-const toastContainer   = ensureEl('toast-container');
-const commitDialog     = document.getElementById('commit-dialog') as HTMLDialogElement;
-const commitMsgInput   = document.getElementById('commit-msg') as HTMLInputElement;
-const btnCommitConfirm = document.getElementById('btn-commit-confirm') as HTMLButtonElement;
-const btnCommitCancel  = document.getElementById('btn-commit-cancel') as HTMLButtonElement;
-const sbBranch         = document.getElementById('sb-branch')!;
-const sbSync           = document.getElementById('sb-sync')!;
 const sbRenderStatus   = document.getElementById('sb-render-status')!;
 const sbSaveStatus     = document.getElementById('sb-save-status')!;
 const editorMount2El   = document.getElementById('editor-mount-2')!;
@@ -105,9 +96,6 @@ const btnNewDbCancel   = document.getElementById('btn-new-db-cancel') as HTMLBut
 let activeView: EditorView | null = null;
 let activeVisual: VisualEditorInstance | null = null;
 let activeDb: DbInstance | null = null;
-let activePath: string | null = null;
-let isDirty = false;
-let editorMode: 'source' | 'visual' = 'source';
 let refreshSidebar: (() => Promise<void>) | null = null;
 let refreshGit: (() => Promise<void>) | null = null;
 let branchPicker: BranchPickerResult | null = null;
@@ -118,7 +106,7 @@ let graphView: { open(): void; close(): void; refresh(): void } | null = null;
 let switchingMode = false;    // M-4: guard against concurrent mode switches
 let openPageInProgress = false; // B9: guard against concurrent openPage calls
 let visualMarkdownCache = ''; // last-known markdown when visual editor is active
-let serverPagesDir = 'pages'; // overridden at boot time via GET /api/config (Q29)
+const serverPagesDir = 'pages'; // overridden at boot time via GET /api/config (Q29)
 
 // module-level palette controls (FIX MAIN-05)
 let openCmdPalette: () => void  = () => {};
@@ -133,77 +121,6 @@ let activeView2: EditorView | null = null;
 let activePath2: string | null = null;
 
 const propertiesController = createPropertiesPanel(propertiesBody);
-
-// ─── Toast helper ─────────────────────────────────────────────────────────────
-// showToast is imported from './utils/toast.js' (see top of file)
-
-function showCommitPrompt(autoSlug: string) {
-  const toast = document.createElement('div');
-  toast.className = 'toast info';
-  toast.innerHTML = `<span>Rendered — commit changes?</span>`;
-  const actions = document.createElement('div');
-  actions.className = 'toast-actions';
-  const confirmBtn = document.createElement('button');
-  confirmBtn.textContent = 'Commit';
-  confirmBtn.addEventListener('click', () => { toast.remove(); clearTimeout(autoCommitTimer); openCommitDialog(autoSlug); });
-  const dismissBtn = document.createElement('button');
-  dismissBtn.textContent = 'Dismiss';
-  dismissBtn.addEventListener('click', () => { toast.remove(); clearTimeout(autoCommitTimer); });
-  actions.append(confirmBtn, dismissBtn);
-  toast.appendChild(actions);
-  toastContainer.appendChild(toast);
-  // M-3: if the user ignores the toast for 30 s, auto-commit with the slug
-  const autoCommitTimer = setTimeout(async () => {
-    if (!toast.parentNode) return; // user already acted
-    toast.remove();
-    try {
-      const res = await apiFetch(API.gitCommit, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: autoSlug }),
-      });
-      if (res.ok) {
-        showToast(`Auto-committed: ${autoSlug}`, 'info');
-        refreshGit?.();
-        branchPicker?.refresh();
-        updateBranchStatus();
-      }
-    } catch { /* silent best-effort */ }
-  }, AUTO_COMMIT_DELAY_MS);
-}
-
-// ─── Commit dialog ────────────────────────────────────────────────────────────
-function openCommitDialog(defaultMsg = '') {
-  commitMsgInput.value = defaultMsg;
-  commitDialog.showModal();
-  commitMsgInput.select();
-}
-
-btnCommitConfirm.addEventListener('click', async () => {
-  const message = commitMsgInput.value.trim();
-  if (!message) return;
-  commitDialog.close();
-  try {
-    const res = await apiFetch(API.gitCommit, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-    if (!res.ok) throw new Error((await res.json() as { error: string }).error);
-    showToast(`Committed: ${message}`, 'success');
-    await refreshGit?.();
-    await branchPicker?.refresh();
-    updateBranchStatus();
-    if (activePath) {
-      const panel = historyPanelEl as HTMLElement & { refreshHistory?: () => void };
-      panel.refreshHistory?.();
-    }
-  } catch (e) {
-    showToast(`Commit failed: ${String(e)}`, 'error');
-  }
-});
-
-btnCommitCancel.addEventListener('click', () => commitDialog.close());
 
 // ─── Editor mode toggle ──────────────────────────────────────────────────────
 async function switchMode(mode: 'source' | 'visual') {
@@ -227,7 +144,7 @@ async function switchMode(mode: 'source' | 'visual') {
       documentPath: activePath,
       onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
       onDirty: () => {
-        isDirty = true;
+        setIsDirty(true);
         if (activePath) primaryTabs.markDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
@@ -236,7 +153,7 @@ async function switchMode(mode: 'source' | 'visual') {
       },
     });
 
-    editorMode = 'visual';
+    setEditorMode('visual');
     btnModeSource.classList.remove('active');
     btnModeVisual.classList.add('active');
   } else {
@@ -251,7 +168,7 @@ async function switchMode(mode: 'source' | 'visual') {
       container: editorMountEl,
       pagePath: activePath,
       onSave: () => {
-        isDirty = false;
+        setIsDirty(false);
         if (activePath) primaryTabs.markDirty(activePath, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
@@ -264,7 +181,7 @@ async function switchMode(mode: 'source' | 'visual') {
         sbSaveStatus.textContent = '';
       },
       onDirty: () => {
-        isDirty = true;
+        setIsDirty(true);
         if (activePath) primaryTabs.markDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
@@ -273,13 +190,13 @@ async function switchMode(mode: 'source' | 'visual') {
 
     // Inject markdown from visual editor into source editor
     if (markdown && activeView) {
-      const { dispatch, state } = activeView;
-      dispatch(state.update({
+      const { state } = activeView;
+      activeView.dispatch(state.update({
         changes: { from: 0, to: state.doc.length, insert: markdown },
       }));
     }
 
-    editorMode = 'source';
+    setEditorMode('source');
     btnModeSource.classList.add('active');
     btnModeVisual.classList.remove('active');
   }
@@ -297,7 +214,7 @@ document.querySelectorAll<HTMLButtonElement>('.stab').forEach(tab => {
     document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.stab-panel').forEach(p => p.classList.add('hidden'));
     tab.classList.add('active');
-    const panelId = `tab-${tab.dataset.tab}`;
+    const panelId = `tab-${tab.dataset['tab']}`;
     document.getElementById(panelId)?.classList.remove('hidden');
   });
 });
@@ -313,8 +230,8 @@ btnProperties.addEventListener('click', () => {
         : (activeView ? activeView.state.doc.toString() : '');
     const setContent = async (newContent: string) => {
       if (editorMode === 'source' && activeView) {
-        const { dispatch, state } = activeView;
-        dispatch(state.update({
+        const { state } = activeView;
+        activeView.dispatch(state.update({
           changes: { from: 0, to: state.doc.length, insert: newContent },
         }));
       } else if (editorMode === 'visual' && activeVisual) {
@@ -448,7 +365,7 @@ async function saveCurrentPage() {
       showToast('Save failed', 'error');
       return;
     }
-    isDirty = false;
+    setIsDirty(false);
     btnSave.disabled = true;
     sbSaveStatus.textContent = 'Saved';
     setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
@@ -458,40 +375,13 @@ async function saveCurrentPage() {
   }
 }
 
-// ─── Status bar ───────────────────────────────────────────────────────────────
-async function updateBranchStatus() {
-  try {
-    const res = await apiFetch(API.gitStatus);
-    if (!res.ok) {
-      sbBranch.textContent = '';
-      sbSync.textContent = '';
-      sbSync.classList.add('hidden');
-      return;
-    }
-    const s = await res.json() as { current: string; files: unknown[]; ahead: number; behind: number };
-    const dirty = s.files.length > 0;
-    sbBranch.textContent = `⎇ ${s.current}${dirty ? ` · ${s.files.length} changed` : ''}`;
-    sbBranch.className = dirty ? 'sb-dirty' : '';
-    // Populate ahead/behind sync indicator
-    const syncParts: string[] = [];
-    if (s.ahead  > 0) syncParts.push(`↑${s.ahead}`);
-    if (s.behind > 0) syncParts.push(`↓${s.behind}`);
-    sbSync.textContent = syncParts.join(' ');
-    sbSync.classList.toggle('hidden', syncParts.length === 0);
-  } catch {
-    sbBranch.textContent = '';
-    sbSync.textContent = '';
-    sbSync.classList.add('hidden');
-  }
-}
-
 // ─── Breadcrumb navigation (#139) ────────────────────────────────────────────
 // Thin wrapper that binds the module-level DOM element and sidebar reference
 // to the pure renderBreadcrumb function from breadcrumb.ts.
 function renderBreadcrumb(path: string | null): void {
-  const el = document.getElementById('editor-breadcrumb') as HTMLElement | null;
+  const el = document.getElementById('editor-breadcrumb');
   if (!el) return;
-  _renderBreadcrumb(path, el, (segPath) => {
+  renderBreadcrumbPure(path, el, (segPath: string) => {
     const target = fileTreeEl.querySelector<HTMLElement>(`[data-path="${segPath}"]`);
     if (target) {
       target.scrollIntoView({ block: 'nearest' });
@@ -517,9 +407,9 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   editorMountEl.innerHTML = '';
 
   primaryTabs.ensure(path, name);
-  activePath = path;
+  setActivePath(path);
   renderBreadcrumb(path);
-  isDirty = false;
+  setIsDirty(false);
   pageTitleEl.textContent = name;
   noPageMessageEl.classList.remove('visible');
   btnSave.disabled = true;
@@ -552,7 +442,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         documentPath: path,
         onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
         onDirty: () => {
-          isDirty = true;
+          setIsDirty(true);
           primaryTabs.markDirty(path, true);
           btnSave.disabled = false;
           sbSaveStatus.textContent = 'Unsaved changes';
@@ -561,7 +451,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
     } catch (e) {
       showToast(`Failed to load page: ${String(e)}`, 'error');
       noPageMessageEl.classList.add('visible');
-      activePath = null;
+      setActivePath(null);
       renderBreadcrumb(null);
     }
   } else {
@@ -569,7 +459,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       container: editorMountEl,
       pagePath: path,
       onSave: () => {
-        isDirty = false;
+        setIsDirty(false);
         primaryTabs.markDirty(path, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
@@ -582,7 +472,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         sbSaveStatus.textContent = '';
       },
       onDirty: () => {
-        isDirty = true;
+        setIsDirty(true);
         primaryTabs.markDirty(path, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
@@ -607,8 +497,8 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         : (activeView ? activeView.state.doc.toString() : '');
     const setContent = async (newContent: string) => {
       if (editorMode === 'source' && activeView) {
-        const { dispatch, state } = activeView;
-        dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
+        const { state } = activeView;
+        activeView.dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
       } else if (editorMode === 'visual' && activeVisual) {
         // M-2: push frontmatter edits back into the visual editor
         await activeVisual.setMarkdown(newContent);
@@ -700,7 +590,7 @@ connectLiveReload((event, data) => {
   }
   if (event === 'git:prompt') {
     const d = data as { autoSlug?: string };
-    showCommitPrompt(d.autoSlug ?? `${QS_SLUG_PREFIX}xxxxxxxx`);
+    showCommitPrompt(d.autoSlug ?? makeAutoSlug());
   }
   if (event === 'git:committed') {
     refreshGit?.();
@@ -737,7 +627,7 @@ initSidebar(fileTreeEl, (path, name) => {
   onDelete(path) {
     const cleanPath = path.endsWith('.qmd') ? path : `${path}.qmd`;
     if (activePath && (activePath === path || activePath === cleanPath)) {
-      activePath = null;
+      setActivePath(null);
       renderBreadcrumb(null);
       activeView?.destroy(); activeView = null;
       activeVisual?.destroy(); activeVisual = null;
@@ -790,68 +680,30 @@ initHistoryPanel(historyPanelEl, () => {
   showToast('File restored to selected commit', 'success');
 }).then(hp => { historySetPage = hp.setPage; }).catch(err => showToast(`History panel init failed: ${String(err)}`, 'error'));
 
-// Click on ahead/behind badge → open Git panel
-sbSync.addEventListener('click', () => {
-  document.querySelector<HTMLButtonElement>('.stab[data-tab="git"]')?.click();
+initCommitDialog(async () => {
+  await refreshGit?.();
+  await branchPicker?.refresh();
+  updateBranchStatus();
+  if (activePath) {
+    const panel = historyPanelEl as HTMLElement & { refreshHistory?: () => void };
+    panel.refreshHistory?.();
+  }
 });
 
-updateBranchStatus();
+initStatusBar();
 
-// Refresh git status every 30s
-setInterval(updateBranchStatus, GIT_STATUS_POLL_INTERVAL_MS);
-
-// Global keyboard shortcuts (B4: AbortController for cleanup)
-const kbdController = new AbortController();
-window.addEventListener('beforeunload', () => kbdController.abort(), { once: true });
-document.addEventListener('keydown', e => {
-  const mod = e.ctrlKey || e.metaKey;
-  // Ctrl+S — save
-  if (mod && e.key === 's') {
-    e.preventDefault();
-    if (isDirty) void saveCurrentPage();
-  }
-  // Ctrl+Shift+G — open commit dialog (L-1)
-  if (mod && e.shiftKey && e.key === 'G') {
-    e.preventDefault();
-    if (activePath) openCommitDialog(makeAutoSlug());
-  }
-  // Ctrl+Shift+E — toggle visual/source editor mode
-  if (mod && e.shiftKey && e.key === 'E') {
-    e.preventDefault();
-    if (activePath && !activeDb) switchMode(editorMode === 'visual' ? 'source' : 'visual');
-  }
-  // Ctrl+Shift+P — toggle preview panel (L-1)
-  if (mod && e.shiftKey && e.key === 'P') {
-    e.preventDefault();
-    document.getElementById('btn-preview')?.click();
-  }
-  // Ctrl+P — search pages overlay
-  if (mod && !e.shiftKey && e.key === 'p') {
-    e.preventDefault();
-    searchOverlay.open();
-  }
-  // Ctrl+K — command palette (#113)
-  if (mod && e.key === 'k') {
-    e.preventDefault();
-    openCmdPalette();
-  }
-  // Ctrl+\ — toggle split editor (#140)
-  if (mod && e.key === '\\') {
-    e.preventDefault();
-    toggleSplit();
-  }
-  // Ctrl+Shift+B — toggle properties panel shortcut
-  if (mod && e.shiftKey && e.key === 'B') {
-    e.preventDefault();
-    btnProperties.click();
-  }
-  // Escape — close command palette if open
-  if (e.key === 'Escape') {
-    if (!document.getElementById('cmd-palette')!.classList.contains('hidden')) {
-      closeCmdPalette();
-    }
-  }
-}, { signal: kbdController.signal });
+registerKeyboardShortcuts({
+  hasActiveDb: () => activeDb !== null,
+  saveCurrentPage,
+  openCommitDialog,
+  makeAutoSlug,
+  switchMode,
+  searchOpen: () => searchOverlay.open(),
+  openCmdPalette: () => openCmdPalette(),
+  closeCmdPalette: () => closeCmdPalette(),
+  toggleSplit,
+  clickProperties: () => btnProperties.click(),
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE-8: UX Polish and Accessibility
@@ -890,7 +742,7 @@ const primaryTabs = new TabBarManager(
   'tab-bar',
   (path, name) => openPage(path, name),
   () => {
-    activePath = null;
+    setActivePath(null);
     renderBreadcrumb(null);
     activeView?.destroy(); activeView = null;
     activeVisual?.destroy(); activeVisual = null;
@@ -917,9 +769,6 @@ const secondaryTabs = new TabBarManager(
   titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
   window.addEventListener('beforeunload', () => titleObs.disconnect());
 }
-
-// Mark tab dirty when isDirty changes
-function setDirtyTab(dirty: boolean) { if (activePath) primaryTabs.markDirty(activePath, dirty); }
 
 // ─── #113 Command palette (Ctrl+K) ───────────────────────────────────────────
 {
@@ -1025,19 +874,6 @@ function setDirtyTab(dirty: boolean) { if (activePath) primaryTabs.markDirty(act
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
     const stored = localStorage.getItem('qs_theme');
     if (!stored) applyTheme(e.matches ? 'light' : 'dark', document.documentElement, btnTheme);
-  });
-}
-
-// ─── #116 / #117 Status bar click actions ────────────────────────────────────
-{
-  const sbBranchBtn = document.getElementById('sb-branch') as HTMLButtonElement | null;
-  sbBranchBtn?.addEventListener('click', () => {
-    (document.getElementById('btn-branch-picker') as HTMLButtonElement)?.click();
-  });
-
-  const sbSaveBtn = document.getElementById('sb-save-status');
-  sbSaveBtn?.addEventListener('click', () => {
-    document.querySelector<HTMLButtonElement>('.stab[data-tab="git"]')?.click();
   });
 }
 

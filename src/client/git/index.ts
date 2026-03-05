@@ -183,7 +183,7 @@ export async function initGitPanel(
     try {
       const res = await fetch(API.gitStatus);
       if (!res.ok) throw new Error('status failed');
-      const s: GitStatus = await res.json();
+      const s = await res.json() as GitStatus;
       renderStatus(statusStrip, s);
     } catch {
       statusStrip.innerHTML = '<span class="git-meta">Could not read git status.</span>';
@@ -194,7 +194,7 @@ export async function initGitPanel(
     try {
       const res = await fetch(API.gitLog);
       if (!res.ok) throw new Error('log failed');
-      const commits: CommitEntry[] = await res.json();
+      const commits = await res.json() as CommitEntry[];
       renderHistory(commitList, commits, async (hash, msg) => {
         diffTitle.textContent = `${hash.slice(0, 7)} · ${msg}`;
         diffBody.textContent = 'Loading…';
@@ -222,7 +222,7 @@ export async function initGitPanel(
         btnPull.disabled = true;
         return;
       }
-      const info: RemoteInfo = await res.json();
+      const info = await res.json() as RemoteInfo;
       remoteUrlInput.value = info.url;
       const parts: string[] = [];
       if (info.ahead > 0) parts.push(`↑${info.ahead}`);
@@ -283,7 +283,7 @@ function renderHistory(
     row.addEventListener('click', () => {
       el.querySelectorAll('.git-commit-row.active').forEach(r => r.classList.remove('active'));
       row.classList.add('active');
-      const hash = row.dataset.hash!;
+      const hash = row.dataset['hash']!;
       const msg = row.querySelector<HTMLElement>('.git-commit-msg')?.textContent ?? '';
       onDiff(hash, msg);
     });

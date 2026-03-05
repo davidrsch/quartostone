@@ -3,11 +3,14 @@
 // Uses the 'yaml' package (already a project dependency).
 
 import { parse as yamlParse } from 'yaml';
+import type { Frontmatter } from '../../shared/frontmatter.js';
+
+export type { Frontmatter } from '../../shared/frontmatter.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface FrontmatterResult {
-  meta: Record<string, unknown>;
+  meta: Frontmatter;
   body: string;
 }
 
@@ -19,7 +22,7 @@ export function parseFrontmatter(content: string): FrontmatterResult {
   const m = FM_RE.exec(content);
   if (!m) return { meta: {}, body: content };
   try {
-    const meta = (yamlParse(m[1] ?? '') ?? {}) as Record<string, unknown>;
+    const meta = (yamlParse(m[1] ?? '') ?? {}) as Frontmatter;
     return { meta, body: content.slice(m[0].length) };
   } catch {
     return { meta: {}, body: content };

@@ -17,9 +17,9 @@ interface ExportJobStatus {
 export type GetCurrentPathFn = () => string | null;
 
 export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageReady(ready: boolean): void } {
-  const picker    = document.getElementById('export-picker') as HTMLElement | null;
+  const picker    = document.getElementById('export-picker');
   const btnExport = document.getElementById('btn-export')   as HTMLButtonElement | null;
-  const dropdown  = document.getElementById('export-dropdown') as HTMLElement | null;
+  const dropdown  = document.getElementById('export-dropdown');
 
   if (!picker || !btnExport || !dropdown) return { setPageReady() {} };
 
@@ -113,8 +113,8 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
         body: JSON.stringify({ path, format, extraArgs }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error((err as { error?: string }).error ?? res.statusText);
+        const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+        throw new Error(err.error ?? res.statusText);
       }
       const data = await res.json() as { token: string };
       token = data.token;
@@ -179,6 +179,6 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
   /* ── Return control object ────────────────────────────────────────────────── */
   return {
-    setPageReady(ready: boolean) { btnExport!.disabled = !ready; },
+    setPageReady(ready: boolean) { btnExport.disabled = !ready; },
   };
 }

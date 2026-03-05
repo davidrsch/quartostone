@@ -2,23 +2,11 @@
 // Page properties panel — reads and edits YAML frontmatter from editor content
 
 import { escAttr } from '../utils/escape.js';
+import type { Frontmatter } from '../../shared/frontmatter.js';
 
 export interface PropertiesPanel {
-  // Q25: parseFrontmatter / serializeFrontmatter duplicated here and in
-  // src/server/utils/frontmatter.ts — candidate for extraction to src/shared/frontmatter.ts.
   mount: (getContent: () => string | Promise<string>, setContent: (s: string) => void) => void;
   unmount: () => void;
-}
-
-interface Frontmatter {
-  [key: string]: unknown;
-  title?: string;
-  author?: string;
-  date?: string;
-  categories?: string[];
-  description?: string;
-  draft?: boolean;
-  icon?: string;
 }
 
 // ─── Frontmatter parsing ──────────────────────────────────────────────────────
@@ -28,7 +16,7 @@ const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 export function parseFrontmatter(content: string): { fm: Frontmatter; body: string } {
   const m = FM_RE.exec(content);
   if (!m) return { fm: {}, body: content };
-  const fm = parseYamlSimple(m[1]);
+  const fm = parseYamlSimple(m[1]!);
   const body = content.slice(m[0].length);
   return { fm, body };
 }
@@ -39,17 +27,17 @@ function parseYamlSimple(yaml: string): Frontmatter {
   const lines = yaml.split('\n');
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i]!;
     const m = line.match(/^([-_\w][\w-]*):\s*(.*)/);
     if (m) {
-      const key = m[1];
-      const val = m[2].trim();
+      const key = m[1]!;
+      const val = m[2]!.trim();
       if (val === '[' || val === '') {
         // multi-line list
         const items: string[] = [];
         i++;
-        while (i < lines.length && lines[i].trimStart().startsWith('-')) {
-          items.push(lines[i].replace(/^\s*-\s*/, '').trim());
+        while (i < lines.length && lines[i]!.trimStart().startsWith('-')) {
+          items.push(lines[i]!.replace(/^\s*-\s*/, '').trim());
           i++;
         }
         out[key] = items;
@@ -87,7 +75,7 @@ export function serializeFrontmatter(fm: Frontmatter): string {
     } else if (typeof val === 'string' && val.includes(':')) {
       lines.push(`${key}: "${val}"`);
     } else {
-      lines.push(`${key}: ${val}`);
+      lines.push(`${key}: ${val as number | boolean}`);
     }
   }
   return '---\n' + lines.join('\n') + '\n---';
@@ -166,7 +154,7 @@ export function createPropertiesPanel(containerEl: HTMLElement): PropertiesPanel
     for (const key of Object.keys(fm)) {
       if (STANDARD_KEYS.has(key)) continue;
       const val = fm[key];
-      const valStr = Array.isArray(val) ? val.join(', ') : String(val ?? '');
+      const valStr = Array.isArray(val) ? val.join(', ') : String((val ?? '') as string | number | boolean);
       form.appendChild(makeExtraRow(key, valStr, save));
     }
 

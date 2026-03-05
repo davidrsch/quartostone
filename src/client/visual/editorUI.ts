@@ -25,7 +25,7 @@ export function buildEditorUIPrefs() {
     equationPreview: () => true,
     packageListingEnabled: () => false,
     tabKeyMoveFocus: () => false,
-    emojiSkinTone: () => emojiTone as SkinTone,
+    emojiSkinTone: () => emojiTone,
     setEmojiSkinTone: (t: SkinTone) => { emojiTone = t; },
     zoteroUseBetterBibtex: () => false,
     bibliographyDefaultType: () => bibDefaultType,

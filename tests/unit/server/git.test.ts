@@ -108,6 +108,12 @@ describe('GET /api/git/diff', () => {
     expect(typeof res.body.diff).toBe('string');
   });
 
+  it('returns 400 for an invalid SHA format', async () => {
+    const res = await client.get('/api/git/diff').query({ sha: 'not-a-valid-sha!' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid sha/i);
+  });
+
   it('returns diff for a specific commit sha', async () => {
     const logRes = await client.get('/api/git/log');
     const sha = (logRes.body as Array<{ hash: string }>)[0]?.hash;
@@ -125,6 +131,13 @@ describe('POST /api/git/commit', () => {
     const res = await client.post('/api/git/commit').send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/message/i);
+  });
+
+  it('returns 400 when commit message exceeds 4096 characters', async () => {
+    const longMessage = 'x'.repeat(4097);
+    const res = await client.post('/api/git/commit').send({ message: longMessage });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/too long/i);
   });
 
   it('creates a commit and returns the commit hash', async () => {

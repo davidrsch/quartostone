@@ -21,7 +21,7 @@ import { EXPORT_FORMATS } from '../../shared/formats.js';
 // Alias for backward compatibility with code that references SUPPORTED_FORMATS.
 export const SUPPORTED_FORMATS = EXPORT_FORMATS;
 
-export type ExportFormat = typeof EXPORT_FORMATS[number] | string;
+export type ExportFormat = typeof EXPORT_FORMATS[number] | (string & {});
 
 // ── Argument security ─────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ const BLOCKED_ARGS = [
 const SAFE_ARG = /^--[\w-]+(=[\w.,:-]+)?$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// ── Job store (in-memory) ─────────────────────────────────────────────────────
+// ── Job types ─────────────────────────────────────────────────────────────────
 
 export type JobStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -49,32 +49,57 @@ interface ExportJob {
   downloadStarted?: number; // Set when streaming begins; prevents cleanup race
 }
 
-const jobs = new Map<string, ExportJob>();
+// ── ExportManager class ───────────────────────────────────────────────────────
 
-/** Keeps only the most recent 100 jobs in memory by evicting the oldest entries. */
-function purgeOldJobs(): void {
-  // simple approach: keep only the last 100 jobs
-  if (jobs.size > 100) {
-    const oldest = Array.from(jobs.keys()).slice(0, jobs.size - 100);
-    for (const k of oldest) jobs.delete(k);
+/** Encapsulates the in-memory export job store and its cleanup timer. */
+export class ExportManager {
+  readonly jobs = new Map<string, ExportJob>();
+  private cleanupIntervalHandle: NodeJS.Timeout | undefined;
+
+  /** Keeps only the most recent 100 jobs in memory by evicting the oldest entries. */
+  purgeOldJobs(): void {
+    if (this.jobs.size > 100) {
+      const oldest = Array.from(this.jobs.keys()).slice(0, this.jobs.size - 100);
+      for (const k of oldest) this.jobs.delete(k);
+    }
+  }
+
+  /** Stop the export cleanup timer (used in tests). */
+  stopCleanupInterval(): void {
+    if (this.cleanupIntervalHandle !== undefined) {
+      clearInterval(this.cleanupIntervalHandle);
+      this.cleanupIntervalHandle = undefined;
+    }
+  }
+
+  startCleanupInterval(): void {
+    this.cleanupIntervalHandle = setInterval(() => {
+      const cutoff = Date.now() - 30 * 60 * 1000;
+      const downloadGrace = Date.now() - 60 * 1000;
+      for (const [id, job] of this.jobs.entries()) {
+        if (job.downloadStarted && job.downloadStarted > downloadGrace) continue;
+        if (job.createdAt && job.createdAt < cutoff) {
+          this.jobs.delete(id);
+          if (job.outDir) {
+            try { rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
+          }
+        }
+      }
+    }, 5 * 60 * 1000);
+    this.cleanupIntervalHandle.unref();
   }
 }
 
-// Time-based cleanup: purge jobs and their temp dirs older than 30 minutes.
-// Jobs with an active download (started < 60s ago) are skipped to avoid racing with streams.
-setInterval(() => {
-  const cutoff = Date.now() - 30 * 60 * 1000;
-  const downloadGrace = Date.now() - 60 * 1000;
-  for (const [id, job] of jobs.entries()) {
-    if (job.downloadStarted && job.downloadStarted > downloadGrace) continue; // still streaming
-    if (job.createdAt && job.createdAt < cutoff) {
-      jobs.delete(id);
-      if (job.outDir) {
-        try { rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
-      }
-    }
-  }
-}, 5 * 60 * 1000).unref();
+/** Factory — creates a fresh, isolated ExportManager instance. */
+export function createExportManager(): ExportManager { return new ExportManager(); }
+
+// Module-level singleton used by the server.
+const _defaultExportManager = createExportManager();
+
+/** Stop the export cleanup timer — intended for use in tests only. */
+export function stopCleanupInterval(): void {
+  _defaultExportManager.stopCleanupInterval();
+}
 
 // ── Quarto runner ─────────────────────────────────────────────────────────────
 
@@ -173,6 +198,9 @@ function runExport(
  */
 export function registerExportApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
+  // Use injected instance from context if provided (enables test isolation),
+  // otherwise fall back to the module-level singleton.
+  const em = ctx.exportManager ?? _defaultExportManager;
 
   // POST /api/export  body: { path: string; format: string; extraArgs?: string[] }
   app.post('/api/export', (req: Request, res: Response) => {
@@ -201,17 +229,17 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     const badArg = extraArgs.find((a: unknown): boolean => {
       if (typeof a !== 'string') return true;
       if (!SAFE_ARG.test(a)) return true;
-      return BLOCKED_ARGS.some(b => a === b || (a as string).startsWith(b + '='));
+      return BLOCKED_ARGS.some(b => a === b || (a).startsWith(b + '='));
     });
     if (badArg !== undefined) {
       return badRequest(res, `Blocked or unsafe argument: ${String(badArg)}`);
     }
-    const safeExtraArgs = extraArgs as string[];
+    const safeExtraArgs = extraArgs;
 
-    purgeOldJobs();
+    em.purgeOldJobs();
     const token = randomUUID();
     const job: ExportJob = { token, status: 'pending', stderr: '', createdAt: Date.now() };
-    jobs.set(token, job);
+    em.jobs.set(token, job);
 
     // Start async — respond immediately with token
     setImmediate(() => runExport(cwd, absPath, format, safeExtraArgs, job));
@@ -230,7 +258,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!token) return badRequest(res, 'token is required');
     if (!UUID_RE.test(token)) return badRequest(res, 'Invalid token');
 
-    const job = jobs.get(token);
+    const job = em.jobs.get(token);
     if (!job) return notFound(res, 'Job not found');
 
     res.json({
@@ -248,7 +276,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     if (!token) return badRequest(res, 'token is required');
     if (!UUID_RE.test(token)) return badRequest(res, 'Invalid token');
 
-    const job = jobs.get(token);
+    const job = em.jobs.get(token);
     if (!job)              return notFound(res, 'Job not found');
     if (job.status !== 'done' || !job.outputPath || !job.filename) {
       return conflict(res, `Job is not complete (status: ${job.status})`);
@@ -286,8 +314,10 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     });
     stream.on('end', () => {
       try { if (job.outDir) rmSync(job.outDir, { recursive: true, force: true }); } catch { /* ignore */ }
-      jobs.delete(token);
+      em.jobs.delete(token);
     });
     stream.pipe(res);
   });
+
+  em.startCleanupInterval();
 }

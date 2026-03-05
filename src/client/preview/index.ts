@@ -22,11 +22,11 @@ interface PreviewStartResponse {
 
 export function initPreviewPanel(): PreviewPanel {
   const btnPreview  = document.getElementById('btn-preview')    as HTMLButtonElement | null;
-  const pane        = document.getElementById('preview-pane')   as HTMLElement | null;
-  const resizer     = document.getElementById('preview-resizer') as HTMLElement | null;
+  const pane        = document.getElementById('preview-pane');
+  const resizer     = document.getElementById('preview-resizer');
   const frame       = document.getElementById('preview-frame')  as HTMLIFrameElement | null;
-  const loadingEl   = document.getElementById('preview-loading') as HTMLElement | null;
-  const errorEl     = document.getElementById('preview-error')  as HTMLElement | null;
+  const loadingEl   = document.getElementById('preview-loading');
+  const errorEl     = document.getElementById('preview-error');
 
   let active       = false;
   let currentPath: string | null = null;
@@ -72,8 +72,8 @@ export function initPreviewPanel(): PreviewPanel {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error((err as { error?: string }).error ?? res.statusText);
+        const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+        throw new Error(err.error ?? res.statusText);
       }
 
       const data = await res.json() as PreviewStartResponse;

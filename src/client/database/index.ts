@@ -271,7 +271,7 @@ function showColumnMenu(
     {
       label: '⇄ Change type', action: () => {
         menu.remove();
-        showChangeTypeDialog(fieldIndex, schema[fieldIndex], onChangeType);
+        showChangeTypeDialog(fieldIndex, schema[fieldIndex]!, onChangeType);
       }
     },
     { label: '← Insert left',  action: () => { menu.remove(); onInsert(fieldIndex, 'left');  } },
@@ -470,7 +470,7 @@ function renderTableView(
 
     if (input.type === 'checkbox') {
       input.addEventListener('change', () => {
-        onCellChange(rowIdx, fieldId, (input as HTMLInputElement).checked ? 'true' : 'false');
+        onCellChange(rowIdx, fieldId, (input).checked ? 'true' : 'false');
       });
     } else {
       input.addEventListener('change', () => { onCellChange(rowIdx, fieldId, input.value); });
@@ -617,7 +617,7 @@ function showAddColumnDialog(
       id:   name.toLowerCase().replace(/\s+/g, '_'),
       name,
       type,
-      options: type === 'select' ? rawOpts.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+      ...(type === 'select' ? { options: rawOpts.split(',').map(s => s.trim()).filter(Boolean) } : {}),
     };
     dlg.close(); dlg.remove();
     onConfirm(field);
@@ -673,7 +673,7 @@ export async function initDatabaseView(
     if (currentView === 'table') {
       renderTableView(
         viewContent, db, activeFilters, activeSorts,
-        /* onCellChange */ (ri, fid, val) => { db.rows[ri][fid] = val; scheduleSave(); },
+        /* onCellChange */ (ri, fid, val) => { db.rows[ri]![fid] = val; scheduleSave(); },
         /* onAddRow     */ () => {
           const empty: Record<string, string> = {};
           db.schema.forEach(f => { empty[f.id] = ''; });
@@ -690,15 +690,16 @@ export async function initDatabaseView(
           if (db.schema[fi]) { db.schema[fi].name = name; renderView(); scheduleSave(); }
         },
         /* onChangeFieldType */ (fi, type, opts) => {
-          if (db.schema[fi]) {
-            db.schema[fi].type = type;
-            db.schema[fi].options = opts;
+          const schemaField = db.schema[fi];
+          if (schemaField) {
+            schemaField.type = type;
+            if (opts !== undefined) { schemaField.options = opts; } else { delete schemaField.options; }
             renderView(); scheduleSave();
           }
         },
         /* onDeleteField */ (fi) => {
           const removed = db.schema.splice(fi, 1);
-          if (removed.length) db.rows.forEach(r => { delete r[removed[0].id]; });
+          if (removed.length) db.rows.forEach(r => { delete r[removed[0]!.id]; });
           renderView(); scheduleSave();
         },
         /* onInsertField */ (fi, dir) => {
@@ -729,7 +730,7 @@ export async function initDatabaseView(
         (ri, newVal) => {
           const gf = db.schema.find(f => f.type === 'select');
           if (!gf) return;
-          db.rows[ri][gf.id] = newVal;
+          db.rows[ri]![gf.id] = newVal;
           renderView(); scheduleSave();
         },
         (colValue) => {

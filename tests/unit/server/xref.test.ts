@@ -23,6 +23,8 @@ import {
   scanXRefsInProject,
   walkFiles,
   resetXrefCache,
+  markXRefCacheDirty,
+  getXRefCache,
 } from '../../../src/server/api/xref.js';
 
 // ── Shared test config + workspace ────────────────────────────────────────────
@@ -464,5 +466,99 @@ describe('POST /api/xref/forId', () => {
     expect(res.status).toBe(200);
     const body = res.body as { refs: unknown[] };
     expect(body.refs).toHaveLength(0);
+  });
+
+  it('returns empty refs for an id in an empty project', async () => {
+    // No files written — project is empty
+    const res = await client.post('/api/xref/forId').send({ id: 'fig-nonexistent' });
+    expect(res.status).toBe(200);
+    const body = res.body as { refs: unknown[] };
+    expect(body.refs).toHaveLength(0);
+  });
+});
+
+// ── markXRefCacheDirty / getXRefCache ─────────────────────────────────────────
+
+describe('markXRefCacheDirty / getXRefCache', () => {
+  it('getXRefCache returns null before any scan (after resetXrefCache)', () => {
+    // resetXrefCache is called in beforeEach, so the cache starts as null
+    expect(getXRefCache()).toBeNull();
+  });
+
+  it('getXRefCache returns populated result after POST /api/xref/index', async () => {
+    writeFileSync(
+      join(workspace, 'pages', 'cached.qmd'),
+      '## Cached Section {#sec-cached}\n',
+    );
+    await client.post('/api/xref/index').send({});
+
+    const cache = getXRefCache();
+    expect(cache).not.toBeNull();
+    expect(cache!.refs.some(r => r.id === 'cached')).toBe(true);
+  });
+
+  it('markXRefCacheDirty causes the next scan to pick up newly added files', async () => {
+    writeFileSync(
+      join(workspace, 'pages', 'initial.qmd'),
+      '::: {#fig-initial}\n:::\n',
+    );
+    await client.post('/api/xref/index').send({});
+    expect(getXRefCache()!.refs.some(r => r.id === 'initial')).toBe(true);
+
+    // Add a new file and mark the cache dirty
+    writeFileSync(
+      join(workspace, 'pages', 'added.qmd'),
+      '::: {#fig-added}\n:::\n',
+    );
+    markXRefCacheDirty();
+
+    // Next scan must re-read all files, including the new one
+    const res = await client.post('/api/xref/index').send({});
+    expect(res.status).toBe(200);
+    const body = res.body as { refs: Array<{ id: string }> };
+    expect(body.refs.some(r => r.id === 'added')).toBe(true);
+    // getXRefCache() should now reflect the fresh scan
+    expect(getXRefCache()!.refs.some(r => r.id === 'added')).toBe(true);
+  });
+
+  it('markXRefCacheDirty does not null out the existing cache immediately', async () => {
+    writeFileSync(
+      join(workspace, 'pages', 'doc.qmd'),
+      '## Doc {#sec-doc}\n',
+    );
+    await client.post('/api/xref/index').send({});
+    expect(getXRefCache()).not.toBeNull();
+
+    markXRefCacheDirty();
+
+    // The cache object is still accessible — it is stale but not nulled
+    expect(getXRefCache()).not.toBeNull();
+  });
+});
+
+// ── Equation XRef via scanXRefsInProject ──────────────────────────────────────
+
+describe('scanXRefsInProject — equation labels', () => {
+  it('finds an inline equation label in a .qmd file', () => {
+    writeFileSync(
+      join(workspace, 'pages', 'math.qmd'),
+      '$$E = mc^2$$ {#eq-myequation}\n',
+    );
+    const result = scanXRefsInProject(join(workspace, 'pages'));
+    const ref = result.refs.find(r => r.id === 'myequation');
+    expect(ref).toBeDefined();
+    expect(ref!.type).toBe('eq');
+    expect(ref!.file).toBe('math.qmd');
+  });
+
+  it('finds an equation block label on its own line', () => {
+    writeFileSync(
+      join(workspace, 'pages', 'block.qmd'),
+      '$$\nF = ma\n$$\n{#eq-newton}\n',
+    );
+    const result = scanXRefsInProject(join(workspace, 'pages'));
+    const ref = result.refs.find(r => r.id === 'newton');
+    expect(ref).toBeDefined();
+    expect(ref!.type).toBe('eq');
   });
 });

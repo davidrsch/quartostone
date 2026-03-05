@@ -37,7 +37,7 @@ export function startWatcher(ctx: WatcherContext) {
         try {
           ctx.broadcast('render:error', { path: filePath, error: sanitizeError(err) });
         } catch (broadcastErr) {
-          logError(`[watcher] broadcast failed: ${broadcastErr}`);
+          logError(`[watcher] broadcast failed: ${String(broadcastErr)}`);
         }
       });
     }, ctx.config.watch_interval_ms);

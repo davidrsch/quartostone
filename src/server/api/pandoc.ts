@@ -19,11 +19,14 @@ const MAX_PANDOC_OUTPUT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // ── Module-level capabilities cache ─────────────────────────────────────────
 
-let capabilitiesCache: unknown | null = null;
+let capabilitiesCache: unknown = null;
+let capabilitiesCacheTime: number | null = null;
+const CAPABILITIES_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /** Reset the capabilities cache — primarily for use in tests. */
 export function resetCapabilitiesCache(): void {
   capabilitiesCache = null;
+  capabilitiesCacheTime = null;
 }
 
 // ── Subprocess helper ─────────────────────────────────────────────────────────
@@ -112,8 +115,9 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // GET /api/pandoc/capabilities
   app.post('/api/pandoc/capabilities', async (_req: Request, res: Response) => {
-    // Return cached result if available
-    if (capabilitiesCache !== null) {
+    // Return cached result if available and not expired
+    const now = Date.now();
+    if (capabilitiesCache !== null && capabilitiesCacheTime !== null && now - capabilitiesCacheTime < CAPABILITIES_CACHE_TTL_MS) {
       return res.json(capabilitiesCache);
     }
 
@@ -153,14 +157,16 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       highlight_languages: hl.stdout.trim(),
     };
     capabilitiesCache = result;
+    capabilitiesCacheTime = Date.now();
     return res.json(result);
   });
 
   // POST /api/pandoc/markdownToAst
   app.post('/api/pandoc/markdownToAst', async (req: Request, res: Response) => {
-    const { markdown, format } = req.body as {
+    const { markdown, format, options } = req.body as {
       markdown: string;
       format: string;
+      options?: unknown;
     };
     if (typeof markdown !== 'string' || typeof format !== 'string') {
       return pandocError(res, 'markdown and format required', 400);
@@ -169,7 +175,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return badRequest(res, 'Invalid or missing format');
     }
 
-    const safeOptions = sanitisePandocOptions(req.body.options);
+    const safeOptions = sanitisePandocOptions(options);
 
     const args = [
       '--from', format,
@@ -193,9 +199,10 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
 
   // POST /api/pandoc/astToMarkdown
   app.post('/api/pandoc/astToMarkdown', async (req: Request, res: Response) => {
-    const { ast, format } = req.body as {
+    const { ast, format, options } = req.body as {
       ast: unknown;
       format: string;
+      options?: unknown;
     };
     if (!ast || typeof format !== 'string') {
       return pandocError(res, 'ast and format required', 400);
@@ -204,7 +211,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return badRequest(res, 'Invalid or missing format');
     }
 
-    const safeOptions = sanitisePandocOptions(req.body.options);
+    const safeOptions = sanitisePandocOptions(options);
 
     const args = [
       '--from', 'json',

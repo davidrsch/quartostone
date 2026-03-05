@@ -154,3 +154,74 @@ describe('serialiseDbFile', () => {
     expect(lines).toHaveLength(2); // header + separator
   });
 });
+
+// ── normaliseSchema edge cases ────────────────────────────────────────────────
+
+describe('normaliseSchema (via parseDbFile)', () => {
+  it('normalises unknown field types to "text"', () => {
+    const content = `---
+quartostone: database
+schema:
+  - id: fancy
+    name: Fancy
+    type: unknown_type
+---
+
+| fancy |
+|-------|
+| hello |
+`;
+    const result = parseDbFile(content);
+    expect(result).not.toBeNull();
+    expect(result!.schema[0].type).toBe('text');
+  });
+
+  it('handles select fields with no options array', () => {
+    const content = `---
+quartostone: database
+schema:
+  - id: status
+    name: Status
+    type: select
+---
+
+| status |
+|--------|
+| active |
+`;
+    const result = parseDbFile(content);
+    expect(result).not.toBeNull();
+    expect(result!.schema[0].type).toBe('select');
+    expect((result!.schema[0] as { options?: string[] }).options).toBeUndefined();
+  });
+
+  it('handles a db page with empty schema (no fields)', () => {
+    const content = `---
+quartostone: database
+schema: []
+---
+`;
+    const result = parseDbFile(content);
+    expect(result).not.toBeNull();
+    expect(result!.schema).toHaveLength(0);
+    expect(result!.rows).toHaveLength(0);
+  });
+});
+
+// ── pipe character escaping ───────────────────────────────────────────────────
+
+describe('pipe character round-trip', () => {
+  it('escapes pipe characters in cell content and restores them on parse', () => {
+    const page = {
+      schema: [{ id: 'notes', name: 'Notes', type: 'text' as const }],
+      rows: [{ notes: 'A|B' }],
+    };
+    const serialised = serialiseDbFile(page);
+    // The raw serialised content should contain the escaped form
+    expect(serialised).toContain('A\\|B');
+    // Parsing it back should restore the original value
+    const reparsed = parseDbFile(serialised);
+    expect(reparsed).not.toBeNull();
+    expect(reparsed!.rows[0].notes).toBe('A|B');
+  });
+});

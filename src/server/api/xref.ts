@@ -155,7 +155,7 @@ export function scanFileForXRefs(content: string, relPath: string): XRef[] {
           type: parsed.type,
           id: parsed.id,
           suffix: '',
-          ...(imgMatch[1]! ? { title: imgMatch[1]! } : {}),
+          ...(imgMatch[1]! ? { title: imgMatch[1] } : {}),
         });
         foundImg = true;
       }
@@ -222,50 +222,69 @@ export function scanXRefsInProject(pagesDir: string): XRefs {
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-// ── In-memory XRef cache (invalidated by file-watcher dirty flag) ────────────
+// ── XRefManager class ─────────────────────────────────────────────────────────
 
-export let xrefCache: XRefs | null = null;
-/** Starts dirty so the first call always performs a full scan. */
-let xrefCacheDirty = true;
+/** Encapsulates the XRef cache and its dirty-flag invalidation logic. */
+export class XRefManager {
+  private cache: XRefs | null = null;
+  /** Starts dirty so the first call always performs a full scan. */
+  private dirty = true;
+
+  markDirty(): void { this.dirty = true; }
+
+  reset(): void { this.cache = null; this.dirty = true; }
+
+  getCache(): XRefs | null { return this.cache; }
+
+  /** Scan XRefs using a watcher-driven dirty flag instead of per-file stat calls. */
+  scan(pagesDir: string): XRefs {
+    if (!this.dirty && this.cache !== null) {
+      return this.cache;
+    }
+    const files = walkFiles(pagesDir);
+    const refs: XRef[] = [];
+    for (const absPath of files) {
+      try {
+        const content = readFileSync(absPath, 'utf-8');
+        const relPath = relative(pagesDir, absPath).replace(/\\/g, '/');
+        refs.push(...scanFileForXRefs(content, relPath));
+      } catch { /* skip unreadable */ }
+    }
+    this.cache = { baseDir: pagesDir, refs };
+    this.dirty = false;
+    return this.cache;
+  }
+}
+
+/** Factory — creates a fresh, isolated XRefManager instance. */
+export function createXRefManager(): XRefManager { return new XRefManager(); }
+
+// Module-level singleton used by the server and the backward-compat helpers below.
+const _defaultXrefManager = createXRefManager();
+
+// ── Backward-compat exports ───────────────────────────────────────────────────
 
 /**
  * Mark the XRef cache as stale. Call this whenever a .qmd file is added,
  * changed, or deleted (e.g. from the file watcher).
  */
 export function markXRefCacheDirty(): void {
-  xrefCacheDirty = true;
+  _defaultXrefManager.markDirty();
 }
 
 /** Reset the cache — intended for use in tests only */
 export function resetXrefCache(): void {
-  xrefCache = null;
-  xrefCacheDirty = true;
+  _defaultXrefManager.reset();
 }
 
-/** Scan XRefs using a watcher-driven dirty flag instead of per-file stat calls. */
-function scanXRefsWithCache(pagesDir: string): XRefs {
-  if (!xrefCacheDirty && xrefCache !== null) {
-    return xrefCache;
-  }
-
-  // Rescan all files
-  const files = walkFiles(pagesDir);
-  const refs: XRef[] = [];
-  for (const absPath of files) {
-    try {
-      const content = readFileSync(absPath, 'utf-8');
-      const relPath = relative(pagesDir, absPath).replace(/\\/g, '/');
-      refs.push(...scanFileForXRefs(content, relPath));
-    } catch { /* skip unreadable */ }
-  }
-
-  xrefCache = { baseDir: pagesDir, refs };
-  xrefCacheDirty = false;
-  return xrefCache;
-}
+/** Get the current XRef cache value — for use in tests only. */
+export function getXRefCache(): XRefs | null { return _defaultXrefManager.getCache(); }
 
 export function registerXRefApi(app: Express, ctx: ServerContext): void {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
+  // Use injected instance from context if provided (enables test isolation),
+  // otherwise fall back to the module-level singleton.
+  const xm = ctx.xrefManager ?? _defaultXrefManager;
 
   /**
    * POST /api/xref/index
@@ -274,7 +293,7 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
    */
   app.post('/api/xref/index', (req: Request, res: Response) => {
     void req.body; // file hint ignored — always scans full project
-    res.json(scanXRefsWithCache(pagesDir));
+    res.json(xm.scan(pagesDir));
   });
 
   /**
@@ -286,7 +305,7 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
     const { id } = req.body as { id?: string };
     if (!id) return badRequest(res, 'id is required');
 
-    const index = scanXRefsWithCache(pagesDir);
+    const index = xm.scan(pagesDir);
     const matchingRefs = index.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);
     res.json({ ...index, refs: matchingRefs });
   });

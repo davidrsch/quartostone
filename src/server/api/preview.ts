@@ -87,11 +87,26 @@ interface PreviewProcess {
   logs:   string[];
 }
 
+// ── PreviewManager class ──────────────────────────────────────────────────────
+
 const MAX_CONCURRENT_PREVIEWS = 5;
-const previews = new Map<string, PreviewProcess>();
+
+/** Encapsulates the in-flight preview process registry. */
+export class PreviewManager {
+  readonly previews = new Map<string, PreviewProcess>();
+}
+
+/** Factory — creates a fresh, isolated PreviewManager instance. */
+export function createPreviewManager(): PreviewManager { return new PreviewManager(); }
+
+// Module-level singleton used by the server.
+const _defaultPreviewManager = createPreviewManager();
 
 // Guard: only register the process.on('exit') cleanup once per process lifetime
 let _exitListenerRegistered = false;
+
+// Backward-compat export — tests import `previews` directly and call .clear() on it.
+export const previews = _defaultPreviewManager.previews;
 
 // ── Port allocation — find the next actually-free TCP port starting at 4400 ────
 
@@ -120,6 +135,7 @@ function startPreview(
   port:   number,
   format: string,
   exe:    string | null,
+  previewsMap: Map<string, PreviewProcess>,
 ): PreviewProcess {
   const args = [
     'preview', absPath,
@@ -145,12 +161,12 @@ function startPreview(
 
   proc.on('exit', (code) => {
     log(`[preview] quarto exited with code ${code} for ${relPath}`);
-    previews.delete(relPath);
+    previewsMap.delete(relPath);
   });
 
   proc.on('error', (err) => {
     logError(`[preview] spawn error for ${relPath}: ${err.message}`);
-    previews.delete(relPath);
+    previewsMap.delete(relPath);
   });
 
   const entry: PreviewProcess = {
@@ -162,7 +178,7 @@ function startPreview(
     logs,
   };
 
-  previews.set(relPath, entry);
+  previewsMap.set(relPath, entry);
   return entry;
 }
 
@@ -181,6 +197,10 @@ function startPreview(
  */
 export function registerPreviewApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
+  // Use injected instance from context if provided (enables test isolation),
+  // otherwise fall back to the module-level singleton.
+  const pm = ctx.previewManager ?? _defaultPreviewManager;
+  const { previews: pmPreviews } = pm;
 
   // POST /api/preview/start  body: { path: string; format?: string }
   app.post('/api/preview/start', async (req: Request, res: Response) => {
@@ -215,7 +235,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 
     const key = resolve(cwd, filePath);
     // Re-use existing preview if same path and format
-    const existing = previews.get(key);
+    const existing = pmPreviews.get(key);
     if (existing && existing.format === format) {
       return res.json({ port: existing.port, url: existing.url, reused: true });
     }
@@ -223,16 +243,16 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     // Stop any existing preview for this file (different format)
     if (existing) {
       try { existing.proc.kill(); } catch { /* ignore */ }
-      previews.delete(key);
+      pmPreviews.delete(key);
     }
 
     // S15: Limit concurrent previews
-    if (previews.size >= MAX_CONCURRENT_PREVIEWS) {
+    if (pmPreviews.size >= MAX_CONCURRENT_PREVIEWS) {
       return res.status(429).json({ error: 'Too many concurrent previews. Stop an existing preview first.' });
     }
 
     const port   = await findFreePort();
-    const entry  = startPreview(cwd, absPath, key, port, format, quartoExecutable);
+    const entry  = startPreview(cwd, absPath, key, port, format, quartoExecutable, pmPreviews);
 
     res.json({ port: entry.port, url: entry.url, reused: false });
   });
@@ -246,22 +266,22 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     if (!filePath) {
       // Stop everything
       let stopped = 0;
-      for (const [key, entry] of previews.entries()) {
+      for (const [key, entry] of pmPreviews.entries()) {
         try { entry.proc.kill(); } catch { /* ignore */ }
-        previews.delete(key);
+        pmPreviews.delete(key);
         stopped++;
       }
       return res.json({ ok: true, stopped });
     }
 
     const key = resolve(cwd, filePath);
-    const entry = previews.get(key);
+    const entry = pmPreviews.get(key);
     if (!entry) return res.json({ ok: true, wasRunning: false });
 
     try {
       entry.proc.kill();
     } catch { /* ignore */ }
-    previews.delete(key);
+    pmPreviews.delete(key);
 
     res.json({ ok: true, wasRunning: true });
   });
@@ -271,14 +291,14 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   // With path: returns state for a specific file preview.
   app.get('/api/preview/status', async (req: Request, res: Response) => {
     const exe = await getQuartoExecutable();
-    const filePath = req.query['path'] as string | undefined;
+    const filePath = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
 
     if (!filePath) {
-      return res.json({ running: previews.size > 0, count: previews.size, quartoAvailable: !!exe });
+      return res.json({ running: pmPreviews.size > 0, count: pmPreviews.size, quartoAvailable: !!exe });
     }
 
     const key = resolve(cwd, filePath);
-    const entry = previews.get(key);
+    const entry = pmPreviews.get(key);
     if (!entry) return res.json({ running: false, quartoAvailable: !!exe });
 
     res.json({ running: true, url: entry.url, port: entry.port, format: entry.format });
@@ -288,13 +308,13 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   // Polls until the Quarto preview server at <port> accepts a TCP connection.
   // Returns { ready: true } when up, { ready: false, timedOut: true } on timeout.
   app.get('/api/preview/ready', async (req: Request, res: Response) => {
-    const port    = parseInt(req.query['port'] as string ?? '', 10);
-    const rawTimeout = parseInt(String(req.query['timeout'] ?? ''), 10);
+    const port    = parseInt(typeof req.query['port'] === 'string' ? req.query['port'] : '', 10);
+    const rawTimeout = parseInt(typeof req.query['timeout'] === 'string' ? req.query['timeout'] : '', 10);
     const timeoutMs = Number.isFinite(rawTimeout) ? Math.min(rawTimeout, 30000) : 5000;
     if (isNaN(port)) return badRequest(res, 'port is required');
 
     // SSRF guard: only allow polling ports that belong to active preview sessions
-    const activeSessionPorts = new Set([...previews.values()].map(s => s.port));
+    const activeSessionPorts = new Set([...pmPreviews.values()].map(s => s.port));
     if (!activeSessionPorts.has(port)) {
       return badRequest(res, 'No active preview session on that port');
     }
@@ -313,10 +333,10 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 
   // GET /api/preview/logs?path=
   app.get('/api/preview/logs', (req: Request, res: Response) => {
-    const filePath = req.query['path'] as string | undefined;
+    const filePath = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
     if (!filePath) return badRequest(res, 'path is required');
     const key = resolve(cwd, filePath);
-    const entry = previews.get(key);
+    const entry = pmPreviews.get(key);
     if (!entry) return res.json({ logs: [] });
     res.json({ logs: entry.logs.map(sanitizeError) });
   });
@@ -325,7 +345,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   if (!_exitListenerRegistered) {
     _exitListenerRegistered = true;
     process.on('exit', () => {
-      for (const entry of previews.values()) {
+      for (const entry of pmPreviews.values()) {
         try { entry.proc.kill(); } catch { /* ignore */ }
       }
     });
@@ -333,7 +353,6 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
 }
 
 // ── Exported for testing ──────────────────────────────────────────────────────
-export { previews };
 
 /**
  * Preset the cached quarto executable path — for use in tests only.

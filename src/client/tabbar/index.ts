@@ -33,7 +33,7 @@ export class TabBarManager {
       el.title = tab.path;
       el.setAttribute('role', 'tab');
       el.setAttribute('aria-selected', String(tab.path === this.activeTabPath));
-      el.dataset.path = tab.path;
+      el.dataset['path'] = tab.path;
 
       const dot = document.createElement('span');
       dot.className = 'editor-tab-dot';

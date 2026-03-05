@@ -17,9 +17,6 @@ import { WIKI_LINK_SCAN_RE } from '../../shared/wikiLink.js';
 
 // ── Link index ────────────────────────────────────────────────────────────────
 
-// forwardLinks[relPath] = Set of resolved page paths this file links to
-const forwardLinks = new Map<string, Set<string>>();
-
 // allPages[relPath] = { title, tags, excerpt }
 export interface PageMeta {
   path:    string;
@@ -28,8 +25,6 @@ export interface PageMeta {
   /** First non-empty body line, stored at index time for backlinks. */
   excerpt: string;
 }
-
-const pageMeta = new Map<string, PageMeta>();
 
 // ── Slug conversion ───────────────────────────────────────────────────────────
 
@@ -55,90 +50,116 @@ function resolveSlug(slug: string, allPaths: string[]): string | null {
   return null;
 }
 
-// ── Front-matter helpers (delegated to shared utilities) ─────────────────────────────────────────
+// ── LinkIndex class ───────────────────────────────────────────────────────────
 
-const extractTitle = getTitleWithFallback;
-const extractTags  = getTags;
+/** Encapsulates the wiki-link forward index and page metadata. */
+export class LinkIndex {
+  /** forwardLinks[relPath] = Set of resolved page paths this file links to */
+  readonly forwardLinks = new Map<string, Set<string>>();
+  readonly pageMeta     = new Map<string, PageMeta>();
 
-// ── Scan a single file ────────────────────────────────────────────────────────
+  private scanFile(relPath: string, absPath: string, allPagePaths: string[]): void {
+    let content: string;
+    try { content = readFileSync(absPath, 'utf-8'); }
+    catch { this.forwardLinks.delete(relPath); this.pageMeta.delete(relPath); return; }
 
-function scanFile(relPath: string, absPath: string, allPagePaths: string[]): void {
-  let content: string;
-  try { content = readFileSync(absPath, 'utf-8'); }
-  catch { forwardLinks.delete(relPath); pageMeta.delete(relPath); return; }
+    const slug = basename(relPath, '.qmd');
+    const bodyText = content.replace(/^---[\s\S]*?---\s*/m, '');
+    const excerptLine = bodyText.split('\n').map(l => l.trim()).find(l => l.length > 2 && !l.startsWith('#')) ?? '';
+    this.pageMeta.set(relPath, {
+      path:    relPath,
+      title:   getTitleWithFallback(content, slug),
+      tags:    getTags(content),
+      excerpt: excerptLine.slice(0, 120),
+    });
 
-  // Update page meta — extract a short excerpt from the body for backlinks
-  const slug = basename(relPath, '.qmd');
-  const bodyText = content.replace(/^---[\s\S]*?---\s*/m, '');
-  const excerptLine = bodyText.split('\n').map(l => l.trim()).find(l => l.length > 2 && !l.startsWith('#')) ?? '';
-  pageMeta.set(relPath, {
-    path:    relPath,
-    title:   getTitleWithFallback(content, slug),
-    tags:    getTags(content),
-    excerpt: excerptLine.slice(0, 120),
-  });
-
-  // Extract all outgoing wiki links
-  const links = new Set<string>();
-  let m: RegExpExecArray | null;
-  WIKI_LINK_SCAN_RE.lastIndex = 0;
-  while ((m = WIKI_LINK_SCAN_RE.exec(content)) !== null) {
-    const target = m[1] ?? '';
-    const slug2  = targetToSlug(target);
-    const resolved = resolveSlug(slug2, allPagePaths);
-    if (resolved && resolved !== relPath) links.add(resolved);
+    const links = new Set<string>();
+    let m: RegExpExecArray | null;
+    WIKI_LINK_SCAN_RE.lastIndex = 0;
+    while ((m = WIKI_LINK_SCAN_RE.exec(content)) !== null) {
+      const target = m[1] ?? '';
+      const slug2  = targetToSlug(target);
+      const resolved = resolveSlug(slug2, allPagePaths);
+      if (resolved && resolved !== relPath) links.add(resolved);
+    }
+    this.forwardLinks.set(relPath, links);
   }
-  forwardLinks.set(relPath, links);
+
+  rebuild(pagesDir: string): void {
+    const allPaths = collectQmd(pagesDir, pagesDir);
+    this.pageMeta.clear();
+    this.forwardLinks.clear();
+    for (const relPath of allPaths) {
+      this.scanFile(relPath, join(pagesDir, relPath), allPaths);
+    }
+  }
+
+  updateForFile(pagesDir: string, relPath: string): void {
+    const allPaths = collectQmd(pagesDir, pagesDir);
+    if (!allPaths.includes(relPath)) allPaths.push(relPath);
+    this.scanFile(relPath, join(pagesDir, relPath), allPaths);
+  }
+
+  removeForFile(relPath: string): void {
+    this.forwardLinks.delete(relPath);
+    this.pageMeta.delete(relPath);
+  }
+
+  reset(): void {
+    this.forwardLinks.clear();
+    this.pageMeta.clear();
+  }
 }
 
-// ── Full index rebuild ────────────────────────────────────────────────────────
+/** Factory — creates a fresh, isolated LinkIndex instance. */
+export function createLinkIndex(): LinkIndex { return new LinkIndex(); }
+
+// Module-level singleton used by the server and the backward-compat helpers below.
+const _defaultLinkIndex = createLinkIndex();
+
+// ── Backward-compat exports ───────────────────────────────────────────────────
+// Tests (and other callers) import these Maps directly and call .clear() on them.
+// They remain valid references to the singleton's Maps.
+
+export const forwardLinks = _defaultLinkIndex.forwardLinks;
+export const pageMeta     = _defaultLinkIndex.pageMeta;
 
 export function rebuildLinkIndex(pagesDir: string): void {
-  const allPaths = collectQmd(pagesDir, pagesDir);
-  pageMeta.clear();
-  forwardLinks.clear();
-  for (const relPath of allPaths) {
-    scanFile(relPath, join(pagesDir, relPath), allPaths);
-  }
+  _defaultLinkIndex.rebuild(pagesDir);
 }
 
 /** Call after a file is saved/created */
 export function updateLinkIndexForFile(pagesDir: string, relPath: string): void {
-  const allPaths = collectQmd(pagesDir, pagesDir);
-  // Ensure this file is in the allPaths list even if brand-new
-  if (!allPaths.includes(relPath)) allPaths.push(relPath);
-  scanFile(relPath, join(pagesDir, relPath), allPaths);
+  _defaultLinkIndex.updateForFile(pagesDir, relPath);
 }
 
 /** Call after a file is deleted */
 export function removeLinkIndexForFile(relPath: string): void {
-  forwardLinks.delete(relPath);
-  pageMeta.delete(relPath);
+  _defaultLinkIndex.removeForFile(relPath);
 }
-
-// ── Exports for testing ───────────────────────────────────────────────────────
-
-export { forwardLinks, pageMeta };
 
 /** Reset the index — intended for use in tests only */
 export function resetLinkIndex(): void {
-  forwardLinks.clear();
-  pageMeta.clear();
+  _defaultLinkIndex.reset();
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────
 
-export function registerLinksApi(app: Express, _ctx: ServerContext): void {
+export function registerLinksApi(app: Express, ctx: ServerContext): void {
+  // Use injected instance from context if provided (enables test isolation),
+  // otherwise fall back to the module-level singleton.
+  const li = ctx.linkIndex ?? _defaultLinkIndex;
+
   // GET /api/links/backlinks?path=<relPath>
   app.get('/api/links/backlinks', (req: Request, res: Response) => {
-    const target = req.query['path'] as string | undefined;
+    const target = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
     if (!target) return badRequest(res, 'path is required');
 
     // Gather all source files that link to this target and return cached data
-    const backlinks = Array.from(forwardLinks.entries())
+    const backlinks = Array.from(li.forwardLinks.entries())
       .filter(([, targets]) => targets.has(target))
       .map(([sourcePath]) => {
-        const meta = pageMeta.get(sourcePath);
+        const meta = li.pageMeta.get(sourcePath);
         return {
           path:    sourcePath,
           title:   meta?.title   ?? sourcePath,
@@ -151,13 +172,13 @@ export function registerLinksApi(app: Express, _ctx: ServerContext): void {
 
   // GET /api/links/forward?path=<relPath>
   app.get('/api/links/forward', (req: Request, res: Response) => {
-    const source = req.query['path'] as string | undefined;
+    const source = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
     if (!source) return badRequest(res, 'path is required');
 
-    const targets = forwardLinks.get(source) ?? new Set<string>();
+    const targets = li.forwardLinks.get(source) ?? new Set<string>();
     const result = Array.from(targets).map(p => ({
       path:  p,
-      title: pageMeta.get(p)?.title ?? p,
+      title: li.pageMeta.get(p)?.title ?? p,
     }));
     res.json(result);
   });
@@ -166,17 +187,17 @@ export function registerLinksApi(app: Express, _ctx: ServerContext): void {
   app.get('/api/links/graph', (_req: Request, res: Response) => {
     // Compute in-degree for each node
     const inDegree = new Map<string, number>();
-    for (const meta of pageMeta.values()) inDegree.set(meta.path, 0);
+    for (const meta of li.pageMeta.values()) inDegree.set(meta.path, 0);
     const edges: { from: string; to: string }[] = [];
 
-    for (const [source, targets] of forwardLinks.entries()) {
+    for (const [source, targets] of li.forwardLinks.entries()) {
       for (const target of targets) {
         edges.push({ from: source, to: target });
         inDegree.set(target, (inDegree.get(target) ?? 0) + 1);
       }
     }
 
-    const nodes = Array.from(pageMeta.values()).map(m => ({
+    const nodes = Array.from(li.pageMeta.values()).map(m => ({
       id:       m.path,
       title:    m.title,
       tags:     m.tags,
@@ -188,8 +209,8 @@ export function registerLinksApi(app: Express, _ctx: ServerContext): void {
 
   // GET /api/links/search?q=<query>  — autocomplete page titles for [[ popup
   app.get('/api/links/search', (req: Request, res: Response) => {
-    const q = ((req.query['q'] as string) ?? '').toLowerCase().trim();
-    const results = Array.from(pageMeta.values())
+    const q = ((typeof req.query['q'] === 'string' ? req.query['q'] : '') ?? '').toLowerCase().trim();
+    const results = Array.from(li.pageMeta.values())
       .filter(m => !q || m.title.toLowerCase().includes(q) || m.path.toLowerCase().includes(q))
       .slice(0, 20)
       .map(m => ({ path: m.path, title: m.title }));

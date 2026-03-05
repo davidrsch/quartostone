@@ -24,9 +24,111 @@ interface IndexEntry {
   tokens:  string[];
 }
 
-// ── Index store ───────────────────────────────────────────────────────────────
+// ── SearchIndex class ──────────────────────────────────────────────────────────
 
-const index = new Map<string, IndexEntry>();
+/** Encapsulates the full-text search inverted index. */
+export class SearchIndex {
+  readonly index = new Map<string, IndexEntry>();
+
+  private indexFile(pagesDir: string, relPath: string): void {
+    const absPath = join(pagesDir, relPath);
+    if (!existsSync(absPath)) { this.index.delete(relPath); return; }
+
+    let raw: string;
+    try { raw = readFileSync(absPath, 'utf-8'); }
+    catch { this.index.delete(relPath); return; }
+
+    const slug = basename(relPath, '.qmd');
+    const title = getTitleWithFallback(raw, slug);
+    const body  = stripMarkdown(raw);
+
+    // Boost title tokens (appear effectively 5× in token list)
+    const titleTokens = tokenize(title);
+    const bodyTokens  = tokenize(body);
+    const tokens = [
+      ...titleTokens, ...titleTokens, ...titleTokens, ...titleTokens, ...titleTokens,
+      ...bodyTokens,
+    ];
+
+    this.index.set(relPath, { path: relPath, title, body, tokens });
+  }
+
+  rebuild(pagesDir: string): void {
+    this.index.clear();
+    const paths = collectQmd(pagesDir, pagesDir);
+    for (const relPath of paths) {
+      this.indexFile(pagesDir, relPath);
+    }
+  }
+
+  updateForFile(pagesDir: string, relPath: string): void {
+    this.indexFile(pagesDir, relPath);
+  }
+
+  removeForFile(relPath: string): void {
+    this.index.delete(relPath);
+  }
+
+  reset(): void {
+    this.index.clear();
+  }
+
+  search(query: string): SearchResult[] {
+    if (!query.trim()) return [];
+    const queryTerms = tokenize(query);
+    if (!queryTerms.length) return [];
+
+    const results: SearchResult[] = [];
+    for (const entry of this.index.values()) {
+      const score = scoreDoc(entry, queryTerms);
+      if (score <= 0) continue;
+      results.push({
+        path:    entry.path,
+        title:   entry.title,
+        excerpt: makeExcerpt(entry.body, queryTerms),
+        score,
+      });
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, 20);
+  }
+}
+
+/** Factory — creates a fresh, isolated SearchIndex instance. */
+export function createSearchIndex(): SearchIndex { return new SearchIndex(); }
+
+// Module-level singleton used by the server and the backward-compat helpers below.
+const _defaultSearchIndex = createSearchIndex();
+
+// ── Backward-compat exports ───────────────────────────────────────────────────
+
+// Tests import `index` directly and call .clear() on it.
+export const index = _defaultSearchIndex.index;
+
+/** Rebuild the full search index from all .qmd files in pagesDir */
+export function rebuildSearchIndex(pagesDir: string): void {
+  _defaultSearchIndex.rebuild(pagesDir);
+}
+
+/** Incrementally update the index for a single file */
+export function updateSearchIndexForFile(pagesDir: string, relPath: string): void {
+  _defaultSearchIndex.updateForFile(pagesDir, relPath);
+}
+
+/** Remove a file from the index */
+export function removeSearchIndexForFile(relPath: string): void {
+  _defaultSearchIndex.removeForFile(relPath);
+}
+
+/** Reset the index — intended for use in tests only */
+export function resetSearchIndex(): void {
+  _defaultSearchIndex.reset();
+}
+
+/** Search the default index — backward-compat delegate */
+export function search(query: string): SearchResult[] {
+  return _defaultSearchIndex.search(query);
+}
 
 // ── Text processing ───────────────────────────────────────────────────────────
 
@@ -57,58 +159,6 @@ function tokenize(text: string): string[] {
   return text.toLowerCase().match(/[a-z0-9_-]{2,}/g) ?? [];
 }
 
-// ── Index management ──────────────────────────────────────────────────────────
-
-
-/** Rebuild the full search index from all .qmd files in pagesDir */
-export function rebuildSearchIndex(pagesDir: string): void {
-  index.clear();
-  const paths = collectQmd(pagesDir, pagesDir);
-  for (const relPath of paths) {
-    indexFile(pagesDir, relPath);
-  }
-}
-
-/** Incrementally update the index for a single file */
-export function updateSearchIndexForFile(pagesDir: string, relPath: string): void {
-  indexFile(pagesDir, relPath);
-}
-
-/** Remove a file from the index */
-export function removeSearchIndexForFile(relPath: string): void {
-  index.delete(relPath);
-}
-
-function indexFile(pagesDir: string, relPath: string): void {
-  const absPath = join(pagesDir, relPath);
-  if (!existsSync(absPath)) { index.delete(relPath); return; }
-
-  let raw: string;
-  try { raw = readFileSync(absPath, 'utf-8'); }
-  catch { index.delete(relPath); return; }
-
-  const slug = basename(relPath, '.qmd');
-  const title = getTitleWithFallback(raw, slug);
-  const body  = stripMarkdown(raw);
-
-  // Boost title tokens (appear effectively 5× in token list)
-  const titleTokens = tokenize(title);
-  const bodyTokens  = tokenize(body);
-  const tokens = [
-    ...titleTokens, ...titleTokens, ...titleTokens, ...titleTokens, ...titleTokens,
-    ...bodyTokens,
-  ];
-
-  index.set(relPath, { path: relPath, title, body, tokens });
-}
-
-// Export for testing
-export { index };
-
-/** Reset the index — intended for use in tests only */
-export function resetSearchIndex(): void {
-  index.clear();
-}
 
 // ── Search ────────────────────────────────────────────────────────────────────
 
@@ -147,44 +197,24 @@ function scoreDoc(entry: IndexEntry, queryTerms: string[]): number {
   return score;
 }
 
-export function search(query: string): SearchResult[] {
-  if (!query.trim()) return [];
-
-  const queryTerms = tokenize(query);
-  if (!queryTerms.length) return [];
-
-  const results: SearchResult[] = [];
-
-  for (const entry of index.values()) {
-    const score = scoreDoc(entry, queryTerms);
-    if (score <= 0) continue;
-    results.push({
-      path:    entry.path,
-      title:   entry.title,
-      excerpt: makeExcerpt(entry.body, queryTerms),
-      score,
-    });
-  }
-
-  results.sort((a, b) => b.score - a.score);
-  return results.slice(0, 20);
-}
-
 // ── Register routes ───────────────────────────────────────────────────────────
 
 export function registerSearchApi(app: Express, ctx: ServerContext): void {
   const pagesDir = join(ctx.cwd, ctx.config.pages_dir);
+  // Use injected instance from context if provided (enables test isolation),
+  // otherwise fall back to the module-level singleton.
+  const si = ctx.searchIndex ?? _defaultSearchIndex;
 
   // GET /api/search?q=<query>
   app.get('/api/search', (req: Request, res: Response) => {
-    const q = (req.query['q'] as string) ?? '';
+    const q = (typeof req.query['q'] === 'string' ? req.query['q'] : '') ?? '';
     if (!q.trim()) return res.json([]);
-    res.json(search(q));
+    res.json(si.search(q));
   });
 
   // POST /api/search/reindex — rebuild full index
   app.post('/api/search/reindex', (_req: Request, res: Response) => {
-    rebuildSearchIndex(pagesDir);
-    res.json({ ok: true, indexed: index.size });
+    si.rebuild(pagesDir);
+    res.json({ ok: true, indexed: si.index.size });
   });
 }

@@ -222,6 +222,18 @@ describe('POST /api/exec — Julia language', () => {
     expect(res.body.stdout).toBe('Hello Julia\n');
     expect(res.body.ok).toBe(true);
   });
+
+  it('returns ok:false with null exitCode when julia is not installed (ENOENT)', async () => {
+    spawnMock.mockImplementationOnce(() =>
+      makeFakeProcess({ emitError: new Error('spawn julia ENOENT') }) as never,
+    );
+
+    const res = await client.post('/api/exec').send({ code: '1+1', language: 'julia' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.exitCode).toBeNull();
+    expect(res.body.stderr).toMatch(/ENOENT/i);
+  });
 });
 
 describe('POST /api/exec — timeout behavior', () => {

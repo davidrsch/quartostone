@@ -448,3 +448,89 @@ describe('DELETE /api/directories/*', () => {
     expect([400, 404]).toContain(res.status); // File-not-a-directory must be rejected, not accepted
   });
 });
+
+// ── GET /api/pages — deep nesting (3+ levels) ─────────────────────────────────
+
+describe('GET /api/pages — 3+ level nesting', () => {
+  it('returns a correctly-structured 3-level nested tree', async () => {
+    mkdirSync(join(pagesDir, 'top', 'mid', 'bottom'), { recursive: true });
+    writePage('top/mid/bottom/deep.qmd', '---\ntitle: Deep\n---\n\n# Deep\n');
+
+    const res = await client.get('/api/pages');
+    expect(res.status).toBe(200);
+
+    const topFolder = (res.body as { name: string; type: string; children: unknown[] }[])
+      .find(n => n.name === 'top');
+    expect(topFolder).toBeDefined();
+    expect(topFolder!.type).toBe('folder');
+
+    const midFolder = (topFolder!.children as { name: string; type: string; children: unknown[] }[])
+      .find(n => n.name === 'mid');
+    expect(midFolder).toBeDefined();
+    expect(midFolder!.type).toBe('folder');
+
+    const bottomFolder = (midFolder!.children as { name: string; type: string; children: { name: string }[] }[])
+      .find(n => n.name === 'bottom');
+    expect(bottomFolder).toBeDefined();
+    expect(bottomFolder!.type).toBe('folder');
+    expect(bottomFolder!.children[0]?.name).toBe('deep');
+  });
+
+  it('returns all files and folders at each level of a 3-level tree', async () => {
+    // Two siblings at the top level, each with nested structure
+    mkdirSync(join(pagesDir, 'branch1', 'sub'), { recursive: true });
+    mkdirSync(join(pagesDir, 'branch2', 'sub'), { recursive: true });
+    writePage('branch1/page.qmd', '---\ntitle: B1 Root\n---\n');
+    writePage('branch1/sub/child.qmd', '---\ntitle: B1 Child\n---\n');
+    writePage('branch2/page.qmd', '---\ntitle: B2 Root\n---\n');
+    writePage('branch2/sub/child.qmd', '---\ntitle: B2 Child\n---\n');
+
+    const res = await client.get('/api/pages');
+    expect(res.status).toBe(200);
+
+    const body = res.body as { name: string; type: string; children: { name: string; type: string; children: { name: string }[] }[] }[];
+    const b1 = body.find(n => n.name === 'branch1');
+    const b2 = body.find(n => n.name === 'branch2');
+    expect(b1).toBeDefined();
+    expect(b2).toBeDefined();
+
+    // Each branch should have a file and a folder with a child
+    expect(b1!.children.some(c => c.name === 'page')).toBe(true);
+    const b1Sub = b1!.children.find(c => c.name === 'sub');
+    expect(b1Sub?.type).toBe('folder');
+    expect(b1Sub?.children.some(c => c.name === 'child')).toBe(true);
+  });
+});
+
+// ── PATCH /api/pages — newPath already has .qmd extension ────────────────────
+
+describe('PATCH /api/pages — newPath with .qmd extension', () => {
+  it('does not double-append .qmd when newPath already ends with .qmd', async () => {
+    writePage('original.qmd', '# Original');
+
+    const res = await client
+      .patch('/api/pages/original')
+      .send({ newPath: 'renamed.qmd' });
+
+    expect(res.status).toBe(200);
+    // File should be at renamed.qmd, not renamed.qmd.qmd
+    expect(existsSync(join(pagesDir, 'renamed.qmd'))).toBe(true);
+    expect(existsSync(join(pagesDir, 'renamed.qmd.qmd'))).toBe(false);
+    expect(existsSync(join(pagesDir, 'original.qmd'))).toBe(false);
+  });
+
+  it('newPath with .qmd extension is treated the same as without', async () => {
+    writePage('alpha.qmd', '# Alpha');
+
+    // One request uses .qmd suffix, the other does not — both should point to
+    // the exact same target file.
+    const resWithExt    = await client.patch('/api/pages/alpha').send({ newPath: 'beta.qmd' });
+    writePage('gamma.qmd', '# Gamma');
+    const resWithoutExt = await client.patch('/api/pages/gamma').send({ newPath: 'delta' });
+
+    expect(resWithExt.status).toBe(200);
+    expect(resWithoutExt.status).toBe(200);
+    expect(existsSync(join(pagesDir, 'beta.qmd'))).toBe(true);
+    expect(existsSync(join(pagesDir, 'delta.qmd'))).toBe(true);
+  });
+});

@@ -6,6 +6,15 @@ export default tseslint.config(
   { ignores: ['dist/', 'node_modules/', 'src/client/public/'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.test.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   {
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
@@ -25,6 +34,12 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'warn',
       // Q42: enforce `import type` for type-only imports
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports', fixStyle: 'inline-type-imports' }],
+      // Downgraded: async event handlers (addEventListener) legitimately return Promise<void>
+      // across ~47 call sites in client UI code; can't change DOM callback signatures.
+      '@typescript-eslint/no-misused-promises': 'warn',
+      // Downgraded: stub methods implementing async interface contracts (e.g. visual editorUI)
+      // have ~30 intentionally no-await async methods across the codebase.
+      '@typescript-eslint/require-await': 'warn',
     },
   }
 );

@@ -323,4 +323,59 @@ describe('removeSearchIndexForFile', () => {
     removeSearchIndexForFile('gone.qmd');
     expect(index.has('gone.qmd')).toBe(false);
   });
+
+  it('search returns no results for terms from a removed file', () => {
+    writeFileSync(
+      join(workspace, 'pages', 'unique.qmd'),
+      '---\ntitle: Unique Content\n---\nUniquetermzyx is only in this file.\n',
+    );
+    rebuildSearchIndex(join(workspace, 'pages'));
+    expect(search('uniquetermzyx').length).toBeGreaterThan(0);
+
+    removeSearchIndexForFile('unique.qmd');
+    expect(search('uniquetermzyx')).toEqual([]);
+  });
+});
+
+// ── updateSearchIndexForFile — incremental updates ────────────────────────────
+// Tests focus on the replace-not-accumulate semantics: calling the function
+// twice must leave exactly the second version in the index, with no tokens
+// carried over from the first.
+
+describe('updateSearchIndexForFile — incremental updates', () => {
+  it('adds a file to the search index with correct tokens', () => {
+    writeFileSync(
+      join(workspace, 'pages', 'novel.qmd'),
+      '---\ntitle: Novel Entry\n---\n\nContains the word xyzplankton.\n',
+    );
+
+    updateSearchIndexForFile(join(workspace, 'pages'), 'novel.qmd');
+
+    const entry = index.get('novel.qmd');
+    expect(entry).toBeDefined();
+    expect(entry!.title).toBe('Novel Entry');
+    expect(entry!.tokens).toContain('xyzplankton');
+  });
+
+  it('replaces existing entry on second call — old tokens are gone', () => {
+    // First version contains "firsttoken"
+    writeFileSync(
+      join(workspace, 'pages', 'replace.qmd'),
+      '---\ntitle: Replace\n---\n\nBody with firsttoken here.\n',
+    );
+    updateSearchIndexForFile(join(workspace, 'pages'), 'replace.qmd');
+    expect(index.get('replace.qmd')!.tokens).toContain('firsttoken');
+
+    // Second version replaces "firsttoken" with "secondtoken"
+    writeFileSync(
+      join(workspace, 'pages', 'replace.qmd'),
+      '---\ntitle: Replace\n---\n\nBody with secondtoken instead.\n',
+    );
+    updateSearchIndexForFile(join(workspace, 'pages'), 'replace.qmd');
+
+    const entry = index.get('replace.qmd')!;
+    expect(entry.tokens).toContain('secondtoken');
+    // Old token must not be present — no accumulation
+    expect(entry.tokens).not.toContain('firsttoken');
+  });
 });

@@ -102,6 +102,30 @@ describe('loadConfig', () => {
 
     expect(config.watch_interval_ms).toBe(300); // the default
   });
+
+  it('falls back to "pages" when pages_dir resolves outside the project root', async () => {
+    writeFileSync(configPath, 'pages_dir: ../../outside\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.pages_dir).toBe('pages');
+  });
+
+  it('falls back to "file" for an invalid render_scope', async () => {
+    writeFileSync(configPath, 'render_scope: invalid\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.render_scope).toBe('file');
+  });
+
+  it('falls back to 4242 for a negative port value', async () => {
+    writeFileSync(configPath, 'port: -1\n');
+
+    const config = await loadConfig(configPath);
+
+    expect(config.port).toBe(4242);
+  });
 });
 
 // ── generateCommitSlug ────────────────────────────────────────────────────────

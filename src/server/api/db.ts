@@ -22,10 +22,14 @@ function parseMarkdownTable(src: string): { headers: string[]; rows: Record<stri
   const lines = src.split('\n').map(l => l.trim()).filter(l => l.startsWith('|'));
   if (lines.length < 2) return { headers: [], rows: [] };
 
-  const parseRow = (line: string): string[] =>
-    line.split('|').slice(1, -1).map(c => c.trim());
+  const parseRow = (line: string): string[] => {
+    // Replace escaped pipes with a null-byte placeholder so they're not split on,
+    // then restore them after splitting.
+    const safe = line.replace(/\\\|/g, '\uFFFF');
+    return safe.split('|').slice(1, -1).map(c => c.trim().replace(/\uFFFF/g, '|'));
+  };
 
-  const headers = parseRow(lines[0]);
+  const headers = parseRow(lines[0]!);
   const dataLines = lines.slice(2); // skip separator line
 
   const rows: Record<string, string>[] = dataLines.map(line => {
@@ -46,12 +50,12 @@ function serializeMarkdownTable(schema: FieldDef[], rows: Record<string, string>
 
   const pad = (s: string, w: number) => s.padEnd(w, ' ');
 
-  const header  = '| ' + ids.map((id, i) => pad(id, widths[i])).join(' | ') + ' |';
+  const header  = '| ' + ids.map((id, i) => pad(id, widths[i]!)).join(' | ') + ' |';
   const sep     = '|' + widths.map(w => '-'.repeat(w + 2)).join('|') + '|';
   const dataLines = rows.map(row =>
     '| ' + ids.map((id, i) => {
       const cellText = String(row[id] ?? '').replace(/\|/g, '\\|');
-      return pad(cellText, widths[i]);
+      return pad(cellText, widths[i]!);
     }).join(' | ') + ' |'
   );
 
@@ -65,13 +69,13 @@ const VALID_FIELD_TYPES: ReadonlySet<string> = new Set(['text', 'select', 'date'
 function normaliseSchema(raw: unknown): FieldDef[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Record<string, unknown>[]).map(f => {
-    const rawType = String(f['type'] ?? 'text').toLowerCase();
+    const rawType = (typeof f['type'] === 'string' ? f['type'] : 'text').toLowerCase();
     const type: FieldDef['type'] = VALID_FIELD_TYPES.has(rawType)
       ? (rawType as FieldDef['type'])
       : 'text'; // unknown types silently fall back to text
     const base = {
-      id:      String(f['id'] ?? f['name'] ?? 'field').toLowerCase().replace(/\s+/g, '_'),
-      name:    String(f['name'] ?? f['id'] ?? 'Field'),
+      id:      (typeof f['id'] === 'string' ? f['id'] : typeof f['name'] === 'string' ? f['name'] : 'field').toLowerCase().replace(/\s+/g, '_'),
+      name:    (typeof f['name'] === 'string' ? f['name'] : typeof f['id'] === 'string' ? f['id'] : 'Field'),
       type,
     };
     return Array.isArray(f['options'])
@@ -133,7 +137,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
 
   // GET /api/db?path=pages/tasks.qmd  → { schema, rows }
   app.get('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, typeof req.query['path'] === 'string' ? req.query['path'] : undefined, res);
     if (!abs) return;
     try {
       const content = await readFile(abs, 'utf-8');
@@ -154,7 +158,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
 
   // PUT /api/db?path=pages/tasks.qmd  body: { schema, rows }
   app.put('/api/db', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, typeof req.query['path'] === 'string' ? req.query['path'] : undefined, res);
     if (!abs) return;
     try {
       const { schema, rows } = req.body as DbPage;
@@ -176,7 +180,7 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
   // POST /api/db/create?path=...  body: { title, schema? }
   // Creates a new database .qmd file
   app.post('/api/db/create', async (req: Request, res: Response) => {
-    const abs = await resolveAndCheck(ctx.cwd, pagesDir, req.query['path'] as string | undefined, res);
+    const abs = await resolveAndCheck(ctx.cwd, pagesDir, typeof req.query['path'] === 'string' ? req.query['path'] : undefined, res);
     if (!abs) return;
     try {
       const { title = 'Untitled Database', schema } = req.body as {

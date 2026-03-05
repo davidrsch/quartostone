@@ -104,7 +104,7 @@ export function initBranchPicker(
     try {
       const res = await fetch(API.gitBranches);
       if (!res.ok) throw new Error('branches failed');
-      const data: BranchesResponse = await res.json();
+      const data = await res.json() as BranchesResponse;
 
       branchListEl.innerHTML = '';
       for (const b of data.branches) {
@@ -186,13 +186,13 @@ export function initBranchPicker(
       if (res.status === 409) {
         // Conflict — show resolution modal (#100)
         let d: { conflicts?: string[] } = {};
-        try { d = JSON.parse(text); } catch { /* ignore */ }
+        try { d = JSON.parse(text) as { conflicts?: string[] }; } catch { /* ignore */ }
         await showConflictModal(d.conflicts ?? []);
         return;
       }
       if (!res.ok) {
         let d: { error?: string } = {};
-        try { d = JSON.parse(text); } catch { /* ignore */ }
+        try { d = JSON.parse(text) as { error?: string }; } catch { /* ignore */ }
         toast(`Merge failed: ${(d.error ?? text) || 'unknown error'}`);
         return;
       }
@@ -318,7 +318,7 @@ export function initBranchPicker(
     try {
       const res = await fetch(API.gitBranches);
       if (!res.ok) return;
-      const data: BranchesResponse = await res.json();
+      const data = await res.json() as BranchesResponse;
       pickerLabel.textContent = data.current;
     } catch { /* silent */ }
   }

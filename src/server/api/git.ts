@@ -298,7 +298,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         const conflicts: string[] = [];
         for (const line of msg.split('\n')) {
           const m = /CONFLICT.*:\s*(.+)$/.exec(line);
-          if (m) conflicts.push(m[1].trim());
+          if (m) conflicts.push(m[1]!.trim());
         }
         return res.status(409).json({ error: 'Merge conflict', conflicts, details: sanitizeGitError(e) });
       }

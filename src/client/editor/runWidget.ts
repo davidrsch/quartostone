@@ -4,13 +4,13 @@
 
 import {
   Decoration,
-  DecorationSet,
-  EditorView,
+  type DecorationSet,
+  type EditorView,
   ViewPlugin,
-  ViewUpdate,
+  type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { RangeSetBuilder, StateField, StateEffect, Transaction } from '@codemirror/state';
+import { RangeSetBuilder, StateField, StateEffect, type Transaction } from '@codemirror/state';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ function parseCodeBlocks(docText: string): CodeBlock[] {
     if (!inBlock) {
       const m = FENCE_OPEN.exec(line);
       if (m) {
-        const lang = m[1].toLowerCase();
+        const lang = m[1]!.toLowerCase();
         if (EXEC_LANGS.has(lang)) {
           inBlock = { from: pos, lang, openLineEnd: lineEnd, codeLines: [] };
         }

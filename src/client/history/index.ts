@@ -34,7 +34,7 @@ export async function initHistoryPanel(
     try {
       const res = await fetch(`${API.gitLog}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error('Failed to load history');
-      const commits: HistoryCommit[] = await res.json();
+      const commits = await res.json() as HistoryCommit[];
 
       if (commits.length === 0) {
         listEl.innerHTML = '<div class="history-empty">No commits for this file yet.</div>';

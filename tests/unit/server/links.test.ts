@@ -292,3 +292,79 @@ describe('removeLinkIndexForFile', () => {
     expect(forwardLinks.has('doomed.qmd')).toBe(false);
   });
 });
+
+// ── Duplicate wiki links ──────────────────────────────────────────────────────
+
+describe('duplicate wiki links', () => {
+  it('two [[same]] links in one page produce only one forward-link entry', () => {
+    writeFileSync(
+      join(workspace, 'pages', 'duplinks.qmd'),
+      '---\ntitle: Dup Links\n---\n\nSee [[Alpha]] and [[Alpha]] again.\n',
+    );
+    writeFileSync(join(workspace, 'pages', 'alpha.qmd'), '---\ntitle: Alpha\n---\nAlpha.\n');
+    rebuildLinkIndex(join(workspace, 'pages'));
+
+    const links = forwardLinks.get('duplinks.qmd');
+    expect(links).toBeDefined();
+    // Set membership means duplicate targets collapse to one entry
+    const alphaEntries = Array.from(links!).filter(l => l === 'alpha.qmd');
+    expect(alphaEntries).toHaveLength(1);
+  });
+});
+
+// ── updateLinkIndexForFile / removeLinkIndexForFile ───────────────────────────
+
+describe('updateLinkIndexForFile / removeLinkIndexForFile', () => {
+  it('updateLinkIndexForFile adds links to the index for a new file', () => {
+    writeFileSync(join(workspace, 'pages', 'dest.qmd'), '---\ntitle: Dest\n---\nDest.\n');
+    writeFileSync(
+      join(workspace, 'pages', 'src.qmd'),
+      '---\ntitle: Src\n---\n\nLinks to [[Dest]].\n',
+    );
+
+    updateLinkIndexForFile(join(workspace, 'pages'), 'src.qmd');
+
+    expect(pageMeta.has('src.qmd')).toBe(true);
+    expect(forwardLinks.get('src.qmd')?.has('dest.qmd')).toBe(true);
+  });
+
+  it('updateLinkIndexForFile replaces old links on second call — no accumulation', () => {
+    writeFileSync(join(workspace, 'pages', 'a.qmd'), '---\ntitle: A\n---\nA.\n');
+    writeFileSync(join(workspace, 'pages', 'b.qmd'), '---\ntitle: B\n---\nB.\n');
+    writeFileSync(
+      join(workspace, 'pages', 'hub.qmd'),
+      '---\ntitle: Hub\n---\n\nSee [[A]].\n',
+    );
+    updateLinkIndexForFile(join(workspace, 'pages'), 'hub.qmd');
+    expect(forwardLinks.get('hub.qmd')?.has('a.qmd')).toBe(true);
+    expect(forwardLinks.get('hub.qmd')?.has('b.qmd')).toBeFalsy();
+
+    // Edit hub to link to B instead of A
+    writeFileSync(
+      join(workspace, 'pages', 'hub.qmd'),
+      '---\ntitle: Hub\n---\n\nSee [[B]].\n',
+    );
+    updateLinkIndexForFile(join(workspace, 'pages'), 'hub.qmd');
+
+    // A should no longer appear — no accumulation of stale links
+    expect(forwardLinks.get('hub.qmd')?.has('a.qmd')).toBeFalsy();
+    expect(forwardLinks.get('hub.qmd')?.has('b.qmd')).toBe(true);
+  });
+
+  it('removeLinkIndexForFile removes all links and metadata for the given file', () => {
+    writeFileSync(join(workspace, 'pages', 'target.qmd'), '---\ntitle: Target\n---\nT.\n');
+    writeFileSync(
+      join(workspace, 'pages', 'linker.qmd'),
+      '---\ntitle: Linker\n---\n\nSee [[Target]].\n',
+    );
+    rebuildLinkIndex(join(workspace, 'pages'));
+
+    expect(pageMeta.has('linker.qmd')).toBe(true);
+    expect(forwardLinks.has('linker.qmd')).toBe(true);
+
+    removeLinkIndexForFile('linker.qmd');
+
+    expect(pageMeta.has('linker.qmd')).toBe(false);
+    expect(forwardLinks.has('linker.qmd')).toBe(false);
+  });
+});
