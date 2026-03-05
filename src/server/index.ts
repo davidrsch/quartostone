@@ -129,6 +129,14 @@ export async function createServer(ctx: ServerContext) {
   const httpServer = createHttpServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
+  wss.on('connection', (_ws, req) => {
+    const origin = req.headers['origin'];
+    const allowedOrigin = `http://localhost:${ctx.config.port}`;
+    if (origin && origin !== allowedOrigin) {
+      _ws.close(1008, 'Origin not allowed');
+    }
+  });
+
   function broadcast(event: string, data?: unknown) {
     const msg = JSON.stringify({ event, data });
     wss.clients.forEach((client) => {

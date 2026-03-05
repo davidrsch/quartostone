@@ -47,7 +47,7 @@ function imageDragDropExtension(): Extension {
       // Determine drop position in document
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
       const insertAt = pos ?? view.state.doc.length;
-      void (async () => {
+      (async () => {
         let at = insertAt;
         for (const file of files) {
           const url = await uploadImageFile(file);
@@ -60,7 +60,7 @@ function imageDragDropExtension(): Extension {
           });
           at += md.length;
         }
-      })();
+      })().catch((err) => console.error('[editor] upload error:', err));
     },
     paste(event, view) {
       const items = [...(event.clipboardData?.items ?? [])];
@@ -68,7 +68,7 @@ function imageDragDropExtension(): Extension {
       if (imageItems.length === 0) return;
       event.preventDefault();
       const insertAt = view.state.selection.main.from;
-      void (async () => {
+      (async () => {
         let offset = 0;
         for (const item of imageItems) {
           const file = item.getAsFile();
@@ -85,7 +85,7 @@ function imageDragDropExtension(): Extension {
             offset += md.length;
           } catch { /* ignore failed upload */ }
         }
-      })();
+      })().catch((err) => console.error('[editor] upload error:', err));
     },
   });
 }

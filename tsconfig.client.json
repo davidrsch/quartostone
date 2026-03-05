@@ -7,6 +7,8 @@
     "outDir": "dist/client",
     "rootDir": "src",
     "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "declaration": false,

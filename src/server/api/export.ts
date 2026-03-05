@@ -31,6 +31,7 @@ const BLOCKED_ARGS = [
   '--include-before-body', '--include-after-body',
 ];
 const SAFE_ARG = /^--[\w-]+(=[\w.,:-]+)?$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // ── Job store (in-memory) ─────────────────────────────────────────────────────
 
@@ -216,8 +217,9 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
 
   // GET /api/export/status?token=
   app.get('/api/export/status', (req: Request, res: Response) => {
-    const token = req.query['token'] as string | undefined;
+    const token = typeof req.query['token'] === 'string' ? req.query['token'] : '';
     if (!token) return badRequest(res, 'token is required');
+    if (!UUID_RE.test(token)) return badRequest(res, 'Invalid token');
 
     const job = jobs.get(token);
     if (!job) return notFound(res, 'Job not found');
@@ -233,8 +235,9 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
   // GET /api/export/download?token=
   // Streams the output file to the client, then deletes it.
   app.get('/api/export/download', (req: Request, res: Response) => {
-    const token = req.query['token'] as string | undefined;
+    const token = typeof req.query['token'] === 'string' ? req.query['token'] : '';
     if (!token) return badRequest(res, 'token is required');
+    if (!UUID_RE.test(token)) return badRequest(res, 'Invalid token');
 
     const job = jobs.get(token);
     if (!job)              return notFound(res, 'Job not found');

@@ -6,14 +6,14 @@
 // DELETE /api/pages/:path    — delete a page
 
 import type { Express, Request, Response } from 'express';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync, realpathSync } from 'node:fs';
 import { join, relative, extname, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ServerContext } from '../index.js';
 import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
-import { resolveInsideDir, PathTraversalError } from '../utils/pathGuard.js';
+import { resolveInsideDir, PathTraversalError, isInsideDir } from '../utils/pathGuard.js';
 import { getFrontmatterKey } from '../utils/frontmatter.js';
 import type { PageNode } from '../../shared/types.js';
 
@@ -24,6 +24,15 @@ function buildTree(dir: string, rootDir: string, depth = 0): PageNode[] {
   for (const entry of entries) {
     const full = join(dir, entry.name);
     const rel = relative(rootDir, full).replace(/\\/g, '/');
+    // S19: Guard against symlinks pointing outside the pages directory
+    if (entry.isSymbolicLink()) {
+      try {
+        const real = realpathSync(full);
+        if (!isInsideDir(rootDir, real)) continue;
+      } catch {
+        continue; // broken symlink
+      }
+    }
     if (entry.isDirectory()) {
       nodes.push({ name: entry.name, path: rel, type: 'folder', children: buildTree(full, rootDir, depth + 1) });
     } else if (entry.isFile() && extname(entry.name) === '.qmd') {

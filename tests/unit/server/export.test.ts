@@ -223,7 +223,7 @@ describe('GET /api/export/status', () => {
   });
 
   it('returns 404 for unknown token', async () => {
-    const res = await client.get('/api/export/status?token=does-not-exist');
+    const res = await client.get('/api/export/status?token=00000000-0000-4000-a000-000000000001');
     expect(res.status).toBe(404);
   });
 
@@ -252,7 +252,7 @@ describe('GET /api/export/download', () => {
   });
 
   it('returns 404 for unknown token', async () => {
-    const res = await client.get('/api/export/download?token=no-such-token');
+    const res = await client.get('/api/export/download?token=00000000-0000-4000-a000-000000000001');
     expect(res.status).toBe(404);
   });
 

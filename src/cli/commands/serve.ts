@@ -1,8 +1,21 @@
 // src/cli/commands/serve.ts
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { platform } from 'node:os';
 import { createServer } from '../../server/index.js';
 import { loadConfig } from '../../server/config.js';
+
+function openBrowser(url: string): void {
+  const p = platform();
+  if (p === 'darwin') {
+    spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+  } else if (p === 'win32') {
+    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore', shell: false }).unref();
+  } else {
+    spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+  }
+}
 
 export async function serve(options: { port: number | undefined; open: boolean }) {
   const cwd = resolve('.');
@@ -28,15 +41,7 @@ export async function serve(options: { port: number | undefined; open: boolean }
     console.log(`\n✓ Quartostone running at http://localhost:${port}`);
     const shouldOpen = options.open !== undefined ? options.open : config.open_browser;
     if (shouldOpen) {
-      import('node:child_process').then(({ exec }) => {
-        const cmd =
-          process.platform === 'win32'
-            ? `start http://localhost:${port}`
-            : process.platform === 'darwin'
-              ? `open http://localhost:${port}`
-              : `xdg-open http://localhost:${port}`;
-        exec(cmd);
-      });
+      openBrowser(`http://localhost:${port}`);
     }
   });
 

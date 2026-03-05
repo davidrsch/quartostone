@@ -68,30 +68,36 @@ export function startWatcher(ctx: WatcherContext) {
       ctx.broadcast('render:error', { path: relPath, error: err.message });
     });
 
-    proc.on('close', async (code) => {
-      if (code !== 0) {
-        ctx.broadcast('render:error', { path: relPath, error: sanitizeError(stderr) });
-        return;
-      }
-
-      ctx.broadcast('render:complete', { path: relPath });
-
-      // Commit
-      if (ctx.config.commit_mode === 'auto') {
+    proc.on('close', (code) => {
+      void (async () => {
         try {
-          const message = generateCommitSlug(ctx.config.commit_message_auto);
-          await git.add(filePath);
-          await git.commit(message);
-          ctx.broadcast('git:committed', { message });
-        } catch (e) {
-          ctx.broadcast('git:error', { error: sanitizeError(e) });
+          if (code !== 0) {
+            ctx.broadcast('render:error', { path: relPath, error: sanitizeError(stderr) });
+            return;
+          }
+
+          ctx.broadcast('render:complete', { path: relPath });
+
+          // Commit
+          if (ctx.config.commit_mode === 'auto') {
+            try {
+              const message = generateCommitSlug(ctx.config.commit_message_auto);
+              await git.add(filePath);
+              await git.commit(message);
+              ctx.broadcast('git:committed', { message });
+            } catch (e) {
+              ctx.broadcast('git:error', { error: sanitizeError(e) });
+            }
+          } else if (ctx.config.commit_mode === 'prompt') {
+            // Broadcast a prompt event — the UI will show a toast
+            const autoSlug = generateCommitSlug(ctx.config.commit_message_auto);
+            ctx.broadcast('git:prompt', { autoSlug, path: relPath });
+          }
+          // manual: do nothing
+        } catch (err) {
+          ctx.broadcast('render:error', { path: relPath, error: sanitizeError(err) });
         }
-      } else if (ctx.config.commit_mode === 'prompt') {
-        // Broadcast a prompt event — the UI will show a toast
-        const autoSlug = generateCommitSlug(ctx.config.commit_message_auto);
-        ctx.broadcast('git:prompt', { autoSlug, path: relPath });
-      }
-      // manual: do nothing
+      })();
     });
   }
 

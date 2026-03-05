@@ -56,6 +56,25 @@ npm run typecheck:all      # validate all TypeScript configs at once
 npm run lint
 ```
 
+## Running Tests
+
+**Unit tests** (Vitest + Supertest):
+
+```bash
+npm test
+```
+
+**End-to-end tests** (Playwright):
+
+```bash
+# First time only — install Playwright browser binaries
+npx playwright install
+
+# E2E tests render the client, so build it first
+npm run build:client
+npm run test:e2e
+```
+
 ## Code Style
 
 - TypeScript strict mode — no `any` without justification

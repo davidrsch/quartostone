@@ -12,12 +12,12 @@ import type { ServerContext } from '../index.js';
 import { badRequest, notFound } from '../utils/errorResponse.js';
 
 const ALLOWED_EXTS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.bmp', '.ico',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico',
 ]);
 
 const ALLOWED_MIMETYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'image/svg+xml', 'image/avif', 'image/tiff', 'image/bmp', 'image/x-icon',
+  'image/avif', 'image/tiff', 'image/bmp', 'image/x-icon',
 ]);
 
 export function registerAssetsApi(app: Express, ctx: ServerContext): void {

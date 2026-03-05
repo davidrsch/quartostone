@@ -15,6 +15,7 @@ import type { ServerContext } from '../index.js';
 import { badRequest, serverError } from '../utils/errorResponse.js';
 
 const PANDOC_TIMEOUT_MS = 30_000;
+const MAX_PANDOC_OUTPUT_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // ── Module-level capabilities cache ─────────────────────────────────────────
 
@@ -43,8 +44,8 @@ function runPandoc(args: string[], stdin?: string): Promise<ProcResult> {
 
     const proc = spawn('pandoc', args, { shell: false });
 
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.stdout.on('data', (chunk: Buffer) => { if (stdout.length < MAX_PANDOC_OUTPUT_BYTES) stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk: Buffer) => { if (stderr.length < MAX_PANDOC_OUTPUT_BYTES) stderr += chunk.toString(); });
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -78,8 +79,13 @@ function pandocError(res: Response, detail: string, code = 500) {
 }
 // ── Shared option sanitiser ───────────────────────────────────────────────────
 
-const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[a-zA-Z0-9\-_.@/=:,+]+)?$/u;
-const BLOCKED_FLAGS = ['--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template'];
+const SAFE_PANDOC_OPTION = /^--[a-zA-Z][\w-]*(?:=[a-zA-Z0-9\-_.@:,+]+)?$/u;
+const BLOCKED_FLAGS = [
+  '--output', '--lua-filter', '--extract-media', '--resource-path', '--data-dir', '--filter', '--template',
+  '--bibliography', '--csl', '--reference-doc', '--pdf-engine', '--pdf-engine-opt',
+  '--syntax-definition', '--highlight-style', '--include-in-header', '--include-before-body',
+  '--include-after-body', '--abbreviations', '--log',
+];
 
 function sanitisePandocOptions(rawOptions: unknown): string[] {
   return Array.isArray(rawOptions)

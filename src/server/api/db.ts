@@ -69,12 +69,14 @@ function normaliseSchema(raw: unknown): FieldDef[] {
     const type: FieldDef['type'] = VALID_FIELD_TYPES.has(rawType)
       ? (rawType as FieldDef['type'])
       : 'text'; // unknown types silently fall back to text
-    return {
+    const base = {
       id:      String(f['id'] ?? f['name'] ?? 'field').toLowerCase().replace(/\s+/g, '_'),
       name:    String(f['name'] ?? f['id'] ?? 'Field'),
       type,
-      options: Array.isArray(f['options']) ? (f['options'] as string[]).map(String) : undefined,
     };
+    return Array.isArray(f['options'])
+      ? { ...base, options: (f['options'] as string[]).map(String) }
+      : base;
   });
 }
 

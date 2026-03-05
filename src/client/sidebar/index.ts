@@ -4,6 +4,7 @@
 
 import { focusAdjacentTreeItem } from '../treeNav.js';
 import { showToast } from '../utils/toast.js';
+import { escHtml } from '../utils/escape.js';
 
 export interface PageNode {
   name: string;
@@ -25,12 +26,6 @@ export interface SidebarOptions {
 }
 
 type SelectCallback = (path: string, name: string) => void;
-
-// ── HTML escaping ───────────────────────────────────────────────────────────────────
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 

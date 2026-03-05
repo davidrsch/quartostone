@@ -17,6 +17,7 @@ import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { PREVIEW_FORMATS } from '../../shared/formats.js';
 import { warn as logWarn, log, error as logError } from '../utils/logger.js';
+import { sanitizeError } from '../utils/errorSanitizer.js';
 
 // ─── #118 Quarto PATH detection ───────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ interface PreviewProcess {
   logs:   string[];
 }
 
+const MAX_CONCURRENT_PREVIEWS = 5;
 const previews = new Map<string, PreviewProcess>();
 
 // Guard: only register the process.on('exit') cleanup once per process lifetime
@@ -165,6 +167,18 @@ function startPreview(
 }
 
 // ── Register routes ───────────────────────────────────────────────────────────
+
+/**
+ * Registers the live-preview endpoints:
+ *   POST /api/preview/start  — spawn `quarto preview` for a given file/format
+ *   POST /api/preview/stop   — terminate one or all running preview processes
+ *   GET  /api/preview/status — check whether a preview is active for a path
+ *   GET  /api/preview/ready  — poll until the preview port accepts connections
+ *
+ * Preview processes are tracked in a per-file Map (keyed by resolved absolute
+ * path). An existing preview for the same file and format is re-used rather than
+ * respawned. Concurrent previews are capped at MAX_CONCURRENT_PREVIEWS (5).
+ */
 export function registerPreviewApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
 
@@ -199,8 +213,9 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
       return badRequest(res, 'Path outside pages directory');
     }
 
+    const key = resolve(cwd, filePath);
     // Re-use existing preview if same path and format
-    const existing = previews.get(filePath);
+    const existing = previews.get(key);
     if (existing && existing.format === format) {
       return res.json({ port: existing.port, url: existing.url, reused: true });
     }
@@ -208,11 +223,16 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     // Stop any existing preview for this file (different format)
     if (existing) {
       try { existing.proc.kill(); } catch { /* ignore */ }
-      previews.delete(filePath);
+      previews.delete(key);
+    }
+
+    // S15: Limit concurrent previews
+    if (previews.size >= MAX_CONCURRENT_PREVIEWS) {
+      return res.status(429).json({ error: 'Too many concurrent previews. Stop an existing preview first.' });
     }
 
     const port   = await findFreePort();
-    const entry  = startPreview(cwd, absPath, filePath, port, format, quartoExecutable);
+    const entry  = startPreview(cwd, absPath, key, port, format, quartoExecutable);
 
     res.json({ port: entry.port, url: entry.url, reused: false });
   });
@@ -234,13 +254,14 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
       return res.json({ ok: true, stopped });
     }
 
-    const entry = previews.get(filePath);
+    const key = resolve(cwd, filePath);
+    const entry = previews.get(key);
     if (!entry) return res.json({ ok: true, wasRunning: false });
 
     try {
       entry.proc.kill();
     } catch { /* ignore */ }
-    previews.delete(filePath);
+    previews.delete(key);
 
     res.json({ ok: true, wasRunning: true });
   });
@@ -256,7 +277,8 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
       return res.json({ running: previews.size > 0, count: previews.size, quartoAvailable: !!exe });
     }
 
-    const entry = previews.get(filePath);
+    const key = resolve(cwd, filePath);
+    const entry = previews.get(key);
     if (!entry) return res.json({ running: false, quartoAvailable: !!exe });
 
     res.json({ running: true, url: entry.url, port: entry.port, format: entry.format });
@@ -293,9 +315,10 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   app.get('/api/preview/logs', (req: Request, res: Response) => {
     const filePath = req.query['path'] as string | undefined;
     if (!filePath) return badRequest(res, 'path is required');
-    const entry = previews.get(filePath);
+    const key = resolve(cwd, filePath);
+    const entry = previews.get(key);
     if (!entry) return res.json({ logs: [] });
-    res.json({ logs: entry.logs });
+    res.json({ logs: entry.logs.map(sanitizeError) });
   });
 
   // Clean up all previews when the server shuts down (register at most once)

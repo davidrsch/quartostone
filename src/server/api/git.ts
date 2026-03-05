@@ -84,7 +84,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
 
   app.get('/api/git/diff', async (req: Request, res: Response) => {
     try {
-      const sha = req.query.sha as string | undefined;
+      const sha = req.query['sha'] as string | undefined;
       if (sha && !SAFE_SHA.test(sha)) {
         return badRequest(res, 'Invalid SHA format');
       }
@@ -153,12 +153,12 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const conflict = msg.includes('CONFLICT') || msg.includes('not possible to fast-forward');
-      res.status(conflict ? 409 : 500).json({
-        error: conflict
+      const hasConflict = msg.includes('CONFLICT') || msg.includes('not possible to fast-forward');
+      res.status(hasConflict ? 409 : 500).json({
+        error: hasConflict
           ? 'Cannot fast-forward. Remote has diverged. Pull manually or rebase.'
           : sanitizeGitError(e),
-        conflict,
+        conflict: hasConflict,
       });
     }
   });
@@ -170,7 +170,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         return badRequest(res, 'url is required');
       }
       // Disallow local file:// remotes and validate basic URL format
-      const allowedProtocols = ['https:', 'http:', 'ssh:', 'git:'];
+      const allowedProtocols = ['https:', 'ssh:', 'git:'];
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(url);
@@ -178,7 +178,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         return badRequest(res, 'Invalid remote URL');
       }
       if (!allowedProtocols.includes(parsedUrl.protocol)) {
-        return badRequest(res, 'Remote URL must use https, http, ssh, or git protocol');
+        return badRequest(res, 'Remote URL must use https, ssh, or git protocol');
       }
       // Set or add remote
       try {
@@ -330,6 +330,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const path = req.query['path'] as string | undefined;
       if (!sha || !SAFE_SHA.test(sha)) return badRequest(res, 'Invalid or missing sha');
       if (!path) return badRequest(res, 'path required');
+      if (path.includes(':') || path.startsWith('-')) return badRequest(res, 'Invalid path');
       if (!isInsideDir(pagesDir, resolve(join(ctx.cwd, path)))) return badRequest(res, 'Path outside pages directory');
       // git show sha:path
       const content = await git.show([`${sha}:${path}`]);

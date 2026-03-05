@@ -89,12 +89,13 @@ export function scanFileForXRefs(content: string, relPath: string): XRef[] {
     if (headingMatch) {
       const parsed = splitTypeId(headingMatch[2]!);
       if (parsed) {
+        const headingTitle = headingMatch[1]!.trim() || undefined;
         refs.push({
           file: relPath,
           type: parsed.type,
           id: parsed.id,
           suffix: '',
-          title: headingMatch[1]!.trim() || undefined,
+          ...(headingTitle !== undefined ? { title: headingTitle } : {}),
         });
         continue;
       }
@@ -117,7 +118,7 @@ export function scanFileForXRefs(content: string, relPath: string): XRef[] {
           if (cap !== undefined) { title = cap.trim() || undefined; break; }
           if (/^:{3,}/.test(l)) break; // end of enclosing div — stop
         }
-        refs.push({ file: relPath, type: parsed.type, id: parsed.id, suffix: '', title });
+        refs.push({ file: relPath, type: parsed.type, id: parsed.id, suffix: '', ...(title !== undefined ? { title } : {}) });
         continue;
       }
     }
@@ -137,7 +138,7 @@ export function scanFileForXRefs(content: string, relPath: string): XRef[] {
           }
           if (!lines[j]!.startsWith('#|')) break; // exited chunk options block
         }
-        refs.push({ file: relPath, type: parsed.type, id: parsed.id, suffix: '', title });
+        refs.push({ file: relPath, type: parsed.type, id: parsed.id, suffix: '', ...(title !== undefined ? { title } : {}) });
         continue;
       }
     }
@@ -154,7 +155,7 @@ export function scanFileForXRefs(content: string, relPath: string): XRef[] {
           type: parsed.type,
           id: parsed.id,
           suffix: '',
-          title: imgMatch[1]! || undefined,
+          ...(imgMatch[1]! ? { title: imgMatch[1]! } : {}),
         });
         foundImg = true;
       }
@@ -288,8 +289,8 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
     const { file, id } = req.body as { file?: string; id?: string };
     if (!id) return badRequest(res, 'id is required');
 
-    const all = scanXRefsWithCache(pagesDir, file);
-    all.refs = all.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);
-    res.json(all);
+    const index = scanXRefsWithCache(pagesDir, file);
+    const matchingRefs = index.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);
+    res.json({ ...index, refs: matchingRefs });
   });
 }

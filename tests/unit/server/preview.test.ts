@@ -9,7 +9,7 @@ import supertest from 'supertest';
 import {
   mkdtempSync, mkdirSync, rmSync, writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
 
@@ -215,7 +215,7 @@ describe('POST /api/preview/start — success', () => {
     expect(res.body.reused).toBe(false);
 
     // Check registry
-    const entry = previews.get('pages/slide.qmd');
+    const entry = previews.get(resolve(workspace, 'pages/slide.qmd'));
     expect(entry?.format).toBe('html');
   });
 });
@@ -255,7 +255,7 @@ describe('POST /api/preview/stop', () => {
     expect(stopRes.body.ok).toBe(true);
     expect(stopRes.body.wasRunning).toBe(true);
     expect(fakeProc.kill).toHaveBeenCalled();
-    expect(previews.has('pages/slide.qmd')).toBe(false);
+    expect(previews.has(resolve(workspace, 'pages/slide.qmd'))).toBe(false);
   });
 });
 

@@ -90,6 +90,67 @@ quartostone serve
 
 ---
 
+## Building from source
+
+```bash
+git clone https://github.com/davidrsch/quartostone
+cd quartostone
+npm install
+```
+
+**Compile TypeScript (server + CLI):**
+
+```bash
+npm run build
+```
+
+**Build the Vite client bundle:**
+
+```bash
+npm run build:client
+```
+
+**Run in development mode** (hot-reload server + Vite HMR, both processes in one terminal):
+
+```bash
+npm run dev
+```
+
+Or start each process separately:
+
+```bash
+npm run dev:server   # Terminal 1 — Express server with tsx watch
+npm run dev:client   # Terminal 2 — Vite dev server with HMR
+```
+
+> **Panmirror / Visual editor note:** The visual (WYSIWYG) editor depends on a local
+> build of [panmirror](https://github.com/davidrsch/quarto). Clone that repo as a sibling
+> of this repo (`../quarto-fork`) and run `npm run build:panmirror` once before starting
+> the client. See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions.
+
+---
+
+## Running tests
+
+**Unit tests** (Vitest + Supertest):
+
+```bash
+npm test
+```
+
+**End-to-end tests** (Playwright):
+
+```bash
+# First time only — install Playwright browser binaries
+npx playwright install
+
+# E2E tests require a production client build
+npm run build:client
+npm run test:e2e
+```
+
+---
+
 ## Editor what you can do
 
 ### Pages

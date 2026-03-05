@@ -2,6 +2,7 @@
 // Git sidebar panel — status strip, commit history list, inline diff viewer, remote sync
 
 import { escHtml } from '../utils/escape.js';
+import { showToast } from '../utils/toast.js';
 import { API } from '../api/endpoints.js';
 
 interface CommitEntry {
@@ -116,10 +117,10 @@ export async function initGitPanel(
         await loadRemote();
       } else {
         const err = await res.json() as { error?: string };
-        alert(`Failed to set remote: ${err.error ?? 'unknown error'}`);
+        showToast(`Failed to set remote: ${err.error ?? 'unknown error'}`, 'error');
       }
     } catch (err) {
-      alert(`Remote save failed: ${String(err)}`);
+      showToast(`Remote save failed: ${String(err)}`, 'error');
     }
   });
 
@@ -132,12 +133,12 @@ export async function initGitPanel(
         await loadRemote();
       } else {
         const err = await res.json() as { error?: string };
-        alert(`Push failed: ${err.error ?? 'unknown error'}`);
+        showToast(`Push failed: ${err.error ?? 'unknown error'}`, 'error');
         btnPush.disabled = false;
         btnPush.textContent = '↑ Push';
       }
     } catch {
-      alert('Push failed: network error');
+      showToast('Push failed: network error', 'error');
       btnPush.disabled = false;
       btnPush.textContent = '↑ Push';
     }
@@ -151,17 +152,17 @@ export async function initGitPanel(
       if (res.ok) {
         await Promise.all([loadStatus(), loadHistory(), loadRemote()]);
       } else if (res.status === 409) {
-        alert('Pull failed: branches have diverged (not fast-forwardable). Please resolve manually.');
+        showToast('Pull failed: branches have diverged (not fast-forwardable). Please resolve manually.', 'error');
         btnPull.disabled = false;
         btnPull.textContent = '↓ Pull';
       } else {
         const err = await res.json() as { error?: string };
-        alert(`Pull failed: ${err.error ?? 'unknown error'}`);
+        showToast(`Pull failed: ${err.error ?? 'unknown error'}`, 'error');
         btnPull.disabled = false;
         btnPull.textContent = '↓ Pull';
       }
     } catch {
-      alert('Pull failed: network error');
+      showToast('Pull failed: network error', 'error');
       btnPull.disabled = false;
       btnPull.textContent = '↓ Pull';
     }

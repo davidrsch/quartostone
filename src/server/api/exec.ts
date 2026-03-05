@@ -11,6 +11,8 @@ import { sanitizeError } from '../utils/errorSanitizer.js';
 
 const EXEC_TIMEOUT_MS = 30_000;
 const MAX_OUTPUT = 1_048_576; // 1 MB per stream
+const MAX_CONCURRENT_EXECS = 3;
+let activeExecs = 0;
 
 // ── Run a code snippet in a subprocess ───────────────────────────────────────
 
@@ -99,6 +101,14 @@ async function executeJulia(code: string, cwd: string, timeout: number): Promise
 
 // ── Register routes ───────────────────────────────────────────────────────────
 
+/**
+ * Registers the code-execution endpoint (`POST /api/exec`).
+ * Only active when `allow_code_execution: true` is set in `_quartostone.yml`.
+ * Supports Python (`python`/`python3`), R (`Rscript`), and Julia (`julia`).
+ * Each call spawns an isolated subprocess with a configurable timeout
+ * (default 30 s). Concurrent executions are capped at MAX_CONCURRENT_EXECS (3)
+ * to prevent resource exhaustion.
+ */
 export function registerExecApi(app: Express, ctx: ServerContext) {
   const { cwd } = ctx;
   const execTimeout = ctx.config.exec_timeout_ms ?? EXEC_TIMEOUT_MS;
@@ -119,6 +129,12 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
       return;
     }
 
+    if (activeExecs >= MAX_CONCURRENT_EXECS) {
+      res.status(429).json({ error: 'Too many concurrent executions. Try again later.' });
+      return;
+    }
+    activeExecs++;
+
     let result: ExecResult;
     try {
       switch (language) {
@@ -133,7 +149,7 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
           result = await executeJulia(code, cwd, execTimeout);
           break;
         default:
-          badRequest(res, `Unsupported language: ${String(language)}`);
+          badRequest(res, 'Unsupported language');
           return;
       }
 
@@ -146,6 +162,8 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
       });
     } catch (err) {
       serverError(res, sanitizeError(err));
+    } finally {
+      activeExecs--;
     }
   });
 }
