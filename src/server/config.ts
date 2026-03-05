@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { parse } from 'yaml';
+import { warn as logWarn } from './utils/logger.js';
 
 export type CommitMode = 'auto' | 'prompt' | 'manual';
 export type RenderScope = 'file' | 'project';
@@ -74,10 +75,10 @@ export async function loadConfig(configPath: string): Promise<QuartostoneConfig>
     const parsed = parse(raw) as Partial<QuartostoneConfig>;
     const cfg: QuartostoneConfig = { ...DEFAULTS, ...parsed };
     const { warnings } = validateConfig(cfg);
-    for (const w of warnings) console.warn('[quartostone]', w);
+    for (const w of warnings) logWarn(w);
     return cfg;
   } catch {
-    console.warn(`Warning: Could not read ${configPath}, using defaults.`);
+    logWarn(`Could not read ${configPath}, using defaults.`);
     return { ...DEFAULTS };
   }
 }

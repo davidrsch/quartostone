@@ -6,6 +6,7 @@
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import type { ServerContext } from '../index.js';
+import { badRequest, forbidden, serverError } from '../utils/errorResponse.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
 
 const EXEC_TIMEOUT_MS = 30_000;
@@ -107,14 +108,14 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
   // response: { stdout, stderr, timedOut, exitCode }
   app.post('/api/exec', async (req: Request, res: Response) => {
     if (!ctx.config.allow_code_execution) {
-      res.status(403).json({ error: 'Code execution is disabled. Set allow_code_execution: true in _quartostone.yml to enable it.' });
+      forbidden(res, 'Code execution is disabled. Set allow_code_execution: true in _quartostone.yml to enable it.');
       return;
     }
 
     const { code, language } = req.body as { code?: string; language?: string };
 
     if (typeof code !== 'string' || !code.trim()) {
-      res.status(400).json({ error: 'code is required' });
+      badRequest(res, 'code is required');
       return;
     }
 
@@ -132,7 +133,7 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
           result = await executeJulia(code, cwd, execTimeout);
           break;
         default:
-          res.status(400).json({ error: `Unsupported language: ${String(language)}` });
+          badRequest(res, `Unsupported language: ${String(language)}`);
           return;
       }
 
@@ -144,7 +145,7 @@ export function registerExecApi(app: Express, ctx: ServerContext) {
         ok:       result.exitCode === 0 && !result.timedOut,
       });
     } catch (err) {
-      res.status(500).json({ error: sanitizeError(err) });
+      serverError(res, sanitizeError(err));
     }
   });
 }

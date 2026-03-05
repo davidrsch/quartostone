@@ -9,6 +9,7 @@ import multer from 'multer';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, basename, extname } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest, notFound } from '../utils/errorResponse.js';
 
 const ALLOWED_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.bmp', '.ico',
@@ -54,7 +55,7 @@ export function registerAssetsApi(app: Express, ctx: ServerContext): void {
     upload.single('file'),
     (req: Request, res: Response) => {
       if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded or file type not allowed' });
+        return badRequest(res, 'No file uploaded or file type not allowed');
       }
       const url = `/assets/${req.file.filename}`;
       res.status(201).json({ url, filename: req.file.filename });
@@ -65,9 +66,9 @@ export function registerAssetsApi(app: Express, ctx: ServerContext): void {
   // Check that the resolved path stays within assetsDir (path traversal guard)
   app.get('/assets/:filename', (req: Request, res: Response) => {
     const filename = basename(String(req.params['filename'] ?? ''));
-    if (!filename) return res.status(400).json({ error: 'Invalid filename' });
+    if (!filename) return badRequest(res, 'Invalid filename');
     const filePath = join(assetsDir, filename);
-    if (!existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+    if (!existsSync(filePath)) return notFound(res, 'Not found');
     res.sendFile(filePath);
   });
 }

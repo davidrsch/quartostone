@@ -5,6 +5,7 @@ import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 
 export function registerRenderApi(app: Express, ctx: ServerContext) {
@@ -15,7 +16,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
     // Validate scope
     if (scope !== undefined && scope !== 'file' && scope !== 'project') {
       responded = true;
-      return res.status(400).json({ error: 'Invalid scope' });
+      return badRequest(res, 'Invalid scope');
     }
 
     const renderScope = scope ?? ctx.config.render_scope;
@@ -25,7 +26,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       // Validate filePath is a non-empty string
       if (typeof filePath !== 'string' || filePath.trim() === '') {
         responded = true;
-        return res.status(400).json({ error: 'filePath required when scope is file' });
+        return badRequest(res, 'filePath required when scope is file');
       }
 
       const pagesRoot = resolve(join(ctx.cwd, ctx.config.pages_dir));
@@ -33,7 +34,7 @@ export function registerRenderApi(app: Express, ctx: ServerContext) {
       // Reject path traversal attacks
       if (!isInsideDir(pagesRoot, filePath)) {
         responded = true;
-        return res.status(400).json({ error: 'Path outside pages directory' });
+        return badRequest(res, 'Path outside pages directory');
       }
 
       const absPath = resolve(pagesRoot, filePath);

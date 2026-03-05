@@ -10,6 +10,7 @@ import type { Express, Request, Response } from 'express';
 import { readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest } from '../utils/errorResponse.js';
 import { collectQmd } from '../utils/qmdFiles.js';
 import { getTitleWithFallback, getTags } from '../utils/frontmatter.js';
 import { WIKI_LINK_SCAN_RE } from '../../shared/wikiLink.js';
@@ -131,7 +132,7 @@ export function registerLinksApi(app: Express, _ctx: ServerContext): void {
   // GET /api/links/backlinks?path=<relPath>
   app.get('/api/links/backlinks', (req: Request, res: Response) => {
     const target = req.query['path'] as string | undefined;
-    if (!target) return res.status(400).json({ error: 'path is required' });
+    if (!target) return badRequest(res, 'path is required');
 
     // Gather all source files that link to this target and return cached data
     const backlinks = Array.from(forwardLinks.entries())
@@ -151,7 +152,7 @@ export function registerLinksApi(app: Express, _ctx: ServerContext): void {
   // GET /api/links/forward?path=<relPath>
   app.get('/api/links/forward', (req: Request, res: Response) => {
     const source = req.query['path'] as string | undefined;
-    if (!source) return res.status(400).json({ error: 'path is required' });
+    if (!source) return badRequest(res, 'path is required');
 
     const targets = forwardLinks.get(source) ?? new Set<string>();
     const result = Array.from(targets).map(p => ({

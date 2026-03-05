@@ -12,6 +12,7 @@
 import type { Express, Request, Response } from 'express';
 import { spawn } from 'node:child_process';
 import type { ServerContext } from '../index.js';
+import { badRequest, serverError } from '../utils/errorResponse.js';
 
 const PANDOC_TIMEOUT_MS = 30_000;
 
@@ -149,7 +150,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return pandocError(res, 'markdown and format required', 400);
     }
     if (!format || !/^[\w+-]+$/.test(format)) {
-      return res.status(400).json({ error: 'Invalid or missing format' });
+      return badRequest(res, 'Invalid or missing format');
     }
 
     const safeOptions = sanitisePandocOptions(req.body.options);
@@ -184,7 +185,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
       return pandocError(res, 'ast and format required', 400);
     }
     if (!format || !/^[\w+-]+$/.test(format)) {
-      return res.status(400).json({ error: 'Invalid or missing format' });
+      return badRequest(res, 'Invalid or missing format');
     }
 
     const safeOptions = sanitisePandocOptions(req.body.options);
@@ -208,7 +209,7 @@ export function registerPandocApi(app: Express, _ctx: ServerContext): void {
   app.post('/api/pandoc/listExtensions', async (req: Request, res: Response) => {
     const { format } = req.body as { format?: string };
     if (!format || !/^[\w+-]+$/.test(format)) {
-      return res.status(400).json({ error: 'Invalid format' });
+      return badRequest(res, 'Invalid format');
     }
     const args = format ? [`--list-extensions=${format}`] : ['--list-extensions'];
     const result = await runPandoc(args);

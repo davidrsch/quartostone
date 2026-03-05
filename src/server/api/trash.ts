@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { join, dirname, resolve, sep } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile } from './search.js';
 
@@ -44,28 +45,28 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.post('/api/trash/restore/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    if (!id || !/^[a-z0-9]+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+    if (!id || !/^[a-z0-9]+$/.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
-    if (!existsSync(metaPath)) return res.status(404).json({ error: 'Trashed item not found' });
+    if (!existsSync(metaPath)) return notFound(res, 'Trashed item not found');
 
     let meta: TrashMeta;
     try {
       meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as TrashMeta;
     } catch {
-      return res.status(400).json({ error: 'Corrupted metadata file' });
+      return badRequest(res, 'Corrupted metadata file');
     }
-    if (!existsSync(trashFile)) return res.status(404).json({ error: 'Trashed file missing from disk' });
+    if (!existsSync(trashFile)) return notFound(res, 'Trashed file missing from disk');
 
     const restoreTarget = resolve(join(pagesDir, meta.originalPath));
     let realRestoreTarget: string;
     try { realRestoreTarget = realpathSync(restoreTarget); } catch { realRestoreTarget = restoreTarget; }
     if (!realRestoreTarget.startsWith(realPagesDir + sep) && realRestoreTarget !== realPagesDir) {
-      return res.status(400).json({ error: 'Invalid restore path' });
+      return badRequest(res, 'Invalid restore path');
     }
 
     if (existsSync(restoreTarget)) {
-      return res.status(409).json({ error: `Cannot restore: ${meta.originalPath} already exists` });
+      return conflict(res, `Cannot restore: ${meta.originalPath} already exists`);
     }
 
     mkdirSync(dirname(restoreTarget), { recursive: true });
@@ -73,7 +74,7 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
     try {
       rmSync(metaPath);
     } catch (err) {
-      return res.status(500).json({ error: String(err) });
+      return serverError(res, String(err));
     }
     updateLinkIndexForFile(pagesDir, meta.originalPath);
     updateSearchIndexForFile(pagesDir, meta.originalPath);
@@ -82,15 +83,15 @@ export function registerTrashApi(app: Express, ctx: ServerContext) {
 
   app.delete('/api/trash/:id', (req: Request, res: Response) => {
     const id = req.params['id'] as string;
-    if (!id || !/^[a-z0-9]+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
+    if (!id || !/^[a-z0-9]+$/.test(id)) return badRequest(res, 'Invalid id');
     const metaPath  = join(trashDir, `${id}.meta.json`);
     const trashFile = join(trashDir, `${id}.qmd`);
-    if (!existsSync(metaPath)) return res.status(404).json({ error: 'Not found' });
+    if (!existsSync(metaPath)) return notFound(res, 'Not found');
     try {
       if (existsSync(trashFile)) rmSync(trashFile);
       rmSync(metaPath);
     } catch (err) {
-      return res.status(500).json({ error: String(err) });
+      return serverError(res, String(err));
     }
     res.json({ ok: true });
   });

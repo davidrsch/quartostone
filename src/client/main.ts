@@ -26,6 +26,7 @@ import type { PaletteEntry } from './cmdpalette/filter.js';
 import { renderBreadcrumb as _renderBreadcrumb } from './breadcrumb.js';
 import { showToast } from './utils/toast.js';
 import type { ToastKind } from './utils/toast.js';
+import { TabBarManager } from './tabbar/index.js';
 
 // ─── DOM references ───────────────────────────────────────────────────────────
 const fileTreeEl       = document.getElementById('file-tree')!;
@@ -198,7 +199,7 @@ async function switchMode(mode: 'source' | 'visual') {
       onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
       onDirty: () => {
         isDirty = true;
-        if (activePath) markTabDirty(activePath, true);
+        if (activePath) primaryTabs.markDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
         // update cache asynchronously so properties panel stays mostly fresh
@@ -222,7 +223,7 @@ async function switchMode(mode: 'source' | 'visual') {
       pagePath: activePath,
       onSave: () => {
         isDirty = false;
-        if (activePath) markTabDirty(activePath, false);
+        if (activePath) primaryTabs.markDirty(activePath, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
@@ -235,7 +236,7 @@ async function switchMode(mode: 'source' | 'visual') {
       },
       onDirty: () => {
         isDirty = true;
-        if (activePath) markTabDirty(activePath, true);
+        if (activePath) primaryTabs.markDirty(activePath, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
       },
@@ -415,7 +416,6 @@ async function saveCurrentPage() {
       body: JSON.stringify({ content }),
     });
     if (!res.ok) {
-      console.error('Save failed:', res.status);
       sbSaveStatus.textContent = '';
       showToast('Save failed', 'error');
       return;
@@ -488,7 +488,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   activeDb?.destroy(); activeDb = null;
   editorMountEl.innerHTML = '';
 
-  ensureTab(path, name);
+  primaryTabs.ensure(path, name);
   activePath = path;
   renderBreadcrumb(path);
   isDirty = false;
@@ -525,7 +525,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
         onDirty: () => {
           isDirty = true;
-          markTabDirty(path, true);
+          primaryTabs.markDirty(path, true);
           btnSave.disabled = false;
           sbSaveStatus.textContent = 'Unsaved changes';
         },
@@ -542,7 +542,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       pagePath: path,
       onSave: () => {
         isDirty = false;
-        markTabDirty(path, false);
+        primaryTabs.markDirty(path, false);
         btnSave.disabled = true;
         sbSaveStatus.textContent = 'Saved';
         setTimeout(() => { sbSaveStatus.textContent = ''; }, 2000);
@@ -555,7 +555,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
       },
       onDirty: () => {
         isDirty = true;
-        markTabDirty(path, true);
+        primaryTabs.markDirty(path, true);
         btnSave.disabled = false;
         sbSaveStatus.textContent = 'Unsaved changes';
       },
@@ -616,13 +616,13 @@ async function openPageInPane2(path: string, name: string): Promise<void> {
       container: editorMount2El,
       pagePath: path,
       onSave: () => {
-        markTabDirty2(path, false);
+        secondaryTabs.markDirty(path, false);
       },
       onSaveError: (err) => {
         showToast(`Pane 2 auto-save failed: ${err.message}`, 'error');
       },
       onDirty: () => {
-        markTabDirty2(path, true);
+        secondaryTabs.markDirty(path, true);
       },
     });
   } catch (e) {
@@ -630,7 +630,7 @@ async function openPageInPane2(path: string, name: string): Promise<void> {
     activePath2 = null;
     return;
   }
-  ensureTab2(path, name);
+  secondaryTabs.ensure(path, name);
 }
 
 /** Destroy the secondary pane editor and clear its state. */
@@ -638,10 +638,9 @@ function closeSplitPane(): void {
   activeView2?.destroy();
   activeView2 = null;
   activePath2 = null;
-  openTabs2.length = 0;
-  activeTabPath2 = null;
+  secondaryTabs.clear();
   editorMount2El.innerHTML = '';
-  renderTabBar2();
+  secondaryTabs.render();
 }
 
 /** Activate or deactivate the split-editor view. */
@@ -720,9 +719,9 @@ initSidebar(fileTreeEl, (path, name) => {
     }
   },
   getActivePath: () => activePath,
-}).then(refresh => { refreshSidebar = refresh; }).catch(err => console.error('Sidebar init failed:', err));
+}).then(refresh => { refreshSidebar = refresh; }).catch(err => showToast(`Sidebar init failed: ${String(err)}`, 'error'));
 
-initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; }).catch(err => console.error('Git panel init failed:', err));
+initGitPanel(gitPanelEl, openCommitDialog).then(({ refresh }) => { refreshGit = refresh; }).catch(err => showToast(`Git panel init failed: ${String(err)}`, 'error'));
 
 branchPicker = initBranchPicker((branch, stashConflict) => {
   updateBranchStatus();
@@ -758,7 +757,7 @@ initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page
   if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath).catch((e: unknown) => showToast(String(e), 'error'));
   showToast('File restored to selected commit', 'success');
-}).then(hp => { historySetPage = hp.setPage; }).catch(err => console.error('History panel init failed:', err));
+}).then(hp => { historySetPage = hp.setPage; }).catch(err => showToast(`History panel init failed: ${String(err)}`, 'error'));
 
 // Click on ahead/behind badge → open Git panel
 sbSync.addEventListener('click', () => {
@@ -770,7 +769,9 @@ updateBranchStatus();
 // Refresh git status every 30s
 setInterval(updateBranchStatus, 30_000);
 
-// Global keyboard shortcuts
+// Global keyboard shortcuts (B4: AbortController for cleanup)
+const kbdController = new AbortController();
+window.addEventListener('beforeunload', () => kbdController.abort(), { once: true });
 document.addEventListener('keydown', e => {
   const mod = e.ctrlKey || e.metaKey;
   // Ctrl+S — save
@@ -819,7 +820,7 @@ document.addEventListener('keydown', e => {
       closeCmdPalette();
     }
   }
-});
+}, { signal: kbdController.signal });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE-8: UX Polish and Accessibility
@@ -853,168 +854,41 @@ document.addEventListener('keydown', e => {
   });
 }
 
-// ─── #112 Tab bar ─────────────────────────────────────────────────────────────
-interface TabEntry { path: string; name: string; dirty: boolean; }
-const openTabs: TabEntry[] = [];
-let activeTabPath: string | null = null;
+// ─── #112 + #140 Tab bar managers ────────────────────────────────────────────
+const primaryTabs = new TabBarManager(
+  'tab-bar',
+  (path, name) => openPage(path, name),
+  () => {
+    activePath = null;
+    renderBreadcrumb(null);
+    activeView?.destroy(); activeView = null;
+    activeVisual?.destroy(); activeVisual = null;
+    activeDb?.destroy(); activeDb = null;
+    editorMountEl.innerHTML = '';
+    noPageMessageEl.classList.add('visible');
+    pageTitleEl.textContent = '';
+    btnSave.disabled = true; btnCommit.disabled = true;
+  },
+);
 
-function renderTabBar() {
-  const bar = document.getElementById('tab-bar')!;
-  bar.innerHTML = '';
-  for (const tab of openTabs) {
-    const el = document.createElement('div');
-    el.className = 'editor-tab' + (tab.path === activeTabPath ? ' active' : '');
-    el.title = tab.path;
-    el.setAttribute('role', 'tab');
-    el.setAttribute('aria-selected', String(tab.path === activeTabPath));
-    el.dataset.path = tab.path;
-
-    const dot = document.createElement('span');
-    dot.className = 'editor-tab-dot';
-    dot.style.visibility = tab.dirty ? 'visible' : 'hidden';
-
-    const name = document.createElement('span');
-    name.className = 'editor-tab-name';
-    name.textContent = tab.name;
-
-    const close = document.createElement('button');
-    close.className = 'editor-tab-close';
-    close.title = 'Close tab';
-    close.setAttribute('aria-label', `Close ${tab.name}`);
-    close.textContent = '×';
-    close.addEventListener('click', ev => {
-      ev.stopPropagation();
-      closeTab(tab.path);
-    });
-
-    el.append(dot, name, close);
-    el.addEventListener('click', () => {
-      if (tab.path !== activePath) openPage(tab.path, tab.name);
-    });
-    bar.appendChild(el);
-  }
-}
-
-function ensureTab(path: string, name: string) {
-  if (!openTabs.find(t => t.path === path)) {
-    openTabs.push({ path, name, dirty: false });
-  }
-  activeTabPath = path;
-  renderTabBar();
-}
-
-function closeTab(path: string) {
-  const idx = openTabs.findIndex(t => t.path === path);
-  if (idx === -1) return;
-  openTabs.splice(idx, 1);
-  if (activeTabPath === path) {
-    const next = openTabs[idx] ?? openTabs[idx - 1];
-    if (next) {
-      openPage(next.path, next.name);
-    } else {
-      activeTabPath = null;
-      activePath = null;
-      renderBreadcrumb(null);
-      activeView?.destroy(); activeView = null;
-      activeVisual?.destroy(); activeVisual = null;
-      activeDb?.destroy(); activeDb = null;
-      editorMountEl.innerHTML = '';
-      noPageMessageEl.classList.add('visible');
-      pageTitleEl.textContent = '';
-      btnSave.disabled = true; btnCommit.disabled = true;
-    }
-  }
-  renderTabBar();
-}
-
-function markTabDirty(path: string, dirty: boolean) {
-  const tab = openTabs.find(t => t.path === path);
-  if (tab) { tab.dirty = dirty; renderTabBar(); }
-}
-
-// ─── #140 Secondary pane tab bar ──────────────────────────────────────────────
-const openTabs2: TabEntry[] = [];
-let activeTabPath2: string | null = null;
-
-function renderTabBar2() {
-  const bar = document.getElementById('tab-bar-2')!;
-  if (!bar) return;
-  bar.innerHTML = '';
-  for (const tab of openTabs2) {
-    const el = document.createElement('div');
-    el.className = 'editor-tab' + (tab.path === activeTabPath2 ? ' active' : '');
-    el.title = tab.path;
-    el.setAttribute('role', 'tab');
-    el.setAttribute('aria-selected', String(tab.path === activeTabPath2));
-    el.dataset.path = tab.path;
-
-    const dot = document.createElement('span');
-    dot.className = 'editor-tab-dot';
-    dot.style.visibility = tab.dirty ? 'visible' : 'hidden';
-
-    const name = document.createElement('span');
-    name.className = 'editor-tab-name';
-    name.textContent = tab.name;
-
-    const close = document.createElement('button');
-    close.className = 'editor-tab-close';
-    close.title = 'Close tab';
-    close.setAttribute('aria-label', `Close ${tab.name}`);
-    close.textContent = '×';
-    close.addEventListener('click', ev => {
-      ev.stopPropagation();
-      closeTab2(tab.path);
-    });
-
-    el.append(dot, name, close);
-    el.addEventListener('click', () => {
-      setFocusedPane('secondary');
-      if (tab.path !== activePath2) void openPageInPane2(tab.path, tab.name);
-    });
-    bar.appendChild(el);
-  }
-}
-
-function ensureTab2(path: string, name: string) {
-  if (!openTabs2.find(t => t.path === path)) {
-    openTabs2.push({ path, name, dirty: false });
-  }
-  activeTabPath2 = path;
-  renderTabBar2();
-}
-
-function closeTab2(path: string) {
-  const idx = openTabs2.findIndex(t => t.path === path);
-  if (idx === -1) return;
-  openTabs2.splice(idx, 1);
-  if (activeTabPath2 === path) {
-    const next = openTabs2[idx] ?? openTabs2[idx - 1];
-    if (next) {
-      void openPageInPane2(next.path, next.name);
-    } else {
-      activeTabPath2 = null;
-      activePath2 = null;
-      activeView2?.destroy(); activeView2 = null;
-      editorMount2El.innerHTML = '';
-    }
-  }
-  renderTabBar2();
-}
-
-function markTabDirty2(path: string, dirty: boolean) {
-  const tab = openTabs2.find(t => t.path === path);
-  if (tab) { tab.dirty = dirty; renderTabBar2(); }
-}
-
+const secondaryTabs = new TabBarManager(
+  'tab-bar-2',
+  (path, name) => { setFocusedPane('secondary'); void openPageInPane2(path, name); },
+  () => {
+    activePath2 = null;
+    activeView2?.destroy(); activeView2 = null;
+    editorMount2El.innerHTML = '';
+  },
+);
 
 {
-  const titleObs = new MutationObserver(() => { renderTabBar(); });
+  const titleObs = new MutationObserver(() => { primaryTabs.render(); });
   titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
   window.addEventListener('beforeunload', () => titleObs.disconnect());
 }
 
-// Mark tab dirty when isDirty changes — patch this into setDirtyState
-function setDirtyTab(dirty: boolean) { if (activePath) markTabDirty(activePath, dirty); }
+// Mark tab dirty when isDirty changes
+function setDirtyTab(dirty: boolean) { if (activePath) primaryTabs.markDirty(activePath, dirty); }
 
 // ─── #113 Command palette (Ctrl+K) ───────────────────────────────────────────
 {

@@ -16,6 +16,7 @@ import type { Express, Request, Response } from 'express';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest } from '../utils/errorResponse.js';
 
 // ── XRef types ────────────────────────────────────────────────────────────────
 
@@ -285,7 +286,7 @@ export function registerXRefApi(app: Express, ctx: ServerContext): void {
    */
   app.post('/api/xref/forId', (req: Request, res: Response) => {
     const { file, id } = req.body as { file?: string; id?: string };
-    if (!id) return res.status(400).json({ error: 'id is required' });
+    if (!id) return badRequest(res, 'id is required');
 
     const all = scanXRefsWithCache(pagesDir, file);
     all.refs = all.refs.filter(r => `${r.type}-${r.id}${r.suffix}` === id);

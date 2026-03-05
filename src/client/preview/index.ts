@@ -84,10 +84,6 @@ export function initPreviewPanel(): PreviewPanel {
         return;
       }
       const readyData = await readyRes.json().catch(() => ({ ready: false })) as { ready: boolean };
-      if (!readyData.ready) {
-        console.warn('[preview] quarto server did not become ready in 20 s');
-      }
-
       if (frame) frame.src = data.url; // set regardless; best-effort
       showPane();
     } catch (err) {

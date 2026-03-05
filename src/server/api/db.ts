@@ -4,12 +4,14 @@
 
 import type { Express, Request, Response } from 'express';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
 import type { ServerContext } from '../index.js';
 import { parseFrontmatter } from '../utils/frontmatter.js';
 import type { FieldDef, DbPage } from '../../shared/types.js';
 import { sanitizeError } from '../utils/errorSanitizer.js';
+import { isInsideDir } from '../utils/pathGuard.js';
+import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 
 // Re-export shared types so existing imports from this module keep working.
 export type { FieldDef, DbPage };
@@ -100,11 +102,10 @@ export function serialiseDbFile(page: DbPage): string {
 async function resolveAndCheck(cwd: string, pagesDir: string, rawPath: string | undefined, res: Response)
   : Promise<string | null>
 {
-  if (!rawPath) { res.status(400).json({ error: 'Missing path parameter' }); return null; }
+  if (!rawPath) { badRequest(res, 'Missing path parameter'); return null; }
   const abs = resolve(join(cwd, rawPath));
-  const pagesDirResolved = resolve(pagesDir);
-  if (!abs.startsWith(pagesDirResolved + sep) && abs !== pagesDirResolved) {
-    res.status(400).json({ error: 'Path traversal not allowed' });
+  if (!isInsideDir(resolve(pagesDir), abs)) {
+    badRequest(res, 'Path traversal not allowed');
     return null;
   }
   return abs;
@@ -124,16 +125,16 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
       const content = await readFile(abs, 'utf-8');
       const db = parseDbFile(content);
       if (!db) {
-        res.status(400).json({ error: 'File is not a Quartostone database page' });
+        badRequest(res, 'File is not a Quartostone database page');
         return;
       }
       res.json(db);
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        return res.status(404).json({ error: 'Database file not found' });
+        return notFound(res, 'Database file not found');
       }
-      return res.status(500).json({ error: 'Failed to read database file' });
+      return serverError(res, 'Failed to read database file');
     }
   });
 
@@ -144,17 +145,17 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
     try {
       const { schema, rows } = req.body as DbPage;
       if (!Array.isArray(schema)) {
-        res.status(400).json({ error: 'schema must be an array' });
+        badRequest(res, 'schema must be an array');
         return;
       }
       if (rows !== undefined && !Array.isArray(rows)) {
-        return res.status(400).json({ error: 'rows must be an array' });
+        return badRequest(res, 'rows must be an array');
       }
       const content = serialiseDbFile({ schema: normaliseSchema(schema), rows: rows ?? [] });
       await writeFile(abs, content, 'utf-8');
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ error: sanitizeError(err) });
+      serverError(res, sanitizeError(err));
     }
   });
 
@@ -190,13 +191,13 @@ export function registerDbApi(app: Express, ctx: ServerContext) {
         await writeFile(abs, content, { flag: 'wx', encoding: 'utf-8' });
       } catch (err: unknown) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-          return res.status(409).json({ error: 'File already exists' });
+          return conflict(res, 'File already exists');
         }
         throw err;
       }
       res.json({ ok: true });
     } catch (err) {
-      res.status(500).json({ error: sanitizeError(err) });
+      serverError(res, sanitizeError(err));
     }
   });
 }

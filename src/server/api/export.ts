@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import type { ServerContext } from '../index.js';
+import { badRequest, conflict, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { EXPORT_FORMATS } from '../../shared/formats.js';
 
@@ -166,20 +167,20 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
       extraArgs?: string[];
     };
 
-    if (!filePath) return res.status(400).json({ error: 'path is required' });
+    if (!filePath) return badRequest(res, 'path is required');
     if (!format || !SUPPORTED_FORMATS.includes(format as typeof SUPPORTED_FORMATS[number])) {
-      return res.status(400).json({ error: `Unsupported format. Valid formats: ${SUPPORTED_FORMATS.join(', ')}` });
+      return badRequest(res, `Unsupported format. Valid formats: ${SUPPORTED_FORMATS.join(', ')}`);
     }
 
     const pagesRoot = resolve(join(cwd, ctx.config.pages_dir));
     const absPath = resolve(join(cwd, filePath));
     if (!isInsideDir(pagesRoot, absPath)) {
-      return res.status(400).json({ error: 'Path traversal not allowed' });
+      return badRequest(res, 'Path traversal not allowed');
     }
-    if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
+    if (!existsSync(absPath)) return notFound(res, 'File not found');
 
     if (!Array.isArray(extraArgs)) {
-      return res.status(400).json({ error: 'extraArgs must be an array' });
+      return badRequest(res, 'extraArgs must be an array');
     }
     // Reject requests that include blocked or unsafe arguments (security)
     const badArg = extraArgs.find((a: unknown): boolean => {
@@ -188,7 +189,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
       return BLOCKED_ARGS.some(b => a === b || (a as string).startsWith(b + '='));
     });
     if (badArg !== undefined) {
-      return res.status(400).json({ error: `Blocked or unsafe argument: ${String(badArg)}` });
+      return badRequest(res, `Blocked or unsafe argument: ${String(badArg)}`);
     }
     const safeExtraArgs = extraArgs as string[];
 
@@ -211,10 +212,10 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
   // GET /api/export/status?token=
   app.get('/api/export/status', (req: Request, res: Response) => {
     const token = req.query['token'] as string | undefined;
-    if (!token) return res.status(400).json({ error: 'token is required' });
+    if (!token) return badRequest(res, 'token is required');
 
     const job = jobs.get(token);
-    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (!job) return notFound(res, 'Job not found');
 
     res.json({
       token:    job.token,
@@ -228,12 +229,12 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
   // Streams the output file to the client, then deletes it.
   app.get('/api/export/download', (req: Request, res: Response) => {
     const token = req.query['token'] as string | undefined;
-    if (!token) return res.status(400).json({ error: 'token is required' });
+    if (!token) return badRequest(res, 'token is required');
 
     const job = jobs.get(token);
-    if (!job)              return res.status(404).json({ error: 'Job not found' });
+    if (!job)              return notFound(res, 'Job not found');
     if (job.status !== 'done' || !job.outputPath || !job.filename) {
-      return res.status(409).json({ error: `Job is not complete (status: ${job.status})` });
+      return conflict(res, `Job is not complete (status: ${job.status})`);
     }
 
     if (!existsSync(job.outputPath)) {
@@ -255,7 +256,7 @@ export function registerExportApi(app: Express, ctx: ServerContext) {
     const stream = createReadStream(job.outputPath);
     stream.on('error', (_err) => {
       if (!res.headersSent) {
-        res.status(500).json({ error: 'File read error' });
+        serverError(res, 'File read error');
       } else {
         res.destroy();
       }

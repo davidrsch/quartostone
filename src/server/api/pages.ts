@@ -9,6 +9,7 @@ import type { Express, Request, Response } from 'express';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmdirSync, renameSync, openSync, writeSync, closeSync } from 'node:fs';
 import { join, relative, extname, dirname } from 'node:path';
 import type { ServerContext } from '../index.js';
+import { badRequest, notFound, conflict, serverError } from '../utils/errorResponse.js';
 import { updateLinkIndexForFile, removeLinkIndexForFile } from './links.js';
 import { updateSearchIndexForFile, removeSearchIndexForFile } from './search.js';
 import { resolveInsideDir, PathTraversalError } from '../utils/pathGuard.js';
@@ -48,7 +49,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       return resolveInsideDir(pagesDir, withQmd);
     } catch (e) {
       if (e instanceof PathTraversalError) {
-        res.status(400).json({ error: 'Path traversal not allowed' });
+        badRequest(res, 'Path traversal not allowed');
         return null;
       }
       throw e;
@@ -61,7 +62,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       return resolveInsideDir(pagesDir, rawSuffix);
     } catch (e) {
       if (e instanceof PathTraversalError) {
-        res.status(400).json({ error: 'Path traversal not allowed' });
+        badRequest(res, 'Path traversal not allowed');
         return null;
       }
       throw e;
@@ -73,22 +74,22 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       const tree = buildTree(pagesDir, pagesDir);
       res.json(tree);
     } catch (e) {
-      res.status(500).json({ error: String(e) });
+      serverError(res, String(e));
     }
   });
 
   app.get('/api/pages/*', (req: Request, res: Response) => {
     const filePath = guardPath(req.params[0] as string, res);
     if (!filePath) return;
-    if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
+    if (!existsSync(filePath)) return notFound(res, 'Page not found');
     try {
       const content = readFileSync(filePath, 'utf-8');
       const relPath = relative(pagesDir, filePath).replace(/\\/g, '/').replace(/\.qmd$/, '');
       return res.json({ content, path: relPath });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') return res.status(404).json({ error: 'File not found' });
-      return res.status(500).json({ error: 'File system error' });
+      if (code === 'ENOENT') return notFound(res, 'File not found');
+      return serverError(res, 'File system error');
     }
   });
 
@@ -96,7 +97,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
     const filePath = guardPath(req.params[0] as string, res);
     if (!filePath) return;
     const { content } = req.body as { content: string };
-    if (typeof content !== 'string') return res.status(400).json({ error: 'content required' });
+    if (typeof content !== 'string') return badRequest(res, 'content required');
     try {
       mkdirSync(dirname(filePath), { recursive: true });
       writeFileSync(filePath, content, 'utf-8');
@@ -106,9 +107,9 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       updateSearchIndexForFile(pagesDir, relPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'ENOSPC') return res.status(500).json({ error: 'No space left on device' });
-      if (code === 'EACCES') return res.status(500).json({ error: 'Permission denied' });
-      return res.status(500).json({ error: 'File system error' });
+      if (code === 'ENOSPC') return serverError(res, 'No space left on device');
+      if (code === 'EACCES') return serverError(res, 'Permission denied');
+      return serverError(res, 'File system error');
     }
     res.json({ ok: true });
   });
@@ -116,7 +117,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   app.patch('/api/pages/*', (req: Request, res: Response) => {
     const rawOld = req.params[0] as string;
     const { newPath } = req.body as { newPath?: string };
-    if (!newPath) return res.status(400).json({ error: 'newPath required' });
+    if (!newPath) return badRequest(res, 'newPath required');
 
     // Detect whether the target is a .qmd file or a directory
     let oldAbs: string;
@@ -130,11 +131,11 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
         if (existsSync(asDir)) {
           oldAbs = asDir; isFile = false;
         } else {
-          return res.status(404).json({ error: 'Not found' });
+          return notFound(res, 'Not found');
         }
       }
     } catch {
-      return res.status(404).json({ error: 'Not found' });
+      return notFound(res, 'Not found');
     }
 
     let newAbsRaw: string;
@@ -144,17 +145,17 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
         isFile ? (newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`) : newPath,
       );
     } catch {
-      return res.status(400).json({ error: 'Path traversal not allowed' });
+      return badRequest(res, 'Path traversal not allowed');
     }
-    if (existsSync(newAbsRaw)) return res.status(409).json({ error: 'Target path already exists' });
+    if (existsSync(newAbsRaw)) return conflict(res, 'Target path already exists');
 
     try {
       mkdirSync(dirname(newAbsRaw), { recursive: true });
       renameSync(oldAbs, newAbsRaw);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'EEXIST') return res.status(409).json({ error: 'Name already exists' });
-      return res.status(500).json({ error: 'File system error' });
+      if (code === 'EEXIST') return conflict(res, 'Name already exists');
+      return serverError(res, 'File system error');
     }
 
     if (isFile) {
@@ -170,7 +171,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
 
   app.post('/api/pages', (req: Request, res: Response) => {
     const { path: newPath, title } = req.body as { path: string; title?: string };
-    if (!newPath) return res.status(400).json({ error: 'path required' });
+    if (!newPath) return badRequest(res, 'path required');
     const normalized = newPath.endsWith('.qmd') ? newPath : `${newPath}.qmd`;
     const filePath = guardAnyPath(normalized, res);
     if (!filePath) return;
@@ -183,10 +184,10 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       closeSync(fd);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'EEXIST') return res.status(409).json({ error: 'Page already exists' });
-      if (code === 'ENOSPC') return res.status(500).json({ error: 'No space left on device' });
-      if (code === 'EACCES') return res.status(500).json({ error: 'Permission denied' });
-      return res.status(500).json({ error: 'File system error' });
+      if (code === 'EEXIST') return conflict(res, 'Page already exists');
+      if (code === 'ENOSPC') return serverError(res, 'No space left on device');
+      if (code === 'EACCES') return serverError(res, 'Permission denied');
+      return serverError(res, 'File system error');
     }
     const newRel = (newPath.endsWith('.qmd') ? newPath : newPath + '.qmd');
     updateLinkIndexForFile(pagesDir, newRel);
@@ -197,7 +198,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   app.delete('/api/pages/*', (req: Request, res: Response) => {
     const filePath = guardPath(req.params[0] as string, res);
     if (!filePath) return;
-    if (!existsSync(filePath)) return res.status(404).json({ error: 'Page not found' });
+    if (!existsSync(filePath)) return notFound(res, 'Page not found');
 
     // Soft-delete: move file to .quartostone/trash/ instead of permanent removal
     const trashDir = join(ctx.cwd, '.quartostone', 'trash');
@@ -212,7 +213,7 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
       );
       renameSync(filePath, join(trashDir, `${id}.qmd`));
     } catch {
-      return res.status(500).json({ error: 'Failed to delete page' });
+      return serverError(res, 'Failed to delete page');
     }
     removeLinkIndexForFile(relPath);
     removeSearchIndexForFile(relPath);
@@ -222,10 +223,10 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   // ── Directory management ─────────────────────────────────────────────────
   app.post('/api/directories', (req: Request, res: Response) => {
     const { path: folderPath } = req.body as { path?: string };
-    if (!folderPath) return res.status(400).json({ error: 'path required' });
+    if (!folderPath) return badRequest(res, 'path required');
     const abs = guardAnyPath(folderPath, res);
     if (!abs) return;
-    if (existsSync(abs)) return res.status(409).json({ error: 'Directory already exists' });
+    if (existsSync(abs)) return conflict(res, 'Directory already exists');
     mkdirSync(abs, { recursive: true });
     res.status(201).json({ ok: true, path: folderPath });
   });
@@ -233,19 +234,19 @@ export function registerPagesApi(app: Express, ctx: ServerContext) {
   app.delete('/api/directories/*', (req: Request, res: Response) => {
     const abs = guardAnyPath(req.params[0] as string, res);
     if (!abs) return;
-    if (!existsSync(abs)) return res.status(404).json({ error: 'Not found' });
+    if (!existsSync(abs)) return notFound(res, 'Not found');
     try {
       rmdirSync(abs); // throws ENOTEMPTY if non-empty (atomic)
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOTEMPTY' || code === 'EEXIST') {
-        return res.status(409).json({ error: 'Directory is not empty' });
+        return conflict(res, 'Directory is not empty');
       }
       if (code === 'ENOENT') {
-        return res.status(404).json({ error: 'Directory not found' });
+        return notFound(res, 'Directory not found');
       }
       if (code === 'ENOTDIR') {
-        return res.status(400).json({ error: 'Path is not a directory' });
+        return badRequest(res, 'Path is not a directory');
       }
       throw err;
     }

@@ -21,9 +21,11 @@
 
 import type { Express, Request, Response } from 'express';
 import { simpleGit } from 'simple-git';
-import { resolve, join, sep } from 'node:path';
+import { resolve, join } from 'node:path';
 import type { ServerContext } from '../index.js';
 import { sanitizeGitError } from '../utils/errorSanitizer.js';
+import { isInsideDir } from '../utils/pathGuard.js';
+import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
 
 const SAFE_SHA = /^[0-9a-f]{4,64}$/i;
 
@@ -31,20 +33,13 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   const git = simpleGit(ctx.cwd);
   const pagesDir = resolve(join(ctx.cwd, ctx.config.pages_dir));
 
-  /** Returns true if path is safely within pagesDir (never the root dir itself). */
-  function isPathSafe(rawPath: string): boolean {
-    const abs = resolve(join(ctx.cwd, rawPath));
-    return abs.startsWith(pagesDir + sep);
-  }
-
   app.get('/api/git/log', async (req: Request, res: Response) => {
     try {
       const filePath = typeof req.query['path'] === 'string' ? req.query['path'] : undefined;
       if (filePath) {
         const abs = resolve(join(ctx.cwd, ctx.config.pages_dir, filePath));
-        const base = resolve(join(ctx.cwd, ctx.config.pages_dir));
-        if (!abs.startsWith(base + sep) && abs !== base) {
-          return res.status(400).json({ error: 'Path outside pages directory' });
+        if (!isInsideDir(pagesDir, abs)) {
+          return badRequest(res, 'Path outside pages directory');
         }
       }
       const log = filePath
@@ -52,7 +47,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         : await git.log({ maxCount: 50 });
       res.json(log.all);
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -60,16 +55,16 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const { message } = req.body as { message?: string };
       if (!message || typeof message !== 'string') {
-        return res.status(400).json({ error: 'message required' });
+        return badRequest(res, 'message required');
       }
       if (message.length > 4096) {
-        return res.status(400).json({ error: 'Commit message too long (max 4096 characters)' });
+        return badRequest(res, 'Commit message too long (max 4096 characters)');
       }
       await git.add(`${ctx.config.pages_dir}/`);
       const result = await git.commit(message);
       res.json({ ok: true, commit: result.commit });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -77,14 +72,14 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const sha = req.query.sha as string | undefined;
       if (sha && !SAFE_SHA.test(sha)) {
-        return res.status(400).json({ error: 'Invalid SHA format' });
+        return badRequest(res, 'Invalid SHA format');
       }
       // Without sha: return the unstaged working-tree diff
       // With sha: show the diff introduced by that commit
       const diff = sha ? await git.show([sha]) : await git.diff();
       res.json({ diff });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -93,7 +88,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const status = await git.status();
       res.json(status);
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -121,7 +116,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         behind: status.behind,
       });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -130,7 +125,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const pushResult = await git.push('origin');
       res.json({ ok: true, pushed: pushResult.pushed });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -158,7 +153,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const { url } = req.body as { url?: string };
       if (!url || typeof url !== 'string') {
-        return res.status(400).json({ error: 'url is required' });
+        return badRequest(res, 'url is required');
       }
       // Disallow local file:// remotes and validate basic URL format
       const allowedProtocols = ['https:', 'http:', 'ssh:', 'git:'];
@@ -166,10 +161,10 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       try {
         parsedUrl = new URL(url);
       } catch {
-        return res.status(400).json({ error: 'Invalid remote URL' });
+        return badRequest(res, 'Invalid remote URL');
       }
       if (!allowedProtocols.includes(parsedUrl.protocol)) {
-        return res.status(400).json({ error: 'Remote URL must use https, http, ssh, or git protocol' });
+        return badRequest(res, 'Remote URL must use https, http, ssh, or git protocol');
       }
       // Set or add remote
       try {
@@ -179,7 +174,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       }
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -197,7 +192,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       }));
       res.json({ current: summary.current, branches });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -206,12 +201,12 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const { name } = req.body as { name?: string };
       if (!name || !/^[\w\-./]+$/.test(name)) {
-        return res.status(400).json({ error: 'valid branch name required' });
+        return badRequest(res, 'valid branch name required');
       }
       await git.checkoutLocalBranch(name);
       res.json({ ok: true, name });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -221,7 +216,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     let wasStashed = false;
     try {
       const { branch } = req.body as { branch?: string };
-      if (!branch || !/^[\w\-./]+$/.test(branch)) return res.status(400).json({ error: 'valid branch name required' });
+      if (!branch || !/^[\w\-./]+$/.test(branch)) return badRequest(res, 'valid branch name required');
 
       const status = await git.status();
       wasStashed = !status.isClean();
@@ -246,7 +241,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       if (wasStashed) {
         try { await git.stash(['pop']); } catch { /* ignore pop failure */ }
       }
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -255,7 +250,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/merge', async (req: Request, res: Response) => {
     try {
       const { branch, message } = req.body as { branch?: string; message?: string };
-      if (!branch || !/^[\w\-./]+$/.test(branch)) return res.status(400).json({ error: 'valid branch name required' });
+      if (!branch || !/^[\w\-./]+$/.test(branch)) return badRequest(res, 'valid branch name required');
       const mergeMsg = message ?? `Merge branch '${branch}'`;
       const result = await git.merge([branch, '--no-ff', '-m', mergeMsg]);
       if (result.failed) {
@@ -273,7 +268,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
         }
         return res.status(409).json({ error: 'Merge conflict', conflicts, details: sanitizeGitError(e) });
       }
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -283,7 +278,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       await git.raw(['merge', '--abort']);
       res.json({ ok: true });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -294,7 +289,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const conflicted = status.conflicted.map(f => f);
       res.json({ conflicted });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -306,7 +301,7 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
       const result = await git.commit('Merge conflict resolved by quartostone');
       res.json({ ok: true, commit: result.commit });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -318,18 +313,18 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
     try {
       const sha  = req.query['sha']  as string | undefined;
       const path = req.query['path'] as string | undefined;
-      if (!sha || !SAFE_SHA.test(sha)) return res.status(400).json({ error: 'Invalid or missing sha' });
-      if (!path) return res.status(400).json({ error: 'path required' });
-      if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
+      if (!sha || !SAFE_SHA.test(sha)) return badRequest(res, 'Invalid or missing sha');
+      if (!path) return badRequest(res, 'path required');
+      if (!isInsideDir(pagesDir, resolve(join(ctx.cwd, path)))) return badRequest(res, 'Path outside pages directory');
       // git show sha:path
       const content = await git.show([`${sha}:${path}`]);
       res.json({ content, sha, path });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('does not exist') || msg.includes('bad object') || msg.includes('not found')) {
-        return res.status(404).json({ error: 'File not found at that commit' });
+        return notFound(res, 'File not found at that commit');
       }
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 
@@ -338,13 +333,13 @@ export function registerGitApi(app: Express, ctx: ServerContext) {
   app.post('/api/git/restore', async (req: Request, res: Response) => {
     try {
       const { sha, path } = req.body as { sha?: string; path?: string };
-      if (!sha || !SAFE_SHA.test(sha)) return res.status(400).json({ error: 'Invalid or missing sha' });
-      if (!path) return res.status(400).json({ error: 'path required' });
-      if (!isPathSafe(path)) return res.status(400).json({ error: 'Path outside pages directory' });
+      if (!sha || !SAFE_SHA.test(sha)) return badRequest(res, 'Invalid or missing sha');
+      if (!path) return badRequest(res, 'path required');
+      if (!isInsideDir(pagesDir, resolve(join(ctx.cwd, path)))) return badRequest(res, 'Path outside pages directory');
       await git.checkout([sha, '--', path]);
       res.json({ ok: true, sha, path });
     } catch (e) {
-      res.status(500).json({ error: sanitizeGitError(e) });
+      serverError(res, sanitizeGitError(e));
     }
   });
 }

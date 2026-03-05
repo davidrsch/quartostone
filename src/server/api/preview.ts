@@ -13,8 +13,10 @@ import { join, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createServer, createConnection } from 'node:net';
 import type { ServerContext } from '../index.js';
+import { badRequest, notFound, serverError } from '../utils/errorResponse.js';
 import { isInsideDir } from '../utils/pathGuard.js';
 import { PREVIEW_FORMATS } from '../../shared/formats.js';
+import { warn as logWarn, log, error as logError } from '../utils/logger.js';
 
 // ─── #118 Quarto PATH detection ───────────────────────────────────────────────
 
@@ -66,9 +68,9 @@ async function getQuartoExecutable(): Promise<string | null> {
   if (_quartoExe === undefined) {
     _quartoExe = await resolveQuartoPath();
     if (!_quartoExe) {
-      console.warn('[preview] quarto not found in PATH \u2014 preview feature will be unavailable.');
+      logWarn('[preview] quarto not found in PATH — preview feature will be unavailable.');
     } else {
-      console.info(`[preview] quarto detected at: ${_quartoExe}`);
+      log(`[preview] quarto detected at: ${_quartoExe}`);
     }
   }
   return _quartoExe;
@@ -140,12 +142,12 @@ function startPreview(
   proc.stderr?.on('data', captureLog);
 
   proc.on('exit', (code) => {
-    console.info(`[preview] quarto exited with code ${code} for ${relPath}`);
+    log(`[preview] quarto exited with code ${code} for ${relPath}`);
     previews.delete(relPath);
   });
 
   proc.on('error', (err) => {
-    console.error(`[preview] spawn error for ${relPath}: ${err.message}`);
+    logError(`[preview] spawn error for ${relPath}: ${err.message}`);
     previews.delete(relPath);
   });
 
@@ -183,18 +185,18 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
       format?: string;
     };
 
-    if (!filePath) return res.status(400).json({ error: 'path is required' });
+    if (!filePath) return badRequest(res, 'path is required');
 
     if (format && !PREVIEW_FORMATS.includes(format as typeof PREVIEW_FORMATS[number])) {
-      return res.status(400).json({ error: 'Invalid format' });
+      return badRequest(res, 'Invalid format');
     }
 
     const absPath = join(cwd, filePath);
-    if (!existsSync(absPath)) return res.status(404).json({ error: 'File not found' });
+    if (!existsSync(absPath)) return notFound(res, 'File not found');
 
     const pagesRoot = resolve(join(cwd, ctx.config.pages_dir));
     if (!isInsideDir(pagesRoot, absPath)) {
-      return res.status(400).json({ error: 'Path outside pages directory' });
+      return badRequest(res, 'Path outside pages directory');
     }
 
     // Re-use existing preview if same path and format
@@ -267,12 +269,12 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
     const port    = parseInt(req.query['port'] as string ?? '', 10);
     const rawTimeout = parseInt(String(req.query['timeout'] ?? ''), 10);
     const timeoutMs = Number.isFinite(rawTimeout) ? Math.min(rawTimeout, 30000) : 5000;
-    if (isNaN(port)) return res.status(400).json({ error: 'port is required' });
+    if (isNaN(port)) return badRequest(res, 'port is required');
 
     // SSRF guard: only allow polling ports that belong to active preview sessions
     const activeSessionPorts = new Set([...previews.values()].map(s => s.port));
     if (!activeSessionPorts.has(port)) {
-      return res.status(400).json({ error: 'No active preview session on that port' });
+      return badRequest(res, 'No active preview session on that port');
     }
 
     const deadline = Date.now() + timeoutMs;
@@ -290,7 +292,7 @@ export function registerPreviewApi(app: Express, ctx: ServerContext) {
   // GET /api/preview/logs?path=
   app.get('/api/preview/logs', (req: Request, res: Response) => {
     const filePath = req.query['path'] as string | undefined;
-    if (!filePath) return res.status(400).json({ error: 'path is required' });
+    if (!filePath) return badRequest(res, 'path is required');
     const entry = previews.get(filePath);
     if (!entry) return res.json({ logs: [] });
     res.json({ logs: entry.logs });

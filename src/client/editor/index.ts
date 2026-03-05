@@ -201,7 +201,7 @@ export async function createEditor(opts: EditorOptions): Promise<EditorView> {
         const content = view.state.doc.toString();
         savePage(opts.pagePath, content)
           .then(() => opts.onSave?.(content))
-          .catch((err: unknown) => { opts.onSaveError?.(err instanceof Error ? err : new Error(String(err))); console.error('Save error:', err); });
+          .catch((err: unknown) => { opts.onSaveError?.(err instanceof Error ? err : new Error(String(err))); });
         return true;
       },
     },

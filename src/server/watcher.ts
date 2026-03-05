@@ -8,6 +8,7 @@ import { simpleGit } from 'simple-git';
 import type { QuartostoneConfig } from './config.js';
 import { generateCommitSlug } from './config.js';
 import { markXRefCacheDirty } from './api/xref.js';
+import { log, warn as logWarn, error as logError } from './utils/logger.js';
 
 interface WatcherContext {
   cwd: string;
@@ -35,14 +36,14 @@ export function startWatcher(ctx: WatcherContext) {
         try {
           ctx.broadcast('render:error', { path: filePath, error: String(err) });
         } catch (broadcastErr) {
-          console.error('[watcher] broadcast failed:', broadcastErr);
+          logError(`[watcher] broadcast failed: ${broadcastErr}`);
         }
       });
     }, ctx.config.watch_interval_ms);
   });
 
   watcher.on('error', (err) => {
-    console.error('Watcher error:', err);
+    logError(`Watcher error: ${err}`);
   });
 
   async function handleChange(filePath: string) {
@@ -93,6 +94,6 @@ export function startWatcher(ctx: WatcherContext) {
     });
   }
 
-  console.log(`✓ Watching ${pagesDir} for changes`);
+  log(`✓ Watching ${pagesDir} for changes`);
   return watcher;
 }

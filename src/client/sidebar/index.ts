@@ -1062,8 +1062,6 @@ async function updatePageIcon(path: string, icon: string): Promise<void> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: updated }),
     });
-    if (!putRes.ok) {
-      console.error('Failed to save icon:', putRes.status, await putRes.text());
-    }
+    // icon save failed — silent best-effort
   } catch { /* silent */ }
 }
