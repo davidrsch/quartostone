@@ -26,8 +26,10 @@ export interface BibliographyResult {
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────
 
+import { apiFetch } from '../api/request.js';
+
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

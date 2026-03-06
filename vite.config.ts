@@ -14,19 +14,22 @@ if (!process.env['QUARTOSTONE_PORT']) {
 
 export default defineConfig({
   root: resolve(__dirname, 'src/client'),
-  base: './',
+  base: '/editor/',
   build: {
     outDir: resolve(__dirname, 'dist/client'),
     emptyOutDir: true,
-    // es2022 adds support for top-level await (used in main.ts boot sequence).
-    // All target browsers from 2022+ ship native TLA support.
     target: 'es2022',
   },
   server: {
     port: 5173,
     proxy: {
       '/api': { target: `http://localhost:${serverPort}`, changeOrigin: false },
-      '/ws':  { target: `ws://localhost:${serverPort}`,  ws: true },
+      '/ws': { target: `ws://localhost:${serverPort}`, ws: true },
+      // Proxy the standalone visual editor if requested through the main dev server
+      '/visual-editor': {
+        target: `http://localhost:${serverPort}`,
+        changeOrigin: false
+      }
     },
   },
 });

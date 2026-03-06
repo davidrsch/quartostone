@@ -5,6 +5,7 @@
 
 import { showToast } from '../utils/toast.js';
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 interface ExportJobStatus {
   token: string;
@@ -17,11 +18,11 @@ interface ExportJobStatus {
 export type GetCurrentPathFn = () => string | null;
 
 export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageReady(ready: boolean): void } {
-  const picker    = document.getElementById('export-picker');
-  const btnExport = document.getElementById('btn-export')   as HTMLButtonElement | null;
-  const dropdown  = document.getElementById('export-dropdown');
+  const picker = document.getElementById('export-picker');
+  const btnExport = document.getElementById('btn-export') as HTMLButtonElement | null;
+  const dropdown = document.getElementById('export-dropdown');
 
-  if (!picker || !btnExport || !dropdown) return { setPageReady() {} };
+  if (!picker || !btnExport || !dropdown) return { setPageReady() { } };
 
   /* ── Toggle dropdown ──────────────────────────────────────────────────── */
 
@@ -68,11 +69,11 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
   /* ── Custom dialog ────────────────────────────────────────────────────── */
 
-  const dialog   = document.getElementById('custom-export-dialog') as HTMLDialogElement | null;
-  const fmtInput = document.getElementById('custom-format-input')  as HTMLInputElement | null;
-  const argsInput = document.getElementById('custom-args-input')   as HTMLInputElement | null;
+  const dialog = document.getElementById('custom-export-dialog') as HTMLDialogElement | null;
+  const fmtInput = document.getElementById('custom-format-input') as HTMLInputElement | null;
+  const argsInput = document.getElementById('custom-args-input') as HTMLInputElement | null;
   const confirmBtn = document.getElementById('btn-custom-export-confirm') as HTMLButtonElement | null;
-  const cancelBtn  = document.getElementById('btn-custom-export-cancel')  as HTMLButtonElement | null;
+  const cancelBtn = document.getElementById('btn-custom-export-cancel') as HTMLButtonElement | null;
 
   function openCustomDialog(): void {
     if (!dialog) return;
@@ -107,7 +108,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
     let token: string;
     try {
-      const res = await fetch(API.exportStart, {
+      const res = await apiFetch(API.exportStart, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path, format, extraArgs }),
@@ -143,7 +144,7 @@ export function initExportPicker(getCurrentPath: GetCurrentPathFn): { setPageRea
 
       let job: ExportJobStatus;
       try {
-        const res = await fetch(`${API.exportStatus}?token=${encodeURIComponent(token)}`);
+        const res = await apiFetch(`${API.exportStatus}?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
           clearInterval(id);
           showToast('Export poll failed', 'error', 6000);

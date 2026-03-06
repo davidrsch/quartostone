@@ -13,7 +13,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { runCellExtension } from './runWidget.js';
 import { API } from '../api/endpoints.js';
-import { getToken } from '../api/request.js';
+import { getToken, apiFetch } from '../api/request.js';
 
 const AUTOSAVE_DEBOUNCE_MS = 1_000; // debounce delay before auto-saving after last keystroke
 
@@ -24,7 +24,7 @@ async function uploadImageFile(file: File): Promise<string | null> {
   const form = new FormData();
   form.append('file', file, file.name);
   try {
-    const res = await fetch(API.assets, { method: 'POST', body: form });
+    const res = await apiFetch(API.assets, { method: 'POST', body: form });
     if (!res.ok) return null;
     const data = (await res.json()) as { url: string };
     return data.url;
@@ -55,7 +55,7 @@ function imageDragDropExtension(): Extension {
           const url = await uploadImageFile(file);
           if (!url) continue;
           const alt = file.name.replace(/\.[^.]+$/, '');
-          const md  = `![${alt}](${url})`;
+          const md = `![${alt}](${url})`;
           view.dispatch({
             changes: { from: at, insert: md },
             selection: { anchor: at + md.length },
@@ -79,7 +79,7 @@ function imageDragDropExtension(): Extension {
             const url = await uploadImageFile(file);
             if (!url) continue;
             const alt = 'image';
-            const md  = `![${alt}](${url})`;
+            const md = `![${alt}](${url})`;
             view.dispatch({
               changes: { from: insertAt + offset, insert: md },
               selection: { anchor: insertAt + offset + md.length },
@@ -102,7 +102,7 @@ export interface EditorOptions {
 
 /** @internal exported for unit tests */
 export async function loadPage(path: string): Promise<string> {
-  const res = await fetch(`/api/pages/${encodeURIComponent(path)}`);
+  const res = await apiFetch(`/api/pages/${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error(`Failed to load page: ${path}`);
   const data = (await res.json()) as { content: string };
   return data.content;
@@ -110,7 +110,7 @@ export async function loadPage(path: string): Promise<string> {
 
 /** @internal exported for unit tests */
 export async function savePage(path: string, content: string): Promise<void> {
-  const res = await fetch(`/api/pages/${encodeURIComponent(path)}`, {
+  const res = await apiFetch(`/api/pages/${encodeURIComponent(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -155,15 +155,15 @@ async function wikiLinkCompletions(context: CompletionContext): Promise<Completi
   if (!match) return null;
   const typedAfterBrackets = match.text.slice(2); // text after [[
   try {
-    const res = await fetch(`/api/links/search?q=${encodeURIComponent(typedAfterBrackets)}`);
+    const res = await apiFetch(`/api/links/search?q=${encodeURIComponent(typedAfterBrackets)}`);
     if (!res.ok) return null;
     const pages = await res.json() as PageHit[];
     return {
-      from:    match.from + 2,  // replace text after [[
+      from: match.from + 2,  // replace text after [[
       options: pages.map(p => ({
-        label:   p.title,
-        detail:  p.path,
-        apply:   p.title + ']]',
+        label: p.title,
+        detail: p.path,
+        apply: p.title + ']]',
       })),
       validFor: /^[^\]]*$/,
     };

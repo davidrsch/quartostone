@@ -11,6 +11,7 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import { RangeSetBuilder, StateField, StateEffect, type Transaction } from '@codemirror/state';
+import { apiFetch } from '../api/request.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -233,7 +234,7 @@ async function executeBlock(view: EditorView, block: CodeBlock): Promise<void> {
   });
 
   try {
-    const res = await fetch('/api/exec', {
+    const res = await apiFetch('/api/exec', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: block.code, language: block.lang }),

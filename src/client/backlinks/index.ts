@@ -4,6 +4,7 @@
  */
 
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 export interface BacklinksPanel {
   /** Update the panel for a new page (or clear when null) */
@@ -13,8 +14,8 @@ export interface BacklinksPanel {
 }
 
 interface BacklinkEntry {
-  path:    string;
-  title:   string;
+  path: string;
+  title: string;
   excerpt: string;
 }
 
@@ -71,7 +72,7 @@ export function initBacklinksPanel(
   async function load(path: string): Promise<void> {
     containerEl.innerHTML = '<p class="bl-empty">Loading…</p>';
     try {
-      const res = await fetch(`${API.linksBacklinks}?path=${encodeURIComponent(path)}`);
+      const res = await apiFetch(`${API.linksBacklinks}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error(res.statusText);
       const entries = await res.json() as BacklinkEntry[];
       render(entries);

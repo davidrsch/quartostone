@@ -3,6 +3,7 @@
 // #97: filter/sort toolbar   #98: column header editing (rename/type/delete/insert)
 
 import { escHtml as esc } from '../utils/escape.js';
+import { apiFetch } from '../api/request.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ type ViewMode = 'table' | 'kanban';
 // #97 — Filter / sort rule types
 type FilterOp = 'contains' | 'equals' | 'is-blank' | 'is-checked' | 'gt' | 'lt';
 interface FilterRule { fieldId: string; op: FilterOp; value: string; }
-interface SortRule   { fieldId: string; dir: 'asc' | 'desc'; }
+interface SortRule { fieldId: string; dir: 'asc' | 'desc'; }
 
 export interface DbInstance {
   destroy(): void;
@@ -45,13 +46,13 @@ function applyFiltersAndSorts(
     indexed = indexed.filter(({ row }) => {
       const val = (row[f.fieldId] ?? '').toLowerCase();
       switch (f.op) {
-        case 'contains':   return val.includes(f.value.toLowerCase());
-        case 'equals':     return val === f.value.toLowerCase();
-        case 'is-blank':   return val === '';
+        case 'contains': return val.includes(f.value.toLowerCase());
+        case 'equals': return val === f.value.toLowerCase();
+        case 'is-blank': return val === '';
         case 'is-checked': return val === 'true';
-        case 'gt':         return parseFloat(val) > parseFloat(f.value);
-        case 'lt':         return parseFloat(val) < parseFloat(f.value);
-        default:           return true;
+        case 'gt': return parseFloat(val) > parseFloat(f.value);
+        case 'lt': return parseFloat(val) < parseFloat(f.value);
+        default: return true;
       }
     });
   }
@@ -274,9 +275,10 @@ function showColumnMenu(
         showChangeTypeDialog(fieldIndex, schema[fieldIndex]!, onChangeType);
       }
     },
-    { label: '← Insert left',  action: () => { menu.remove(); onInsert(fieldIndex, 'left');  } },
+    { label: '← Insert left', action: () => { menu.remove(); onInsert(fieldIndex, 'left'); } },
     { label: '→ Insert right', action: () => { menu.remove(); onInsert(fieldIndex, 'right'); } },
-    { label: '🗑 Delete field', danger: true, action: () => {
+    {
+      label: '🗑 Delete field', danger: true, action: () => {
         menu.remove();
         if (schema.length <= 1) { alert('Cannot delete the last field.'); return; }
         if (confirm(`Delete field "${schema[fieldIndex]?.name ?? ''}"?`)) {
@@ -409,7 +411,7 @@ function renderTableView(
   }).join('');
 
   const hasActiveFilters = activeFilters.length > 0;
-  const hasActiveSorts   = activeSorts.length > 0;
+  const hasActiveSorts = activeSorts.length > 0;
 
   el.innerHTML = `
     <div class="db-toolbar">
@@ -475,7 +477,7 @@ function renderTableView(
       });
     } else {
       input.addEventListener('change', () => { onCellChange(rowIdx, fieldId, input.value); });
-      input.addEventListener('blur',   () => { onCellChange(rowIdx, fieldId, input.value); });
+      input.addEventListener('blur', () => { onCellChange(rowIdx, fieldId, input.value); });
     }
   });
 
@@ -511,15 +513,15 @@ function renderKanbanView(
 
   const colsHtml = columns.map(col => {
     const colLabel = col || 'No status';
-    const colRows  = rows.map((r, i) => ({ r, i })).filter(({ r }) => (r[groupField.id] ?? '') === col);
+    const colRows = rows.map((r, i) => ({ r, i })).filter(({ r }) => (r[groupField.id] ?? '') === col);
     const cardsHtml = colRows.map(({ r, i }) => {
       const nameField = schema.find(f => f.type === 'text');
       const title = nameField ? (r[nameField.id] ?? '') : Object.values(r)[0] ?? '';
       return `<div class="db-kanban-card" draggable="true" data-row="${i}" data-col="${esc(col)}">
         <div class="db-card-title">${esc(title) || '<em>Untitled</em>'}</div>
         ${schema.filter(f => f.id !== nameField?.id && f.id !== groupField.id).slice(0, 2).map(f =>
-          `<div class="db-card-meta">${esc(f.name)}: ${esc(r[f.id] ?? '')}</div>`
-        ).join('')}
+        `<div class="db-card-meta">${esc(f.name)}: ${esc(r[f.id] ?? '')}</div>`
+      ).join('')}
       </div>`;
     }).join('');
 
@@ -548,7 +550,7 @@ function renderKanbanView(
 
   el.querySelectorAll<HTMLElement>('.db-kanban-cards').forEach(zone => {
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-    zone.addEventListener('dragleave',  () => { zone.classList.remove('drag-over'); });
+    zone.addEventListener('dragleave', () => { zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', () => {
       zone.classList.remove('drag-over');
       if (dragRowIdx < 0) return;
@@ -598,8 +600,8 @@ function showAddColumnDialog(
   document.body.appendChild(dlg);
   dlg.showModal();
 
-  const typeEl    = dlg.querySelector<HTMLSelectElement>('#db-new-field-type')!;
-  const optRow    = dlg.querySelector<HTMLElement>('#db-options-row')!;
+  const typeEl = dlg.querySelector<HTMLSelectElement>('#db-new-field-type')!;
+  const optRow = dlg.querySelector<HTMLElement>('#db-options-row')!;
 
   typeEl.addEventListener('change', () => {
     optRow.classList.toggle('hidden', typeEl.value !== 'select');
@@ -615,7 +617,7 @@ function showAddColumnDialog(
     const type = typeEl.value as FieldDef['type'];
     const rawOpts = (dlg.querySelector<HTMLInputElement>('#db-new-field-options')?.value ?? '');
     const field: FieldDef = {
-      id:   name.toLowerCase().replace(/\s+/g, '_'),
+      id: name.toLowerCase().replace(/\s+/g, '_'),
       name,
       type,
       ...(type === 'select' ? { options: rawOpts.split(',').map(s => s.trim()).filter(Boolean) } : {}),
@@ -634,7 +636,7 @@ export async function initDatabaseView(
   // Fetch current data
   let db: DbPage;
   try {
-    const res = await fetch(`/api/db?path=${encodeURIComponent(pagePath)}`);
+    const res = await apiFetch(`/api/db?path=${encodeURIComponent(pagePath)}`);
     if (!res.ok) return null;
     db = await res.json() as DbPage;
   } catch {
@@ -647,16 +649,16 @@ export async function initDatabaseView(
 
   // #97 — Load persisted filter/sort state from localStorage
   const FILTER_KEY = `db-filter-${pagePath}`;
-  const SORT_KEY   = `db-sort-${pagePath}`;
+  const SORT_KEY = `db-sort-${pagePath}`;
   let activeFilters: FilterRule[] = [];
-  let activeSorts: SortRule[]     = [];
+  let activeSorts: SortRule[] = [];
   try { activeFilters = JSON.parse(localStorage.getItem(FILTER_KEY) ?? '[]') as FilterRule[]; } catch { /* ok */ }
-  try { activeSorts   = JSON.parse(localStorage.getItem(SORT_KEY)   ?? '[]') as SortRule[];   } catch { /* ok */ }
+  try { activeSorts = JSON.parse(localStorage.getItem(SORT_KEY) ?? '[]') as SortRule[]; } catch { /* ok */ }
 
   async function persistDb() {
     if (destroyed) return;
     try {
-      await fetch(`/api/db?path=${encodeURIComponent(pagePath)}`, {
+      await apiFetch(`/api/db?path=${encodeURIComponent(pagePath)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(db),
@@ -674,23 +676,23 @@ export async function initDatabaseView(
     if (currentView === 'table') {
       renderTableView(
         viewContent, db, activeFilters, activeSorts,
-        /* onCellChange */ (ri, fid, val) => { db.rows[ri]![fid] = val; scheduleSave(); },
-        /* onAddRow     */ () => {
+        /* onCellChange */(ri, fid, val) => { db.rows[ri]![fid] = val; scheduleSave(); },
+        /* onAddRow     */() => {
           const empty: Record<string, string> = {};
           db.schema.forEach(f => { empty[f.id] = ''; });
           db.rows.push(empty);
           renderView(); scheduleSave();
         },
-        /* onDeleteRow  */ (ri) => { db.rows.splice(ri, 1); renderView(); scheduleSave(); },
-        /* onAddColumn  */ () => showAddColumnDialog(field => {
+        /* onDeleteRow  */(ri) => { db.rows.splice(ri, 1); renderView(); scheduleSave(); },
+        /* onAddColumn  */() => showAddColumnDialog(field => {
           db.schema.push(field);
           db.rows.forEach(r => { r[field.id] = ''; });
           renderView(); scheduleSave();
         }),
-        /* onRenameField */ (fi, name) => {
+        /* onRenameField */(fi, name) => {
           if (db.schema[fi]) { db.schema[fi].name = name; renderView(); scheduleSave(); }
         },
-        /* onChangeFieldType */ (fi, type, opts) => {
+        /* onChangeFieldType */(fi, type, opts) => {
           const schemaField = db.schema[fi];
           if (schemaField) {
             schemaField.type = type;
@@ -698,12 +700,12 @@ export async function initDatabaseView(
             renderView(); scheduleSave();
           }
         },
-        /* onDeleteField */ (fi) => {
+        /* onDeleteField */(fi) => {
           const removed = db.schema.splice(fi, 1);
           if (removed.length) db.rows.forEach(r => { delete r[removed[0]!.id]; });
           renderView(); scheduleSave();
         },
-        /* onInsertField */ (fi, dir) => {
+        /* onInsertField */(fi, dir) => {
           const idx = dir === 'left' ? fi : fi + 1;
           const newField: FieldDef = {
             id: `field_${Date.now()}`,
@@ -714,12 +716,12 @@ export async function initDatabaseView(
           db.rows.forEach(r => { r[newField.id] = ''; });
           renderView(); scheduleSave();
         },
-        /* onFilterChange */ (filters) => {
+        /* onFilterChange */(filters) => {
           activeFilters = filters;
           localStorage.setItem(FILTER_KEY, JSON.stringify(filters));
           renderView();
         },
-        /* onSortChange */ (sorts) => {
+        /* onSortChange */(sorts) => {
           activeSorts = sorts;
           localStorage.setItem(SORT_KEY, JSON.stringify(sorts));
           renderView();

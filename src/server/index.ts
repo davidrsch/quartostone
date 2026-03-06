@@ -124,6 +124,13 @@ export function createApp(ctx: ServerContext) {
   const editorDist = ctx.clientDist ?? join(__dirname, '../client');
   if (existsSync(editorDist)) {
     app.use('/editor', express.static(editorDist));
+
+    // Serve standalone visual editor bundle
+    const visualEditorPath = join(ctx.cwd, '../quarto-visual-editor/dist');
+    if (existsSync(visualEditorPath)) {
+      app.use('/visual-editor', express.static(visualEditorPath));
+    }
+
     // When no rendered site exists at /, serve the editor as the root app.
     // This covers fresh workspaces (no _site/ yet) and the E2E test fixture.
     if (!existsSync(siteDir)) {

@@ -134,14 +134,76 @@ export function buildEditorDialogs() {
     insertTabset: async () => null,
     insertCite: async () => null,
 
-    // Generic HTML dialog — always cancel
+    // Generic HTML dialog — use native <dialog>
     htmlDialog: async (
-      _title: string,
-      _okText: string | null,
-      _create: unknown,
-      _focus: () => void,
-      _validate: () => string | null,
-    ) => false,
+      title: string,
+      okText: string | null,
+      create: (el: HTMLElement) => void,
+      focus: () => void,
+      validate: () => string | null,
+    ) => {
+      console.log('[htmlDialog]', { title, okText, create, focus, validate });
+      return new Promise<boolean>((resolve) => {
+        const dialog = document.createElement('dialog');
+        dialog.className = 'panmirror-dialog';
+        dialog.innerHTML = `
+          <h3 style="margin-top: 0; margin-bottom: 16px;">${title}</h3>
+          <div class="content" style="margin-bottom: 24px;"></div>
+          <div class="actions" style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn-cancel">Cancel</button>
+            <button class="btn-ok active">${okText || 'OK'}</button>
+          </div>
+        `;
+        document.body.appendChild(dialog);
+
+        const contentDiv = dialog.querySelector('.content') as HTMLElement;
+        try {
+          if (typeof create === 'function') {
+            create(contentDiv);
+          } else if (typeof create === 'object' && typeof (create as any).render === 'function') {
+            (create as any).render(contentDiv);
+          } else {
+            console.error('htmlDialog create is neither function nor render object', create);
+          }
+        } catch (e) {
+          console.error('Error rendering dialog content', e);
+        }
+
+        const btnCancel = dialog.querySelector('.btn-cancel') as HTMLButtonElement;
+        const btnOk = dialog.querySelector('.btn-ok') as HTMLButtonElement;
+
+        const cleanup = () => {
+          dialog.close();
+          dialog.remove();
+        };
+
+        btnCancel.addEventListener('click', () => {
+          cleanup();
+          resolve(false);
+        });
+
+        btnOk.addEventListener('click', () => {
+          if (validate) {
+            const err = validate();
+            if (err) {
+              alert(err);
+              focus();
+              return;
+            }
+          }
+          cleanup();
+          resolve(true);
+        });
+
+        dialog.addEventListener('cancel', () => {
+          cleanup();
+          resolve(false);
+        });
+
+        dialog.showModal();
+        if (focus) setTimeout(focus, 10);
+      });
+    },
   };
 }
 
@@ -163,29 +225,29 @@ export function buildEditorUIImages() {
     search: empty,
     search_progress: empty,
     omni_insert: emptyObj([
-      'generic','heading1','heading1_dark','heading2','heading2_dark',
-      'heading3','heading3_dark','heading4','heading4_dark',
-      'ordered_list','ordered_list_dark','bullet_list','bullet_list_dark',
-      'blockquote','blockquote_dark','math_inline','math_inline_dark',
-      'math_display','math_display_dark','html_block','html_block_dark',
-      'line_block','line_block_dark','emoji','emoji_dark','comment','comment_dark',
-      'div','div_dark','code_block','code_block_dark','footnote','footnote_dark',
-      'citation','citation_dark','cross_reference','cross_reference_dark',
-      'symbol','symbol_dark','table','table_dark','definition_list','definition_list_dark',
-      'horizontal_rule','horizontal_rule_dark','image','image_dark','link','link_dark',
-      'paragraph','paragraph_dark','raw_block','raw_block_dark','raw_inline','raw_inline_dark',
-      'tex_block','tex_block_dark','yaml_block','yaml_block_dark',
-      'python_chunk','sql_chunk','d3_chunk','stan_chunk',
-      'bash_chunk','bash_chunk_dark','r_chunk','r_chunk_dark',
-      'rcpp_chunk','rcpp_chunk_dark','tabset','tabset_dark',
-      'slide_columns','slide_columns_dark','slide_pause','slide_pause_dark',
-      'slide_notes','slide_notes_dark',
+      'generic', 'heading1', 'heading1_dark', 'heading2', 'heading2_dark',
+      'heading3', 'heading3_dark', 'heading4', 'heading4_dark',
+      'ordered_list', 'ordered_list_dark', 'bullet_list', 'bullet_list_dark',
+      'blockquote', 'blockquote_dark', 'math_inline', 'math_inline_dark',
+      'math_display', 'math_display_dark', 'html_block', 'html_block_dark',
+      'line_block', 'line_block_dark', 'emoji', 'emoji_dark', 'comment', 'comment_dark',
+      'div', 'div_dark', 'code_block', 'code_block_dark', 'footnote', 'footnote_dark',
+      'citation', 'citation_dark', 'cross_reference', 'cross_reference_dark',
+      'symbol', 'symbol_dark', 'table', 'table_dark', 'definition_list', 'definition_list_dark',
+      'horizontal_rule', 'horizontal_rule_dark', 'image', 'image_dark', 'link', 'link_dark',
+      'paragraph', 'paragraph_dark', 'raw_block', 'raw_block_dark', 'raw_inline', 'raw_inline_dark',
+      'tex_block', 'tex_block_dark', 'yaml_block', 'yaml_block_dark',
+      'python_chunk', 'sql_chunk', 'd3_chunk', 'stan_chunk',
+      'bash_chunk', 'bash_chunk_dark', 'r_chunk', 'r_chunk_dark',
+      'rcpp_chunk', 'rcpp_chunk_dark', 'tabset', 'tabset_dark',
+      'slide_columns', 'slide_columns_dark', 'slide_pause', 'slide_pause_dark',
+      'slide_notes', 'slide_notes_dark',
     ]),
     citations: emptyObj([
-      'article','article_dark','book','book_dark','broadcast','broadcast_dark',
-      'data','data_dark','entry','entry_dark','image','image_dark',
-      'legal','legal_dark','map','map_dark','movie','movie_dark','other','other_dark',
-      'web','web_dark','thesis','thesis_dark','software','software_dark',
+      'article', 'article_dark', 'book', 'book_dark', 'broadcast', 'broadcast_dark',
+      'data', 'data_dark', 'entry', 'entry_dark', 'image', 'image_dark',
+      'legal', 'legal_dark', 'map', 'map_dark', 'movie', 'movie_dark', 'other', 'other_dark',
+      'web', 'web_dark', 'thesis', 'thesis_dark', 'software', 'software_dark',
     ]),
     lists: emptyObj(['checked', 'checked_dark', 'unchecked', 'unchecked_dark']),
   };
@@ -198,10 +260,10 @@ export function buildEditorUI(
   onOpenPage?: (path: string) => void,
 ) {
   return {
-    dialogs:  buildEditorDialogs(),
-    display:  buildEditorDisplay(onOpenPage),
-    context:  buildEditorUIContext(documentPath),
-    prefs:    buildEditorUIPrefs(),
-    images:   buildEditorUIImages(),
+    dialogs: buildEditorDialogs(),
+    display: buildEditorDisplay(onOpenPage),
+    context: buildEditorUIContext(documentPath),
+    prefs: buildEditorUIPrefs(),
+    images: buildEditorUIImages(),
   };
 }

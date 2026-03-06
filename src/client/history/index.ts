@@ -4,6 +4,7 @@
 
 import { escHtml } from '../utils/escape.js';
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 interface HistoryCommit {
   hash: string;
@@ -21,8 +22,8 @@ export async function initHistoryPanel(
   containerEl: HTMLElement,
   onRestored: (path: string, sha: string) => void,
 ): Promise<HistoryInitResult> {
-  const emptyEl  = containerEl.querySelector<HTMLElement>('#history-empty')!;
-  const listEl   = containerEl.querySelector<HTMLElement>('#history-list')!;
+  const emptyEl = containerEl.querySelector<HTMLElement>('#history-empty')!;
+  const listEl = containerEl.querySelector<HTMLElement>('#history-list')!;
 
   let currentPath: string | null = null;
 
@@ -32,7 +33,7 @@ export async function initHistoryPanel(
     emptyEl.classList.add('hidden');
 
     try {
-      const res = await fetch(`${API.gitLog}?path=${encodeURIComponent(path)}`);
+      const res = await apiFetch(`${API.gitLog}?path=${encodeURIComponent(path)}`);
       if (!res.ok) throw new Error('Failed to load history');
       const commits = await res.json() as HistoryCommit[];
 
@@ -47,7 +48,7 @@ export async function initHistoryPanel(
         item.className = 'history-commit';
 
         const shortSha = commit.hash.slice(0, 7);
-        const dateStr  = new Date(commit.date).toLocaleDateString(undefined, {
+        const dateStr = new Date(commit.date).toLocaleDateString(undefined, {
           month: 'short', day: 'numeric', year: 'numeric',
         });
 
@@ -74,7 +75,7 @@ export async function initHistoryPanel(
   async function restoreFile(path: string, sha: string) {
     if (!confirm(`Restore "${path}" to version ${sha.slice(0, 7)}?\n\nUnsaved changes will be lost.`)) return;
     try {
-      const res = await fetch(API.gitRestore, {
+      const res = await apiFetch(API.gitRestore, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sha, path }),

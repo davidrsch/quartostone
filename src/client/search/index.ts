@@ -4,6 +4,7 @@
  */
 
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 export interface SearchOverlay {
   open(): void;
@@ -12,10 +13,10 @@ export interface SearchOverlay {
 }
 
 interface SearchResult {
-  path:    string;
-  title:   string;
+  path: string;
+  title: string;
   excerpt: string;
-  score:   number;
+  score: number;
 }
 
 type OpenPageFn = (path: string, title: string) => void;
@@ -43,11 +44,11 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
   `;
   document.body.appendChild(overlay);
 
-  const inputEl   = overlay.querySelector<HTMLInputElement>('#search-input')!;
+  const inputEl = overlay.querySelector<HTMLInputElement>('#search-input')!;
   const resultsEl = overlay.querySelector<HTMLElement>('#search-results')!;
   const backdropEl = overlay.querySelector<HTMLElement>('#search-backdrop')!;
 
-  let isOpen  = false;
+  let isOpen = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let selectedIdx = -1;
   let currentResults: SearchResult[] = [];
@@ -144,7 +145,7 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
     const q = inputEl.value.trim();
     if (!q) { renderResults([]); return; }
     try {
-      const res = await fetch(`${API.search}?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`${API.search}?q=${encodeURIComponent(q)}`);
       if (!res.ok) { renderResults([]); return; }
       const data = await res.json() as SearchResult[];
       renderResults(data);
@@ -175,7 +176,7 @@ export function initSearchOverlay(onOpenPage: OpenPageFn): SearchOverlay {
   }
 
   return {
-    open(): void  { doOpen(); },
+    open(): void { doOpen(); },
     close(): void { doClose(); },
     get isOpen(): boolean { return isOpen; },
   };

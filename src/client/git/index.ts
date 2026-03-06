@@ -4,6 +4,7 @@
 import { escHtml } from '../utils/escape.js';
 import { showToast } from '../utils/toast.js';
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 interface CommitEntry {
   hash: string;
@@ -81,20 +82,20 @@ export async function initGitPanel(
     </dialog>
   `;
 
-  const statusStrip    = containerEl.querySelector<HTMLElement>('#git-status-strip')!;
-  const commitList     = containerEl.querySelector<HTMLElement>('#git-commit-list')!;
-  const diffPanel      = containerEl.querySelector<HTMLElement>('#git-diff-panel')!;
-  const diffTitle      = containerEl.querySelector<HTMLElement>('#git-diff-title')!;
-  const diffBody       = containerEl.querySelector<HTMLElement>('#git-diff-body')!;
-  const btnCommit      = containerEl.querySelector<HTMLElement>('#btn-git-commit-now')!;
-  const btnCloseDiff   = containerEl.querySelector<HTMLElement>('#btn-close-diff')!;
-  const syncInfo       = containerEl.querySelector<HTMLElement>('#git-sync-info')!;
-  const btnPull        = containerEl.querySelector<HTMLButtonElement>('#btn-git-pull')!;
-  const btnPush        = containerEl.querySelector<HTMLButtonElement>('#btn-git-push')!;
+  const statusStrip = containerEl.querySelector<HTMLElement>('#git-status-strip')!;
+  const commitList = containerEl.querySelector<HTMLElement>('#git-commit-list')!;
+  const diffPanel = containerEl.querySelector<HTMLElement>('#git-diff-panel')!;
+  const diffTitle = containerEl.querySelector<HTMLElement>('#git-diff-title')!;
+  const diffBody = containerEl.querySelector<HTMLElement>('#git-diff-body')!;
+  const btnCommit = containerEl.querySelector<HTMLElement>('#btn-git-commit-now')!;
+  const btnCloseDiff = containerEl.querySelector<HTMLElement>('#btn-close-diff')!;
+  const syncInfo = containerEl.querySelector<HTMLElement>('#git-sync-info')!;
+  const btnPull = containerEl.querySelector<HTMLButtonElement>('#btn-git-pull')!;
+  const btnPush = containerEl.querySelector<HTMLButtonElement>('#btn-git-push')!;
   const btnSyncSettings = containerEl.querySelector<HTMLElement>('#btn-git-sync-settings')!;
-  const remoteDialog   = containerEl.querySelector<HTMLDialogElement>('#git-remote-dialog')!;
+  const remoteDialog = containerEl.querySelector<HTMLDialogElement>('#git-remote-dialog')!;
   const remoteUrlInput = containerEl.querySelector<HTMLInputElement>('#git-remote-url')!;
-  const btnRemoteSave  = containerEl.querySelector<HTMLElement>('#btn-remote-save')!;
+  const btnRemoteSave = containerEl.querySelector<HTMLElement>('#btn-remote-save')!;
   const btnRemoteCancel = containerEl.querySelector<HTMLElement>('#btn-remote-cancel')!;
 
   btnCommit.addEventListener('click', () => {
@@ -118,7 +119,7 @@ export async function initGitPanel(
     try {
       const url = remoteUrlInput.value.trim();
       if (!url) return;
-      const res = await fetch(API.gitRemote, {
+      const res = await apiFetch(API.gitRemote, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -139,7 +140,7 @@ export async function initGitPanel(
     btnPush.disabled = true;
     btnPush.textContent = '↑ Pushing…';
     try {
-      const res = await fetch(API.gitPush, { method: 'POST' });
+      const res = await apiFetch(API.gitPush, { method: 'POST' });
       if (res.ok) {
         await loadRemote();
       } else {
@@ -159,7 +160,7 @@ export async function initGitPanel(
     btnPull.disabled = true;
     btnPull.textContent = '↓ Pulling…';
     try {
-      const res = await fetch(API.gitPull, { method: 'POST' });
+      const res = await apiFetch(API.gitPull, { method: 'POST' });
       if (res.ok) {
         await Promise.all([loadStatus(), loadHistory(), loadRemote()]);
       } else if (res.status === 409) {
@@ -181,7 +182,7 @@ export async function initGitPanel(
 
   async function loadStatus() {
     try {
-      const res = await fetch(API.gitStatus);
+      const res = await apiFetch(API.gitStatus);
       if (!res.ok) throw new Error('status failed');
       const s = await res.json() as GitStatus;
       renderStatus(statusStrip, s);
@@ -192,14 +193,14 @@ export async function initGitPanel(
 
   async function loadHistory() {
     try {
-      const res = await fetch(API.gitLog);
+      const res = await apiFetch(API.gitLog);
       if (!res.ok) throw new Error('log failed');
       const commits = await res.json() as CommitEntry[];
       renderHistory(commitList, commits, async (hash, msg) => {
         diffTitle.textContent = `${hash.slice(0, 7)} · ${msg}`;
         diffBody.textContent = 'Loading…';
         diffPanel.classList.remove('hidden');
-        const dr = await fetch(`${API.gitDiff}?sha=${hash}`);
+        const dr = await apiFetch(`${API.gitDiff}?sha=${hash}`);
         if (!dr.ok) {
           diffBody.textContent = 'Failed to load diff.';
           return;
@@ -215,7 +216,7 @@ export async function initGitPanel(
 
   async function loadRemote() {
     try {
-      const res = await fetch(API.gitRemote);
+      const res = await apiFetch(API.gitRemote);
       if (!res.ok) {
         syncInfo.textContent = 'No remote';
         btnPush.disabled = true;

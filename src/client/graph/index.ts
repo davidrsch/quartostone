@@ -6,11 +6,12 @@
 
 import { API } from '../api/endpoints.js';
 import { STORAGE_KEYS } from '../storage.js';
+import { apiFetch } from '../api/request.js';
 
 interface GraphNode {
-  id:       string;
-  title:    string;
-  tags:     string[];
+  id: string;
+  title: string;
+  tags: string[];
   inDegree: number;
   // Simulation state
   x: number;
@@ -21,7 +22,7 @@ interface GraphNode {
 
 interface GraphEdge {
   from: string;
-  to:   string;
+  to: string;
 }
 
 interface GraphData {
@@ -31,13 +32,13 @@ interface GraphData {
 
 export type OpenPageFn = (path: string, title: string) => void;
 
-const RADIUS_BASE  = 6;
+const RADIUS_BASE = 6;
 const RADIUS_SCALE = 2.5;
-const REPEL_FORCE  = 8000;
-const SPRING_LEN   = 120;
-const SPRING_K     = 0.04;
-const DAMPING      = 0.82;
-const TICK_DT      = 0.016;
+const REPEL_FORCE = 8000;
+const SPRING_LEN = 120;
+const SPRING_K = 0.04;
+const DAMPING = 0.82;
+const TICK_DT = 0.016;
 
 /**
  * Initialises the linked-pages graph panel using a simple spring-force layout.
@@ -50,7 +51,7 @@ const TICK_DT      = 0.016;
  * @returns Object with `open()`, `close()`, and `refresh()` controls.
  */
 export function initGraphPanel(
-  panelEl:    HTMLElement,
+  panelEl: HTMLElement,
   onOpenPage: OpenPageFn,
 ): { open(): void; close(): void; refresh(): void } {
   let visible = false;
@@ -71,11 +72,11 @@ export function initGraphPanel(
     <div id="graph-tooltip" class="hidden"></div>
   `;
 
-  const canvas     = panelEl.querySelector<HTMLCanvasElement>('#graph-canvas')!;
-  const ctx2d      = canvas.getContext('2d')!;
-  const tooltip    = panelEl.querySelector<HTMLElement>('#graph-tooltip')!;
+  const canvas = panelEl.querySelector<HTMLCanvasElement>('#graph-canvas')!;
+  const ctx2d = canvas.getContext('2d')!;
+  const tooltip = panelEl.querySelector<HTMLElement>('#graph-tooltip')!;
   const filterInput = panelEl.querySelector<HTMLInputElement>('#graph-filter')!;
-  const closeBtn   = panelEl.querySelector<HTMLButtonElement>('#graph-close-btn')!;
+  const closeBtn = panelEl.querySelector<HTMLButtonElement>('#graph-close-btn')!;
 
   // FIX GRAPH-01: ARIA role + keyboard accessibility for canvas
   canvas.setAttribute('role', 'img');
@@ -103,8 +104,8 @@ export function initGraphPanel(
   function isVisible(n: GraphNode): boolean {
     if (!filterQuery) return true;
     return n.id.toLowerCase().includes(filterQuery) ||
-           n.title.toLowerCase().includes(filterQuery) ||
-           n.tags.some(t => t.toLowerCase().includes(filterQuery));
+      n.title.toLowerCase().includes(filterQuery) ||
+      n.tags.some(t => t.toLowerCase().includes(filterQuery));
   }
 
   function initPositions(): void {
@@ -153,7 +154,7 @@ export function initGraphPanel(
         if (!isVisible(a) || !isVisible(b)) continue;
         const dx = b.x - a.x; const dy = b.y - a.y;
         const dist2 = dx * dx + dy * dy || 1;
-        const dist  = Math.sqrt(dist2);
+        const dist = Math.sqrt(dist2);
         const force = REPEL_FORCE / dist2;
         const fx = (dx / dist) * force * TICK_DT;
         const fy = (dy / dist) * force * TICK_DT;
@@ -185,7 +186,7 @@ export function initGraphPanel(
     // Integrate + damp
     for (const n of nodes) {
       n.vx *= DAMPING; n.vy *= DAMPING;
-      n.x  += n.vx;    n.y  += n.vy;
+      n.x += n.vx; n.y += n.vy;
       // Clamp to canvas bounds
       const r = radius(n);
       n.x = Math.max(r, Math.min(cw - r, n.x));
@@ -195,8 +196,8 @@ export function initGraphPanel(
 
   /* ── Rendering ────────────────────────────────────────────────────────── */
 
-  const ACCENT   = '#7c6af7';
-  const ORPHAN   = '#f97171';
+  const ACCENT = '#7c6af7';
+  const ORPHAN = '#f97171';
   const EDGE_CLR = '#4a556880';
 
   function draw(): void {
@@ -313,7 +314,7 @@ export function initGraphPanel(
       if (hit) {
         tooltip.textContent = `${hit.title} (${hit.inDegree} backlinks)`;
         tooltip.style.left = (mx + 12) + 'px';
-        tooltip.style.top  = (my - 4)  + 'px';
+        tooltip.style.top = (my - 4) + 'px';
         tooltip.classList.remove('hidden');
       } else {
         tooltip.classList.add('hidden');
@@ -335,7 +336,7 @@ export function initGraphPanel(
   /* ── Resize observer ──────────────────────────────────────────────────── */
 
   const ro = new ResizeObserver(() => {
-    canvas.width  = panelEl.clientWidth;
+    canvas.width = panelEl.clientWidth;
     canvas.height = panelEl.clientHeight - 44; // subtract toolbar
     draw();
   });
@@ -344,7 +345,7 @@ export function initGraphPanel(
 
   async function loadData(): Promise<void> {
     try {
-      const res = await fetch(API.linksGraph);
+      const res = await apiFetch(API.linksGraph);
       if (!res.ok) return;
       const data = await res.json() as GraphData;
 
@@ -353,7 +354,7 @@ export function initGraphPanel(
       nodeMap.clear();
       for (const n of nodes) nodeMap.set(n.id, n);
 
-      canvas.width  = panelEl.clientWidth;
+      canvas.width = panelEl.clientWidth;
       canvas.height = panelEl.clientHeight - 44;
       initPositions();
       settled = false;

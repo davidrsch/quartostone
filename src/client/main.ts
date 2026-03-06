@@ -44,7 +44,7 @@ import { openCommitDialog, initCommitDialog, showCommitPrompt, makeAutoSlug } fr
 import { registerKeyboardShortcuts } from './keyboard.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SAVE_STATUS_CLEAR_DELAY_MS  = 2_000;   // duration the save status badge stays visible
+const SAVE_STATUS_CLEAR_DELAY_MS = 2_000;   // duration the save status badge stays visible
 
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
 // Q03: throws a clear error instead of a cryptic TypeError when a required element is missing.
@@ -55,42 +55,42 @@ function ensureEl<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 // ─── DOM references ───────────────────────────────────────────────────────────
-const fileTreeEl       = ensureEl('file-tree');
-const editorMountEl    = ensureEl('editor-mount');
-const noPageMessageEl  = ensureEl('no-page-message');
-const pageTitleEl      = ensureEl('current-page-title');
-const btnSave          = document.getElementById('btn-save') as HTMLButtonElement;
-const btnCommit        = document.getElementById('btn-commit') as HTMLButtonElement;
-const btnNewPage       = document.getElementById('btn-new-page') as HTMLButtonElement;
-const btnNewDb         = document.getElementById('btn-new-db') as HTMLButtonElement;
-const btnModeSource    = document.getElementById('btn-mode-source') as HTMLButtonElement;
-const btnModeVisual    = document.getElementById('btn-mode-visual') as HTMLButtonElement;
-const btnProperties    = document.getElementById('btn-properties') as HTMLButtonElement;
-const btnCloseProps    = document.getElementById('btn-close-props') as HTMLButtonElement;
-const propertiesPanel  = ensureEl('properties-panel');
-const propertiesBody   = ensureEl('properties-body');
-const gitPanelEl       = document.getElementById('git-panel')!;
-const historyPanelEl   = document.getElementById('history-panel')!;
-const sbRenderStatus   = document.getElementById('sb-render-status')!;
-const sbSaveStatus     = document.getElementById('sb-save-status')!;
-const editorMount2El   = document.getElementById('editor-mount-2')!;
-const editorSplitEl    = document.getElementById('editor-split')!;
-const btnSplit         = document.getElementById('btn-split') as HTMLButtonElement;
+const fileTreeEl = ensureEl('file-tree');
+const editorMountEl = ensureEl('editor-mount');
+const noPageMessageEl = ensureEl('no-page-message');
+const pageTitleEl = ensureEl('current-page-title');
+const btnSave = document.getElementById('btn-save') as HTMLButtonElement;
+const btnCommit = document.getElementById('btn-commit') as HTMLButtonElement;
+const btnNewPage = document.getElementById('btn-new-page') as HTMLButtonElement;
+const btnNewDb = document.getElementById('btn-new-db') as HTMLButtonElement;
+const btnModeSource = document.getElementById('btn-mode-source') as HTMLButtonElement;
+const btnModeVisual = document.getElementById('btn-mode-visual') as HTMLButtonElement;
+const btnProperties = document.getElementById('btn-properties') as HTMLButtonElement;
+const btnCloseProps = document.getElementById('btn-close-props') as HTMLButtonElement;
+const propertiesPanel = ensureEl('properties-panel');
+const propertiesBody = ensureEl('properties-body');
+const gitPanelEl = document.getElementById('git-panel')!;
+const historyPanelEl = document.getElementById('history-panel')!;
+const sbRenderStatus = document.getElementById('sb-render-status')!;
+const sbSaveStatus = document.getElementById('sb-save-status')!;
+const editorMount2El = document.getElementById('editor-mount-2')!;
+const editorSplitEl = document.getElementById('editor-split')!;
+const btnSplit = document.getElementById('btn-split') as HTMLButtonElement;
 
 // L-2: named-input dialogs (replace window.prompt)
-const newPageDialog    = document.getElementById('new-page-dialog') as HTMLDialogElement;
+const newPageDialog = document.getElementById('new-page-dialog') as HTMLDialogElement;
 const newPageNameInput = document.getElementById('new-page-name') as HTMLInputElement;
 const btnNewPageConfirm = document.getElementById('btn-new-page-confirm') as HTMLButtonElement;
-const btnNewPageCancel  = document.getElementById('btn-new-page-cancel') as HTMLButtonElement;
-const newFolderDialog    = document.getElementById('new-folder-dialog') as HTMLDialogElement;
+const btnNewPageCancel = document.getElementById('btn-new-page-cancel') as HTMLButtonElement;
+const newFolderDialog = document.getElementById('new-folder-dialog') as HTMLDialogElement;
 const newFolderNameInput = document.getElementById('new-folder-name') as HTMLInputElement;
 const btnNewFolderConfirm = document.getElementById('btn-new-folder-confirm') as HTMLButtonElement;
-const btnNewFolderCancel  = document.getElementById('btn-new-folder-cancel') as HTMLButtonElement;
-const btnNewFolder       = document.getElementById('btn-new-folder') as HTMLButtonElement;
-const newDbDialog      = document.getElementById('new-db-dialog') as HTMLDialogElement;
-const newDbNameInput   = document.getElementById('new-db-name') as HTMLInputElement;
-const btnNewDbConfirm  = document.getElementById('btn-new-db-confirm') as HTMLButtonElement;
-const btnNewDbCancel   = document.getElementById('btn-new-db-cancel') as HTMLButtonElement;
+const btnNewFolderCancel = document.getElementById('btn-new-folder-cancel') as HTMLButtonElement;
+const btnNewFolder = document.getElementById('btn-new-folder') as HTMLButtonElement;
+const newDbDialog = document.getElementById('new-db-dialog') as HTMLDialogElement;
+const newDbNameInput = document.getElementById('new-db-name') as HTMLInputElement;
+const btnNewDbConfirm = document.getElementById('btn-new-db-confirm') as HTMLButtonElement;
+const btnNewDbCancel = document.getElementById('btn-new-db-cancel') as HTMLButtonElement;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let activeView: EditorView | null = null;
@@ -109,8 +109,8 @@ let visualMarkdownCache = ''; // last-known markdown when visual editor is activ
 const serverPagesDir = 'pages'; // overridden at boot time via GET /api/config (Q29)
 
 // module-level palette controls (FIX MAIN-05)
-let openCmdPalette: () => void  = () => {};
-let closeCmdPalette: () => void = () => {};
+let openCmdPalette: () => void = () => { };
+let closeCmdPalette: () => void = () => { };
 // module-level export picker handle (FIX EXP-02)
 let exportPicker: { setPageReady(ready: boolean): void } | null = null;
 
@@ -131,75 +131,82 @@ async function switchMode(mode: 'source' | 'visual') {
   switchingMode = true;
   try {
     if (mode === 'visual') {
-    // Get current source content, destroy source editor, init visual
-    const markdown = activeView ? activeView.state.doc.toString() : '';
-    visualMarkdownCache = markdown;
-    activeView?.destroy();
-    activeView = null;
-    editorMountEl.innerHTML = '';
+      // Get current source content, destroy source editor, init visual
+      const markdown = activeView ? activeView.state.doc.toString() : '';
+      visualMarkdownCache = markdown;
+      activeView?.destroy();
+      activeView = null;
+      editorMountEl.innerHTML = '';
 
-    activeVisual = await createVisualEditor({
-      container: editorMountEl,
-      initialMarkdown: markdown,
-      documentPath: activePath,
-      onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
-      onDirty: () => {
-        setIsDirty(true);
-        if (activePath) primaryTabs.markDirty(activePath, true);
-        btnSave.disabled = false;
-        sbSaveStatus.textContent = 'Unsaved changes';
-        // update cache asynchronously so properties panel stays mostly fresh
-        activeVisual?.getMarkdown().then(md => { visualMarkdownCache = md; }).catch(err => console.warn('[VisualEditor] getMarkdown failed:', err));
-      },
-    });
+      activeVisual = await createVisualEditor({
+        container: editorMountEl,
+        initialMarkdown: markdown,
+        documentPath: activePath,
+        onOpenPage: (path) => openPage(path, path.split('/').pop()?.replace(/\.qmd$/i, '') ?? path),
+        onDirty: () => {
+          setIsDirty(true);
+          if (activePath) primaryTabs.markDirty(activePath, true);
+          btnSave.disabled = false;
+          sbSaveStatus.textContent = 'Unsaved changes';
+          // update cache asynchronously so properties panel stays mostly fresh
+          activeVisual?.getMarkdown().then(md => { visualMarkdownCache = md; }).catch(err => console.warn('[VisualEditor] getMarkdown failed:', err));
+        },
+      });
 
-    setEditorMode('visual');
-    btnModeSource.classList.remove('active');
-    btnModeVisual.classList.add('active');
-  } else {
-    // Get current visual content, destroy visual editor, init source
-    const markdown = activeVisual ? await activeVisual.getMarkdown() : visualMarkdownCache;
-    visualMarkdownCache = '';
-    activeVisual?.destroy();
-    activeVisual = null;
-    editorMountEl.innerHTML = '';
+      const visualToolbar = ensureEl('visual-toolbar');
+      visualToolbar.innerHTML = '';
+      visualToolbar.classList.add('hidden'); // Hide manual toolbar as new editor has its own
 
-    activeView = await createEditor({
-      container: editorMountEl,
-      pagePath: activePath,
-      onSave: () => {
-        setIsDirty(false);
-        if (activePath) primaryTabs.markDirty(activePath, false);
-        btnSave.disabled = true;
-        sbSaveStatus.textContent = 'Saved';
-        setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
-        refreshGit?.();
-        updateBranchStatus();
-      },
-      onSaveError: (err) => {
-        showToast(`Auto-save failed: ${err.message}`, 'error');
-        sbSaveStatus.textContent = '';
-      },
-      onDirty: () => {
-        setIsDirty(true);
-        if (activePath) primaryTabs.markDirty(activePath, true);
-        btnSave.disabled = false;
-        sbSaveStatus.textContent = 'Unsaved changes';
-      },
-    });
+      setEditorMode('visual');
+      btnModeSource.classList.remove('active');
+      btnModeVisual.classList.add('active');
+    } else {
+      // Get current visual content, destroy visual editor, init source
+      const visualToolbar = document.getElementById('visual-toolbar');
+      if (visualToolbar) visualToolbar.classList.add('hidden');
 
-    // Inject markdown from visual editor into source editor
-    if (markdown && activeView) {
-      const { state } = activeView;
-      activeView.dispatch(state.update({
-        changes: { from: 0, to: state.doc.length, insert: markdown },
-      }));
+      const markdown = activeVisual ? await activeVisual.getMarkdown() : visualMarkdownCache;
+      visualMarkdownCache = '';
+      activeVisual?.destroy();
+      activeVisual = null;
+      editorMountEl.innerHTML = '';
+
+      activeView = await createEditor({
+        container: editorMountEl,
+        pagePath: activePath,
+        onSave: () => {
+          setIsDirty(false);
+          if (activePath) primaryTabs.markDirty(activePath, false);
+          btnSave.disabled = true;
+          sbSaveStatus.textContent = 'Saved';
+          setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
+          refreshGit?.();
+          updateBranchStatus();
+        },
+        onSaveError: (err) => {
+          showToast(`Auto-save failed: ${err.message}`, 'error');
+          sbSaveStatus.textContent = '';
+        },
+        onDirty: () => {
+          setIsDirty(true);
+          if (activePath) primaryTabs.markDirty(activePath, true);
+          btnSave.disabled = false;
+          sbSaveStatus.textContent = 'Unsaved changes';
+        },
+      });
+
+      // Inject markdown from visual editor into source editor
+      if (markdown && activeView) {
+        const { state } = activeView;
+        activeView.dispatch(state.update({
+          changes: { from: 0, to: state.doc.length, insert: markdown },
+        }));
+      }
+
+      setEditorMode('source');
+      btnModeSource.classList.add('active');
+      btnModeVisual.classList.remove('active');
     }
-
-    setEditorMode('source');
-    btnModeSource.classList.add('active');
-    btnModeVisual.classList.remove('active');
-  }
   } finally {
     switchingMode = false;
   }
@@ -396,51 +403,81 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
   if (openPageInProgress) return; // B9: drop concurrent calls
   openPageInProgress = true;
   try {
-  if (isDirty) {
-    const discard = confirm('You have unsaved changes. Discard them?');
-    if (!discard) return;
-  }
-  // Destroy any active editor
-  activeView?.destroy(); activeView = null;
-  activeVisual?.destroy(); activeVisual = null;
-  activeDb?.destroy(); activeDb = null;
-  editorMountEl.innerHTML = '';
+    if (isDirty) {
+      const discard = confirm('You have unsaved changes. Discard them?');
+      if (!discard) return;
+    }
+    // Destroy any active editor
+    activeView?.destroy(); activeView = null;
+    activeVisual?.destroy(); activeVisual = null;
+    activeDb?.destroy(); activeDb = null;
+    editorMountEl.innerHTML = '';
 
-  primaryTabs.ensure(path, name);
-  setActivePath(path);
-  renderBreadcrumb(path);
-  setIsDirty(false);
-  pageTitleEl.textContent = name;
-  noPageMessageEl.classList.remove('visible');
-  btnSave.disabled = true;
-  btnCommit.disabled = false;
-  exportPicker?.setPageReady(true)
+    primaryTabs.ensure(path, name);
+    setActivePath(path);
+    renderBreadcrumb(path);
+    setIsDirty(false);
+    pageTitleEl.textContent = name;
+    noPageMessageEl.classList.remove('visible');
+    btnSave.disabled = true;
+    btnCommit.disabled = false;
+    exportPicker?.setPageReady(true)
 
-  // Check if this is a database page
-  const dbInstance = await initDatabaseView(editorMountEl, path);
-  if (dbInstance) {
-    activeDb = dbInstance;
-    // Hide mode toggle buttons — database has its own view switcher
-    btnModeSource.style.display = 'none';
-    btnModeVisual.style.display = 'none';
-    return;
-  }
+    // Check if this is a database page
+    const dbInstance = await initDatabaseView(editorMountEl, path);
+    if (dbInstance) {
+      activeDb = dbInstance;
+      // Hide mode toggle buttons — database has its own view switcher
+      btnModeSource.style.display = 'none';
+      btnModeVisual.style.display = 'none';
+      return;
+    }
 
-  // Show mode toggle buttons for regular pages
-  btnModeSource.style.display = '';
-  btnModeVisual.style.display = '';
+    // Show mode toggle buttons for regular pages
+    btnModeSource.style.display = '';
+    btnModeVisual.style.display = '';
 
-  if (editorMode === 'visual') {
-    // Fetch content then open in visual mode — C-2: add error handling
-    try {
-      const res = await apiFetch(`/api/pages/${encodeURIComponent(path)}`);
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const data = await res.json() as { content?: string };
-      activeVisual = await createVisualEditor({
+    if (editorMode === 'visual') {
+      // Fetch content then open in visual mode — C-2: add error handling
+      try {
+        const res = await apiFetch(`/api/pages/${encodeURIComponent(path)}`);
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        const data = await res.json() as { content?: string };
+        activeVisual = await createVisualEditor({
+          container: editorMountEl,
+          initialMarkdown: data.content ?? '',
+          documentPath: path,
+          onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
+          onDirty: () => {
+            setIsDirty(true);
+            primaryTabs.markDirty(path, true);
+            btnSave.disabled = false;
+            sbSaveStatus.textContent = 'Unsaved changes';
+          },
+        });
+      } catch (e) {
+        showToast(`Failed to load page: ${String(e)}`, 'error');
+        noPageMessageEl.classList.add('visible');
+        setActivePath(null);
+        renderBreadcrumb(null);
+      }
+    } else {
+      activeView = await createEditor({
         container: editorMountEl,
-        initialMarkdown: data.content ?? '',
-        documentPath: path,
-        onOpenPage: (p) => openPage(p, p.split('/').pop()?.replace(/\.qmd$/i, '') ?? p),
+        pagePath: path,
+        onSave: () => {
+          setIsDirty(false);
+          primaryTabs.markDirty(path, false);
+          btnSave.disabled = true;
+          sbSaveStatus.textContent = 'Saved';
+          setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
+          refreshGit?.();
+          updateBranchStatus();
+        },
+        onSaveError: (err) => {
+          showToast(`Auto-save failed: ${err.message}`, 'error');
+          sbSaveStatus.textContent = '';
+        },
         onDirty: () => {
           setIsDirty(true);
           primaryTabs.markDirty(path, true);
@@ -448,64 +485,34 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
           sbSaveStatus.textContent = 'Unsaved changes';
         },
       });
-    } catch (e) {
-      showToast(`Failed to load page: ${String(e)}`, 'error');
-      noPageMessageEl.classList.add('visible');
-      setActivePath(null);
-      renderBreadcrumb(null);
     }
-  } else {
-    activeView = await createEditor({
-      container: editorMountEl,
-      pagePath: path,
-      onSave: () => {
-        setIsDirty(false);
-        primaryTabs.markDirty(path, false);
-        btnSave.disabled = true;
-        sbSaveStatus.textContent = 'Saved';
-        setTimeout(() => { sbSaveStatus.textContent = ''; }, SAVE_STATUS_CLEAR_DELAY_MS);
-        refreshGit?.();
-        updateBranchStatus();
-      },
-      onSaveError: (err) => {
-        showToast(`Auto-save failed: ${err.message}`, 'error');
-        sbSaveStatus.textContent = '';
-      },
-      onDirty: () => {
-        setIsDirty(true);
-        primaryTabs.markDirty(path, true);
-        btnSave.disabled = false;
-        sbSaveStatus.textContent = 'Unsaved changes';
-      },
-    });
-  }
 
-  // Update history panel with newly opened page
-  historySetPage?.(path);
+    // Update history panel with newly opened page
+    historySetPage?.(path);
 
-  // Update preview panel with newly opened page
-  previewPanel?.setPage(path);
+    // Update preview panel with newly opened page
+    previewPanel?.setPage(path);
 
-  // Update backlinks panel with newly opened page
-  backlinksPanel?.setPage(path);
+    // Update backlinks panel with newly opened page
+    backlinksPanel?.setPage(path);
 
-  // Re-mount properties panel if open
-  if (!propertiesPanel.classList.contains('hidden')) {
-    const getContent = () =>
-      editorMode === 'visual' && activeVisual
-        ? activeVisual.getMarkdown()
-        : (activeView ? activeView.state.doc.toString() : '');
-    const setContent = async (newContent: string) => {
-      if (editorMode === 'source' && activeView) {
-        const { state } = activeView;
-        activeView.dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
-      } else if (editorMode === 'visual' && activeVisual) {
-        // M-2: push frontmatter edits back into the visual editor
-        await activeVisual.setMarkdown(newContent);
-      }
-    };
-    propertiesController.mount(getContent, setContent);
-  }
+    // Re-mount properties panel if open
+    if (!propertiesPanel.classList.contains('hidden')) {
+      const getContent = () =>
+        editorMode === 'visual' && activeVisual
+          ? activeVisual.getMarkdown()
+          : (activeView ? activeView.state.doc.toString() : '');
+      const setContent = async (newContent: string) => {
+        if (editorMode === 'source' && activeView) {
+          const { state } = activeView;
+          activeView.dispatch(state.update({ changes: { from: 0, to: state.doc.length, insert: newContent } }));
+        } else if (editorMode === 'visual' && activeVisual) {
+          // M-2: push frontmatter edits back into the visual editor
+          await activeVisual.setMarkdown(newContent);
+        }
+      };
+      propertiesController.mount(getContent, setContent);
+    }
   } finally {
     openPageInProgress = false;
   }
@@ -516,7 +523,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
 /** Set which pane is "focused" — sidebar nav routes into it. */
 function setFocusedPane(pane: 'primary' | 'secondary') {
   focusedPane = pane;
-  const primaryEl  = document.getElementById('editor-pane-primary');
+  const primaryEl = document.getElementById('editor-pane-primary');
   const secondaryEl = document.getElementById('editor-pane-secondary');
   primaryEl?.classList.toggle('focused-pane', pane === 'primary');
   secondaryEl?.classList.toggle('focused-pane', pane === 'secondary');
@@ -712,7 +719,7 @@ registerKeyboardShortcuts({
 // ─── #111 Resizable sidebar ───────────────────────────────────────────────────
 {
   const sidebarEl = document.getElementById('sidebar') as HTMLElement;
-  const resizer   = document.getElementById('sidebar-resizer') as HTMLElement;
+  const resizer = document.getElementById('sidebar-resizer') as HTMLElement;
   const SIDEBAR_W_KEY = 'qs_sidebar_width';
   const saved = localStorage.getItem(SIDEBAR_W_KEY);
   if (saved) sidebarEl.style.width = `${saved}px`;
@@ -772,25 +779,25 @@ const secondaryTabs = new TabBarManager(
 
 // ─── #113 Command palette (Ctrl+K) ───────────────────────────────────────────
 {
-  const palette   = document.getElementById('cmd-palette')!;
-  const backdrop  = document.getElementById('cmd-palette-backdrop')!;
-  const input     = document.getElementById('cmd-palette-input') as HTMLInputElement;
-  const list      = document.getElementById('cmd-palette-list')!;
+  const palette = document.getElementById('cmd-palette')!;
+  const backdrop = document.getElementById('cmd-palette-backdrop')!;
+  const input = document.getElementById('cmd-palette-input') as HTMLInputElement;
+  const list = document.getElementById('cmd-palette-list')!;
   let selectedIdx = 0;
   let currentItems: PaletteEntry[] = [];
 
   function buildActions() {
     return [
-      { icon: '📄', label: 'New page',          hint: '',           action: () => btnNewPage.click() },
-      { icon: '⊞',  label: 'New database',      hint: '',           action: () => btnNewDb.click() },
-      { icon: '💾', label: 'Save',               hint: 'Ctrl+S',    action: () => { if (isDirty) saveCurrentPage(); } },
-      { icon: '📦', label: 'Commit changes',     hint: 'Ctrl+⇧G',  action: () => btnCommit.click() },
-      { icon: '⎇',  label: 'Switch branch',      hint: '',          action: () => (document.getElementById('btn-branch-picker') as HTMLButtonElement)?.click() },
-      { icon: '👁',  label: 'Toggle preview',    hint: 'Ctrl+⇧P',  action: () => (document.getElementById('btn-preview') as HTMLButtonElement)?.click() },
-      { icon: '⊡',  label: 'Toggle properties', hint: 'Ctrl+⇧B',  action: () => btnProperties.click() },
-      { icon: '◈',  label: 'Open graph',         hint: '',          action: () => graphView?.open() },
-      { icon: '⧉',  label: 'Toggle split editor', hint: 'Ctrl+\\',  action: () => toggleSplit() },
-      { icon: '?',  label: 'Keyboard shortcuts', hint: '',          action: () => (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal() },
+      { icon: '📄', label: 'New page', hint: '', action: () => btnNewPage.click() },
+      { icon: '⊞', label: 'New database', hint: '', action: () => btnNewDb.click() },
+      { icon: '💾', label: 'Save', hint: 'Ctrl+S', action: () => { if (isDirty) saveCurrentPage(); } },
+      { icon: '📦', label: 'Commit changes', hint: 'Ctrl+⇧G', action: () => btnCommit.click() },
+      { icon: '⎇', label: 'Switch branch', hint: '', action: () => (document.getElementById('btn-branch-picker') as HTMLButtonElement)?.click() },
+      { icon: '👁', label: 'Toggle preview', hint: 'Ctrl+⇧P', action: () => (document.getElementById('btn-preview') as HTMLButtonElement)?.click() },
+      { icon: '⊡', label: 'Toggle properties', hint: 'Ctrl+⇧B', action: () => btnProperties.click() },
+      { icon: '◈', label: 'Open graph', hint: '', action: () => graphView?.open() },
+      { icon: '⧉', label: 'Toggle split editor', hint: 'Ctrl+\\', action: () => toggleSplit() },
+      { icon: '?', label: 'Keyboard shortcuts', hint: '', action: () => (document.getElementById('kbd-dialog') as HTMLDialogElement)?.showModal() },
     ];
   }
 
@@ -845,8 +852,8 @@ const secondaryTabs = new TabBarManager(
 
   input.addEventListener('input', () => renderPalette(input.value));
   input.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown')  { e.preventDefault(); setSelected(moveIdx(selectedIdx, 1, currentItems.length)); }
-    if (e.key === 'ArrowUp')    { e.preventDefault(); setSelected(moveIdx(selectedIdx, -1, currentItems.length)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(moveIdx(selectedIdx, 1, currentItems.length)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSelected(moveIdx(selectedIdx, -1, currentItems.length)); }
     if (e.key === 'Enter') {
       e.preventDefault();
       const action = currentItems[selectedIdx];
@@ -887,7 +894,7 @@ btnSplit.addEventListener('click', toggleSplit);
 
 // Pane focus: clicking inside a pane marks it as the active target for sidebar nav
 {
-  const primaryPane   = document.getElementById('editor-pane-primary')!;
+  const primaryPane = document.getElementById('editor-pane-primary')!;
   const secondaryPane = document.getElementById('editor-pane-secondary')!;
   primaryPane.addEventListener('mousedown', () => { if (splitActive) setFocusedPane('primary'); });
   secondaryPane.addEventListener('mousedown', () => { if (splitActive) setFocusedPane('secondary'); });
@@ -895,8 +902,8 @@ btnSplit.addEventListener('click', toggleSplit);
 
 // Pane divider drag-to-resize between primary and secondary editor panes
 {
-  const paneDivider   = document.getElementById('editor-pane-divider')!;
-  const primaryPane   = document.getElementById('editor-pane-primary') as HTMLElement;
+  const paneDivider = document.getElementById('editor-pane-divider')!;
+  const primaryPane = document.getElementById('editor-pane-primary') as HTMLElement;
   const secondaryPane = document.getElementById('editor-pane-secondary') as HTMLElement;
 
   paneDivider.addEventListener('mousedown', ev => {
@@ -904,7 +911,7 @@ btnSplit.addEventListener('click', toggleSplit);
     paneDivider.classList.add('dragging');
     const startX = ev.clientX;
     const startW = primaryPane.offsetWidth;
-    const total  = (primaryPane.parentElement as HTMLElement).offsetWidth;
+    const total = (primaryPane.parentElement as HTMLElement).offsetWidth;
     const onMove = (e: MouseEvent) => {
       const newW = Math.max(200, Math.min(total - 200, startW + e.clientX - startX));
       primaryPane.style.flex = 'none';

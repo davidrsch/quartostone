@@ -3,6 +3,7 @@
 
 import { showToast } from '../utils/toast.js';
 import type { PageNode } from './index.js';
+import { apiFetch } from '../api/request.js';
 
 export function startRename(
   labelEl: HTMLSpanElement,
@@ -28,7 +29,7 @@ export function startRename(
     const newPath = parts.join('/');
     try {
       const urlPath = node.path.split('/').map(encodeURIComponent).join('/');
-      const res = await fetch(`/api/pages/${urlPath}`, {
+      const res = await apiFetch(`/api/pages/${urlPath}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPath }),

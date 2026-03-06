@@ -4,6 +4,7 @@
  */
 
 import { API } from '../api/endpoints.js';
+import { apiFetch } from '../api/request.js';
 
 export interface PreviewPanel {
   /** Call when the active page path changes; starts/updates preview if active. */
@@ -21,14 +22,14 @@ interface PreviewStartResponse {
 }
 
 export function initPreviewPanel(): PreviewPanel {
-  const btnPreview  = document.getElementById('btn-preview')    as HTMLButtonElement | null;
-  const pane        = document.getElementById('preview-pane');
-  const resizer     = document.getElementById('preview-resizer');
-  const frame       = document.getElementById('preview-frame')  as HTMLIFrameElement | null;
-  const loadingEl   = document.getElementById('preview-loading');
-  const errorEl     = document.getElementById('preview-error');
+  const btnPreview = document.getElementById('btn-preview') as HTMLButtonElement | null;
+  const pane = document.getElementById('preview-pane');
+  const resizer = document.getElementById('preview-resizer');
+  const frame = document.getElementById('preview-frame') as HTMLIFrameElement | null;
+  const loadingEl = document.getElementById('preview-loading');
+  const errorEl = document.getElementById('preview-error');
 
-  let active       = false;
+  let active = false;
   let currentPath: string | null = null;
 
   /* ── Helpers ──────────────────────────────────────────────────────────── */
@@ -65,7 +66,7 @@ export function initPreviewPanel(): PreviewPanel {
     setError(null);
 
     try {
-      const res = await fetch(API.previewStart, {
+      const res = await apiFetch(API.previewStart, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),
@@ -80,7 +81,7 @@ export function initPreviewPanel(): PreviewPanel {
 
       // #118 — Use server-side TCP readiness poll instead of client-side fetch polling.
       // The server checks the TCP port directly which is more reliable than a CORS fetch.
-      const readyRes = await fetch(`${API.previewReady}?port=${data.port}&timeout=20000`);
+      const readyRes = await apiFetch(`${API.previewReady}?port=${data.port}&timeout=20000`);
       if (!readyRes.ok) {
         setError(`Preview server readiness check failed (HTTP ${readyRes.status})`);
         return;
@@ -100,7 +101,7 @@ export function initPreviewPanel(): PreviewPanel {
 
   async function stopPreview(path: string): Promise<void> {
     try {
-      await fetch(API.previewStop, {
+      await apiFetch(API.previewStop, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path }),

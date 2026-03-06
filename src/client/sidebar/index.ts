@@ -11,6 +11,7 @@ import {
   getFavorites, isFavorite, toggleFavorite, getRecent,
   addRecentPage as _addRecentPage, buildSimpleList, buildRecentList,
 } from './recentFavorites.js';
+import { apiFetch } from '../api/request.js';
 
 export { addRecentPage } from './recentFavorites.js';
 
@@ -101,7 +102,7 @@ export async function initSidebar(
 
   async function refresh() {
     try {
-      const res = await fetch('/api/pages');
+      const res = await apiFetch('/api/pages');
       if (!res.ok) throw new Error('Server error');
       allNodes = (await res.json()) as PageNode[];
       _allNodes = allNodes; // keep module-level in sync for Move-to dialog
@@ -296,16 +297,18 @@ function buildFileNode(
       ? node.path.split('/').slice(0, -1).join('/')
       : '';
     openContextMenu(e, [
-      { label: '+ New page here',   action: () => opts?.onNewPage?.(parentFolder) },
+      { label: '+ New page here', action: () => opts?.onNewPage?.(parentFolder) },
       { label: '+ New folder here', action: () => opts?.onNewFolder?.(parentFolder) },
       'separator',
-      { label: '✎ Rename',          action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
-      { label: '📁 Move to\u2026',    action: () => openMoveDialog(node, onRefresh) },
-      { label: '\u29c9 Duplicate',   action: () => void duplicatePage(node, onRefresh) },
-      { label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
-        action: () => { toggleFavorite(node.path); void onRefresh(); } },
+      { label: '✎ Rename', action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
+      { label: '📁 Move to\u2026', action: () => openMoveDialog(node, onRefresh) },
+      { label: '\u29c9 Duplicate', action: () => void duplicatePage(node, onRefresh) },
+      {
+        label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
+        action: () => { toggleFavorite(node.path); void onRefresh(); }
+      },
       'separator',
-      { label: '⧉ Copy wiki-link',  action: () => { navigator.clipboard.writeText(`[[${node.name}]]`).catch(() => {}); } },
+      { label: '⧉ Copy wiki-link', action: () => { navigator.clipboard.writeText(`[[${node.name}]]`).catch(() => { }); } },
       'separator',
       { label: '🗑 Delete', danger: true, action: () => void deleteItem(node, opts, onRefresh) },
     ]);
@@ -412,13 +415,15 @@ function buildFolderNode(
   item.addEventListener('contextmenu', e => {
     e.preventDefault(); e.stopPropagation();
     openContextMenu(e, [
-      { label: '+ New page here',   action: () => opts?.onNewPage?.(node.path) },
+      { label: '+ New page here', action: () => opts?.onNewPage?.(node.path) },
       { label: '+ New folder here', action: () => opts?.onNewFolder?.(node.path) },
       'separator',
-      { label: '✎ Rename',          action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
-      { label: '📁 Move to\u2026',    action: () => openMoveDialog(node, onRefresh) },
-      { label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
-        action: () => { toggleFavorite(node.path); void onRefresh(); } },
+      { label: '✎ Rename', action: () => { const lbl = item.querySelector<HTMLSpanElement>('.label'); if (lbl) startRename(lbl, node, onRefresh); } },
+      { label: '📁 Move to\u2026', action: () => openMoveDialog(node, onRefresh) },
+      {
+        label: isFavorite(node.path) ? '★ Remove from favorites' : '☆ Add to favorites',
+        action: () => { toggleFavorite(node.path); void onRefresh(); }
+      },
       'separator',
       { label: '🗑 Delete folder', danger: true, action: () => void deleteItem(node, opts, onRefresh) },
     ]);
@@ -463,7 +468,7 @@ async function deleteItem(
     : `/api/directories/${encoded}`;
 
   try {
-    const res = await fetch(url, { method: 'DELETE' });
+    const res = await apiFetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error(((await res.json()) as { error: string }).error);
     await onRefresh();
   } catch (err) {
@@ -484,7 +489,7 @@ async function movePage(
   const newPath = targetFolder ? `${targetFolder}/${dragName}` : dragName;
   try {
     const encoded = dragPath.split('/').map(encodeURIComponent).join('/');
-    const res = await fetch(`/api/pages/${encoded}`, {
+    const res = await apiFetch(`/api/pages/${encoded}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPath }),
@@ -579,7 +584,7 @@ function openMoveDialog(node: PageNode, onRefresh: () => Promise<void>): void {
 async function duplicatePage(node: PageNode, onRefresh: () => Promise<void>): Promise<void> {
   try {
     const encoded = node.path.split('/').map(encodeURIComponent).join('/');
-    const res = await fetch(`/api/pages/${encoded}`);
+    const res = await apiFetch(`/api/pages/${encoded}`);
     if (!res.ok) throw new Error('Failed to read page');
     const { content } = await res.json() as { content: string };
 
@@ -589,7 +594,7 @@ async function duplicatePage(node: PageNode, onRefresh: () => Promise<void>): Pr
     const copyPath = folder ? `${folder}/${nameNoExt}-copy` : `${nameNoExt}-copy`;
 
     const copyEncoded = copyPath.split('/').map(encodeURIComponent).join('/');
-    const putRes = await fetch(`/api/pages/${copyEncoded}`, {
+    const putRes = await apiFetch(`/api/pages/${copyEncoded}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -610,7 +615,7 @@ async function buildTagsSection(
   rev: number,
 ): Promise<void> {
   try {
-    const res = await fetch('/api/links/graph');
+    const res = await apiFetch('/api/links/graph');
     if (!res.ok) return;
     const { nodes } = await res.json() as { nodes: Array<{ id: string; tags: string[] }> };
 
@@ -666,7 +671,7 @@ async function buildTrashSection(
   rev: number,
 ): Promise<void> {
   try {
-    const res = await fetch('/api/trash');
+    const res = await apiFetch('/api/trash');
     if (!res.ok) return;
     const items = (await res.json()) as Array<{ id: string; name: string; deletedAt: string }>;
     if (items.length === 0) return;
@@ -687,7 +692,7 @@ async function buildTrashSection(
       restoreBtn.textContent = '↩';
       restoreBtn.addEventListener('click', async () => {
         try {
-          const r = await fetch(`/api/trash/restore/${item.id}`, { method: 'POST' });
+          const r = await apiFetch(`/api/trash/restore/${item.id}`, { method: 'POST' });
           if (!r.ok) { showToast(`Restore failed: ${((await r.json()) as { error: string }).error}`, 'error', 4000); return; }
           await onRefresh();
         } catch (err) {
@@ -702,7 +707,7 @@ async function buildTrashSection(
       delBtn.addEventListener('click', async () => {
         if (!confirm(`Permanently delete "${item.name}"?`)) return;
         try {
-          const r = await fetch(`/api/trash/${item.id}`, { method: 'DELETE' });
+          const r = await apiFetch(`/api/trash/${item.id}`, { method: 'DELETE' });
           if (!r.ok) { showToast('Permanent delete failed', 'error', 4000); return; }
           await onRefresh();
         } catch (err) {
@@ -758,14 +763,14 @@ let _sidebarPickerClose: ((e: MouseEvent) => void) | null = null;
 let _sidebarPickerKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
 const COMMON_EMOJIS = [
-  '📄','📝','📋','📌','📎','📃','📜','📑','🗒','🗓',
-  '📅','📆','📊','📈','📉','🗃','🗂','📁','📂','🗄',
-  '💡','⚡','🔧','🔨','⚙️','🛠','🔍','🔎','🔑','🗝',
-  '🎯','🚀','✅','❌','⭐','🌟','💎','🏅','🎖','🏆',
-  '💬','📢','📣','ℹ️','⚠️','❓','❗','📰','📖','📚',
-  '🌍','🌐','🔗','📡','💻','🖥','🖨','⌨️','🖱','📱',
-  '🎨','🎭','🎬','🎵','🎸','🎹','🎮','🕹','🃏','🎲',
-  '🌱','🌿','🍀','🌸','🌺','🦋','🐾','🦊','🐶','🐱',
+  '📄', '📝', '📋', '📌', '📎', '📃', '📜', '📑', '🗒', '🗓',
+  '📅', '📆', '📊', '📈', '📉', '🗃', '🗂', '📁', '📂', '🗄',
+  '💡', '⚡', '🔧', '🔨', '⚙️', '🛠', '🔍', '🔎', '🔑', '🗝',
+  '🎯', '🚀', '✅', '❌', '⭐', '🌟', '💎', '🏅', '🎖', '🏆',
+  '💬', '📢', '📣', 'ℹ️', '⚠️', '❓', '❗', '📰', '📖', '📚',
+  '🌍', '🌐', '🔗', '📡', '💻', '🖥', '🖨', '⌨️', '🖱', '📱',
+  '🎨', '🎭', '🎬', '🎵', '🎸', '🎹', '🎮', '🕹', '🃏', '🎲',
+  '🌱', '🌿', '🍀', '🌸', '🌺', '🦋', '🐾', '🦊', '🐶', '🐱',
 ];
 
 function openEmojiPicker(
@@ -820,7 +825,7 @@ function openEmojiPicker(
   // Position below anchor
   const rect = anchor.getBoundingClientRect();
   popover.style.left = `${rect.left}px`;
-  popover.style.top  = `${rect.bottom + 4}px`;
+  popover.style.top = `${rect.bottom + 4}px`;
 
   // Close on outside click or Escape
   const close = (e: MouseEvent) => {
