@@ -22,6 +22,9 @@ export default defineConfig({
   // Start a real Quartostone server against the fixture workspace before running E2E tests.
   webServer: {
     command: 'npx tsx tests/e2e/fixtures/start-server.ts',
+    env: {
+      QUARTOSTONE_E2E: 'true',
+    },
     // /api/health always returns 200 — avoids false 404 when _site/ doesn't exist.
     url: `http://localhost:${E2E_PORT}/api/health`,
     reuseExistingServer: !process.env['CI'],

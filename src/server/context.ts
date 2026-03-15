@@ -13,6 +13,8 @@ export interface ServerContext {
   port: number;
   /** Explicit path to the built editor client (dist/client/). */
   clientDist?: string;
+  /** Explicit path to the built visual editor bundle (dist/). */
+  visualEditorDist?: string;
   /** Auth token for API requests. Undefined in test mode (disables auth). */
   token?: string;
   /** Optional: pre-built LinkIndex (defaults to module singleton if absent). */

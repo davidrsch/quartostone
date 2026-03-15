@@ -1,140 +1,470 @@
 // src/client/visual/index.ts
 // Standalone Quarto Visual Editor Integration for Quartostone.
-// This module replaces the legacy Panmirror UMD loader with an iframe-based 
-// approach that loads the 'quarto-visual-editor' bundle and communicates 
-// via window.postMessage (JSON-RPC).
+//
+// Method names come directly from packages/editor-types/src/vscode.ts in
+// the quarto-visual-editor repo (which mirrors the VS Code extension protocol).
+
+import { pandocServer } from './pandocServer.js';
+
+// ── RPC method name constants (must match editor-types/src/vscode.ts) ─────────
+
+// Editor → Host (editor calls these on the host)
+const VSC_VEH_GetHostContext = 'vsc_ve_get_host_context';
+const VSC_VEH_ReopenSourceMode = 'vsc_ve_reopen_source_mode';
+const VSC_VEH_OnEditorReady = 'vsc_veh_on_editor_ready';
+const VSC_VEH_OnEditorUpdated = 'vsc_veh_on_editor_updated';
+const VSC_VEH_OnEditorStateChanged = 'vsc_veh_on_editor_state_changed';
+const VSC_VEH_FlushEditorUpdates = 'vsc_veh_flush_editor_updates';
+const VSC_VEH_SaveDocument = 'vsc_veh_save_document';
+const VSC_VEH_RenderDocument = 'vsc_veh_render_document';
+const VSC_VEH_EditorResourceUri = 'vsc_veh_editor_resource_url';
+const VSC_VEH_OpenURL = 'vsc_veh_open_url';
+const VSC_VEH_NavigateToXRef = 'vsc_veh_navigate_to_xref';
+const VSC_VEH_NavigateToFile = 'vsc_veh_navigate_to_file';
+const VSC_VEH_ResolveImageUris = 'vsc_veh_resolve_image_uris';
+const VSC_VEH_ResolveBase64Images = 'vsc_veh_resolve_base64_images';
+const VSC_VEH_SelectImage = 'vsc_veh_select_image';
+
+// Services API (editor calls these for prefs, dictionary, math, source)
+const kPrefsGetPrefs = "prefs_get_prefs";
+const kPrefsSetPrefs = "prefs_set_prefs";
+const kDictionaryAvailableDictionaries = "dictionary_available_dictionaries";
+const kDictionaryGetDictionary = "dictionary_get_dictionary";
+const kDictionaryGetUserDictionary = "dictionary_get_user_dictionary";
+const kDictionaryAddToUserDictionary = "dictionary_add_to_user_dictionary";
+const kDictionaryGetIgnoredwords = "dictionary_get_ignored_words";
+const kDictionaryIgnoreWord = "dictionary_ignore_word";
+const kDictionaryUnignoreWord = "dictionary_unignore_word";
+const kMathMathjaxTypesetSvg = "math_mathjax_typeset_svg";
+const kSourceGetSourcePosLocations = "source_get_source_pos_locations";
+
+// Pandoc RPC (editor calls these for document conversion)
+const kPandocGetCapabilities = "pandoc_get_capabilities";
+const kPandocListExtensions = "pandoc_list_extensions";
+const kPandocMarkdownToAst = "pandoc_markdown_to_ast";
+const kPandocAstToMarkdown = "pandoc_ast_to_markdown";
+
+// Host → Editor (host calls these on the editor)
+const VSC_VE_Init = 'vsc_ve_init';
+const VSC_VE_GetMarkdownFromState = 'vsc_ve_get_markdown_from_state';
+
+// ── Public interface ───────────────────────────────────────────────────────────
 
 export interface VisualEditorOptions {
   container: HTMLElement;
   initialMarkdown: string;
-  /** Called whenever the document is modified */
   onDirty?: () => void;
-  /** Path of the document being edited (for resource resolution) */
   documentPath?: string | null;
-  /** Called when the user clicks a file link or xref link in visual mode */
   onOpenPage?: (path: string) => void;
+  onSwitchToSource?: () => void;
 }
 
 export interface VisualEditorInstance {
-  /** Get the current document as markdown */
   getMarkdown(): Promise<string>;
-  /** Replace the entire editor content */
   setMarkdown(md: string): Promise<void>;
-  /** Destroy the editor and free resources */
   destroy(): void;
-  /** Get the available commands - Stubbed for now as the new editor has its own UI */
   getCommands(): any[];
-  /** Subscribe to state changes - Stubbed for now */
   onStateChanged(callback: () => void): () => void;
 }
 
-/**
- * Creates the Visual Editor. 
- * Instead of mounting a JS library directly, we mount an IFRAME that points to our standalone app.
- */
+// ── Factory ───────────────────────────────────────────────────────────────────
+
 export async function createVisualEditor(
   opts: VisualEditorOptions,
 ): Promise<VisualEditorInstance> {
+
+  // Pending RPC calls FROM HOST TO EDITOR
+  let rpcId = 1;
+  const pending = new Map<number, { resolve: (v: any) => void, reject: (e: any) => void }>();
+
+  // Last editor state JSON received via onEditorUpdated
+  let currentStateJson: unknown = null;
+  // Flag: has the editor finished its init()? (prevents premature getMarkdown calls)
+  let editorInitialized = false;
+
+  // ── Create the iframe ──────────────────────────────────────────────────────
   const iframe = document.createElement('iframe');
-
-  // Configure iframe to be seamless and occupy full space
-  iframe.style.width = '100%';
-  iframe.style.height = '100%';
-  iframe.style.border = 'none';
-  iframe.style.display = 'block';
-  iframe.src = '/visual-editor/index.html'; // Assuming we serve the dist here
-
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+  iframe.src = '/visual-editor/index.html';
   opts.container.appendChild(iframe);
 
-  // Communication Bridge
-  let rpcRequestId = 1;
-  const pendingRequests = new Map<number, { resolve: (val: any) => void, reject: (err: any) => void }>();
+  // ── Inject VS Code-compatible CSS variables into the iframe ────────────────
+  // The visual editor's theme.ts reads these from the iframe's <html> element.
+  // In VS Code, the webview host sets them. In Quartostone, we inject them.
+  function injectVSCodeTheme() {
+    const idoc = iframe.contentDocument;
+    if (!idoc) return;
+    const isDark = document.documentElement.classList.contains('dark') ||
+      document.body.classList.contains('dark');
+    // VS Code class needed for darkMode detection in the editor
+    idoc.body.className = isDark ? 'vscode-dark' : 'vscode-light';
+    const css = isDark ? {
+      '--vscode-editor-background': '#1e1e1e',
+      '--vscode-editor-foreground': '#d4d4d4',
+      '--vscode-editor-font-size': '13px',
+      '--vscode-editor-font-family': 'Consolas, monospace',
+      '--vscode-editor-selectionBackground': '#264f78',
+      '--vscode-editor-selectionForeground': '',
+      '--vscode-editorCursor-foreground': '#aeafad',
+      '--vscode-textLink-foreground': '#4ec9b0',
+      '--vscode-breadcrumb-foreground': '#a0a0a0',
+      '--vscode-titleBar-activeBackground': '#3c3c3c',
+      '--vscode-titleBar-inactiveBackground': '#3c3c3c',
+      '--vscode-panel-border': '#404040',
+      '--vscode-notebook-cellBorderColor': '#404040',
+      '--vscode-notebook-cellEditorBackground': '#252526',
+      '--vscode-notebook-focusedCellBorder': '#007acc',
+      '--vscode-commandCenter-border': '#333333',
+      '--vscode-focusBorder': '#007fd4',
+      '--vscode-editorWidget-foreground': '#cccccc',
+      '--vscode-editorWhitespace-foreground': '#404040',
+      '--vscode-editorGhostText-foreground': '#606060',
+      '--vscode-editorInfo-foreground': '#3794ff',
+      '--vscode-editor-foldBackground': '#264f78',
+      '--vscode-editorSuggestWidget-background': '#252526',
+      '--vscode-editorSuggestWidget-border': '#454545',
+      '--vscode-editorSuggestWidget-foreground': '#d4d4d4',
+      '--vscode-editorSuggestWidget-selectedBackground': '#062f4a',
+      '--vscode-editorSuggestWidget-selectedForeground': '#d4d4d4',
+      '--vscode-editorSuggestWidget-selectedIconForeground': '#d4d4d4',
+      '--vscode-editorSuggestWidget-highlightForeground': '#18a3ff',
+      '--vscode-editorSuggestWidget-focusHighlightForeground': '#18a3ff',
+      '--vscode-disabledForeground': '#6c6c6c',
+      '--vscode-charts-orange': '#d18616',
+      '--vscode-list-deemphasizedForeground': '#8c8c8c',
+    } : {
+      '--vscode-editor-background': '#ffffff',
+      '--vscode-editor-foreground': '#000000',
+      '--vscode-editor-font-size': '13px',
+      '--vscode-editor-font-family': 'Consolas, monospace',
+      '--vscode-editor-selectionBackground': '#add6ff',
+      '--vscode-editor-selectionForeground': '',
+      '--vscode-editorCursor-foreground': '#000000',
+      '--vscode-textLink-foreground': '#0066bf',
+      '--vscode-breadcrumb-foreground': '#6f6f6f',
+      '--vscode-titleBar-activeBackground': '#dddddd',
+      '--vscode-titleBar-inactiveBackground': '#eeeeee',
+      '--vscode-panel-border': '#c8c8c8',
+      '--vscode-notebook-cellBorderColor': '#c8c8c8',
+      '--vscode-notebook-cellEditorBackground': '#f3f3f3',
+      '--vscode-notebook-focusedCellBorder': '#007acc',
+      '--vscode-commandCenter-border': '#d4d4d4',
+      '--vscode-focusBorder': '#0066bf',
+      '--vscode-editorWidget-foreground': '#6f6f6f',
+      '--vscode-editorWhitespace-foreground': '#d4d4d4',
+      '--vscode-editorGhostText-foreground': '#a0a0a0',
+      '--vscode-editorInfo-foreground': '#1a85ff',
+      '--vscode-editor-foldBackground': '#e8f2fc',
+      '--vscode-editorSuggestWidget-background': '#f3f3f3',
+      '--vscode-editorSuggestWidget-border': '#c8c8c8',
+      '--vscode-editorSuggestWidget-foreground': '#000000',
+      '--vscode-editorSuggestWidget-selectedBackground': '#0060c0',
+      '--vscode-editorSuggestWidget-selectedForeground': '#ffffff',
+      '--vscode-editorSuggestWidget-selectedIconForeground': '#ffffff',
+      '--vscode-editorSuggestWidget-highlightForeground': '#0066bf',
+      '--vscode-editorSuggestWidget-focusHighlightForeground': '#0066bf',
+      '--vscode-disabledForeground': '#a0a0a0',
+      '--vscode-charts-orange': '#bc8501',
+      '--vscode-list-deemphasizedForeground': '#6c6c6c',
+    };
+    const htmlEl = idoc.documentElement;
+    Object.entries(css).forEach(([k, v]) => htmlEl.style.setProperty(k, v));
+  }
 
-  const handleMessage = (event: MessageEvent) => {
-    // Only trust messages from our iframe
-    if (event.source !== iframe.contentWindow) return;
+  iframe.addEventListener('load', () => { injectVSCodeTheme(); });
 
-    const data = event.data;
-    if (data && typeof data === 'object') {
-      // Handle RPC Responses
-      if (data.id && (data.result !== undefined || data.error !== undefined)) {
-        const pending = pendingRequests.get(data.id);
-        if (pending) {
-          pendingRequests.delete(data.id);
-          if (data.error) pending.reject(data.error);
-          else pending.resolve(data.result);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function postToEditor(msg: object) {
+    iframe.contentWindow?.postMessage(msg, '*');
+  }
+
+  // Send an RPC call to the editor (host → editor direction)
+  function callEditor(method: string, args: unknown[] = []): Promise<any> {
+    const id = rpcId++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (pending.has(id)) {
+          pending.delete(id);
+          reject(new Error(`[VisualEditor] RPC timeout: ${method}`));
         }
-      }
+      }, 5000);
 
-      // Handle RPC Notifications / Events from Editor
-      if (data.method === 'onDirty') {
-        opts.onDirty?.();
+      pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); }
+      });
+      postToEditor({ jsonrpc: '2.0', id, method, params: args });
+    });
+  }
+
+  // Reply to an incoming RPC request from the editor
+  function respond(id: number, result: unknown) {
+    postToEditor({ jsonrpc: '2.0', id, result });
+  }
+  function respondError(id: number, message: string) {
+    postToEditor({ jsonrpc: '2.0', id, error: { message } });
+  }
+
+  // ── Message dispatcher ─────────────────────────────────────────────────────
+  const handleMessage = async (event: MessageEvent) => {
+    if (event.source !== iframe.contentWindow) return;
+    const msg = event.data as any;
+    if (!msg || typeof msg !== 'object' || msg.jsonrpc !== '2.0') return;
+
+    // Response to a host→editor call we made
+    if (msg.id != null && !msg.method) {
+      const p = pending.get(msg.id);
+      if (p) {
+        pending.delete(msg.id);
+        if (msg.error) p.reject(msg.error);
+        else p.resolve(msg.result);
       }
-      if (data.method === 'onOpenPage' && data.params?.path) {
-        opts.onOpenPage?.(data.params.path);
+      return;
+    }
+
+    // Incoming RPC call from the editor → host
+    const { id, method, params } = msg as { id: number, method: string, params: unknown[] };
+    const args = Array.isArray(params) ? params : [];
+
+    try {
+      switch (method) {
+
+        // ── Called first — editor asks for host context before rendering ──────
+        case VSC_VEH_GetHostContext:
+          respond(id, {
+            documentPath: opts.documentPath || '',
+            resourceDir: '/',
+            projectDir: '/',
+            isWindowsDesktop: navigator.platform.toLowerCase().includes('win'),
+            executableLanguages: [],
+          });
+          break;
+
+        // ── Called when fully mounted — send the initial markdown ─────────────
+        case VSC_VEH_OnEditorReady:
+          respond(id, null);
+          // Give the editor its content
+          try {
+            await callEditor(VSC_VE_Init, [opts.initialMarkdown, null]);
+            editorInitialized = true;
+          } catch (initErr) {
+            console.error('[VisualEditor] init() failed:', initErr);
+          }
+          break;
+
+        // ── Content changed ──────────────────────────────────────────────────
+        case VSC_VEH_OnEditorUpdated:
+          currentStateJson = args[0] ?? null;
+          opts.onDirty?.();
+          respond(id, null);
+          break;
+
+        case VSC_VEH_OnEditorStateChanged:
+          respond(id, null);
+          break;
+
+        case VSC_VEH_FlushEditorUpdates:
+          respond(id, null);
+          break;
+
+        // ── File operations ──────────────────────────────────────────────────
+        case VSC_VEH_SaveDocument:
+          opts.onDirty?.();   // Light up the Save button
+          respond(id, null);
+          break;
+
+        // ── Pandoc ───────────────────────────────────────────────────────────
+        case kPandocListExtensions:
+          try {
+            const ext = await (pandocServer as any).listExtensions(args[0]);
+            respond(id, ext);
+          } catch (err) {
+            respondError(id, String(err));
+          }
+          break;
+
+        case kPandocGetCapabilities:
+          try {
+            const cap = await (pandocServer as any).getCapabilities();
+            respond(id, cap);
+          } catch (err) {
+            respondError(id, String(err));
+          }
+          break;
+
+        case kPandocMarkdownToAst:
+          try {
+            const ast = await (pandocServer as any).markdownToAst(args[0], args[1], args[2] || []);
+            respond(id, ast);
+          } catch (err) {
+            respondError(id, String(err));
+          }
+          break;
+
+        case kPandocAstToMarkdown:
+          try {
+            const md = await (pandocServer as any).astToMarkdown(args[0], args[1], args[2] || []);
+            respond(id, md);
+          } catch (err) {
+            respondError(id, String(err));
+          }
+          break;
+
+        // ── Services API ─────────────────────────────────────────────────────
+        case kPrefsGetPrefs:
+          respond(id, {
+            showOutline: false,
+            darkMode: document.body.classList.contains('dark'),
+            fontSize: 14,
+            fontFamily: "var(--bs-body-font-family)",
+            maxContentWidth: 1000,
+            realtimeSpelling: false,
+            dictionaryLocale: 'en_US',
+            emojiSkinTone: 0,
+            listSpacing: 'spaced',
+            tabKeyMoveFocus: false,
+            equationPreview: true,
+            markdownWrap: 'none',
+            markdownWrapColumn: 72,
+            markdownReferences: 'block',
+            markdownReferencesPrefix: '',
+            markdownReferenceLinks: false,
+            zoteroUseBetterBibtex: false,
+            bibliographyDefaultType: 'bib',
+            citationDefaultInText: false,
+            packageListingEnabled: false,
+            spacesForTab: true,
+            tabWidth: 2,
+            autoClosingBrackets: true,
+            highlightSelectedWord: true,
+            lineNumbers: true,
+            showWhitespace: false,
+            blinkingCursor: true,
+            quickSuggestions: true
+          });
+          break;
+
+        case kPrefsSetPrefs:
+          respond(id, null);
+          break;
+
+        case kDictionaryAvailableDictionaries:
+          respond(id, []);
+          break;
+
+        case kDictionaryGetDictionary:
+          respond(id, { aff: "", words: "" });
+          break;
+
+        case kDictionaryGetUserDictionary:
+        case kDictionaryGetIgnoredwords:
+          respond(id, []);
+          break;
+
+        case kDictionaryAddToUserDictionary:
+        case kDictionaryIgnoreWord:
+        case kDictionaryUnignoreWord:
+          respond(id, []); // should return updated word list, but empty is safe enough 
+          break;
+
+        case kMathMathjaxTypesetSvg:
+          // Just stub it
+          respond(id, null);
+          break;
+
+        case kSourceGetSourcePosLocations:
+          respond(id, []);
+          break;
+
+        case VSC_VEH_RenderDocument:
+          respond(id, null);
+          break;
+
+        case VSC_VEH_ReopenSourceMode:
+          opts.onSwitchToSource?.();
+          respond(id, null);
+          break;
+
+        // ── Resource resolution ───────────────────────────────────────────────
+        case VSC_VEH_EditorResourceUri:
+          respond(id, args[0]);   // pass through unchanged
+          break;
+
+        case VSC_VEH_ResolveImageUris:
+          respond(id, args[0]);   // pass through unchanged
+          break;
+
+        case VSC_VEH_ResolveBase64Images:
+          respond(id, args[0]);
+          break;
+
+        // ── Navigation ────────────────────────────────────────────────────────
+        case VSC_VEH_OpenURL:
+          if (typeof args[0] === 'string') window.open(args[0] as string, '_blank');
+          respond(id, null);
+          break;
+
+        case VSC_VEH_NavigateToFile:
+          if (typeof args[0] === 'string') opts.onOpenPage?.(args[0] as string);
+          respond(id, null);
+          break;
+
+        case VSC_VEH_NavigateToXRef:
+          respond(id, null);
+          break;
+
+        case VSC_VEH_SelectImage:
+          respond(id, null);
+          break;
+
+        default:
+          // Unknown method — respond with success to avoid editor hanging
+          respond(id, null);
+          break;
       }
+    } catch (e) {
+      respondError(id, String(e));
     }
   };
 
   window.addEventListener('message', handleMessage);
 
-  const callRpc = (method: string, params: any = {}): Promise<any> => {
-    const id = rpcRequestId++;
-    return new Promise((resolve, reject) => {
-      pendingRequests.set(id, { resolve, reject });
-      iframe.contentWindow?.postMessage({
-        jsonrpc: '2.0',
-        id,
-        method,
-        params
-      }, '*');
-    });
-  };
-
-  // Wait for editor to signal it is ready
-  await new Promise<void>((resolve) => {
-    const readyListener = (event: MessageEvent) => {
-      if (event.source === iframe.contentWindow && event.data?.method === 'ready') {
-        window.removeEventListener('message', readyListener);
-        resolve();
-      }
-    };
-    window.addEventListener('message', readyListener);
-  });
-
-  // Initialize with markdown
-  await callRpc('setMarkdown', {
-    markdown: opts.initialMarkdown,
-    path: opts.documentPath,
-    // Provide some context for the editor
-    config: {
-      pandocMode: 'markdown',
-      quarto: true
-    }
-  });
+  // ── Public API ─────────────────────────────────────────────────────────────
 
   return {
     async getMarkdown(): Promise<string> {
-      const result = await callRpc('getMarkdown');
-      return result?.markdown ?? '';
+      if (!editorInitialized || !currentStateJson) {
+        return opts.initialMarkdown;
+      }
+      try {
+        const md = await callEditor(VSC_VE_GetMarkdownFromState, [currentStateJson]);
+        return typeof md === 'string' ? md : opts.initialMarkdown;
+      } catch {
+        return opts.initialMarkdown;
+      }
     },
 
     async setMarkdown(md: string): Promise<void> {
-      await callRpc('setMarkdown', { markdown: md, path: opts.documentPath });
+      opts.initialMarkdown = md;
+      currentStateJson = null;
+      editorInitialized = false;
+      try {
+        await callEditor(VSC_VE_Init, [md, null]);
+        editorInitialized = true;
+      } catch (e) {
+        console.error('[VisualEditor] setMarkdown failed:', e);
+      }
     },
 
     destroy(): void {
       window.removeEventListener('message', handleMessage);
+      pending.clear();
       iframe.remove();
     },
 
-    getCommands(): any[] {
-      return []; // The new editor provides its own toolbar
-    },
-
-    onStateChanged(cb: () => void): () => void {
-      // In the new system, 'Update' / 'onDirty' are handled via RPC notifications
-      return () => { };
-    }
+    getCommands(): any[] { return []; },
+    onStateChanged(_cb: () => void): () => void { return () => { }; },
   };
 }

@@ -317,119 +317,150 @@ describe('buildEditorUI', () => {
 
 // ── createVisualEditor ────────────────────────────────────────────────────────
 
+// ── createVisualEditor ────────────────────────────────────────────────────────
+
 describe('createVisualEditor', () => {
-  // Build a minimal mock of window.Panmirror.Editor
-  type UpdateCallback = () => void;
-  interface MockEditorInstance {
-    setMarkdown: ReturnType<typeof vi.fn>;
-    getMarkdown: ReturnType<typeof vi.fn>;
-    subscribe: ReturnType<typeof vi.fn>;
-    destroy: ReturnType<typeof vi.fn>;
-    _fireUpdate: () => void;
-  }
-
-  function buildMockEditor(): MockEditorInstance {
-    let updateCb: UpdateCallback | null = null;
-    const unsubscribe = vi.fn();
-    return {
-      setMarkdown: vi.fn().mockResolvedValue(undefined),
-      getMarkdown: vi.fn().mockResolvedValue({ code: '# Hello\n' }),
-      subscribe: vi.fn().mockImplementation((_event: string, cb: UpdateCallback) => {
-        updateCb = cb;
-        return unsubscribe;
-      }),
-      destroy: vi.fn(),
-      _fireUpdate: () => updateCb?.(),
-    };
-  }
-
-  let mockEditorInstance!: MockEditorInstance;
+  let container: HTMLElement;
 
   beforeEach(() => {
-    mockEditorInstance = buildMockEditor();
-
-    vi.stubGlobal('Panmirror', {
-      Editor: {
-        create: vi.fn().mockResolvedValue(mockEditorInstance),
-      },
-      UITools: {},
-    });
-  });
-
-  it('calls Editor.create with a container element', async () => {
-    const container = document.createElement('div');
+    container = document.createElement('div');
     document.body.appendChild(container);
-
-    await createVisualEditor({ container, initialMarkdown: '# Hello\n' });
-
-    expect(window.Panmirror!.Editor.create).toHaveBeenCalledWith(
-      container,
-      expect.any(Object), // context
-      expect.any(Object), // format
-      expect.any(Object), // options
-    );
-  });
-
-  it('calls setMarkdown with the initial markdown after creation', async () => {
-    const container = document.createElement('div');
-    await createVisualEditor({ container, initialMarkdown: '# Test\n' });
-
-    expect(mockEditorInstance.setMarkdown).toHaveBeenCalledWith(
-      '# Test\n',
-      expect.any(Object), // writer options
-      false,
-    );
-  });
-
-  it('getMarkdown() returns the markdown from the underlying editor', async () => {
-    const container = document.createElement('div');
-    const instance = await createVisualEditor({ container, initialMarkdown: '' });
-
-    const md = await instance.getMarkdown();
-    expect(md).toBe('# Hello\n');
-  });
-
-  it('setMarkdown() proxies to the underlying editor setMarkdown', async () => {
-    const container = document.createElement('div');
-    const instance = await createVisualEditor({ container, initialMarkdown: '' });
-
-    await instance.setMarkdown('## World\n');
-
-    // Called once for initial load, once more for our call
-    const calls = mockEditorInstance.setMarkdown.mock.calls;
-    expect(calls[calls.length - 1]![0]).toBe('## World\n');
-  });
-
-  it('onDirty callback is invoked when the editor fires an Update event', async () => {
-    const container = document.createElement('div');
-    const onDirty = vi.fn();
-
-    await createVisualEditor({ container, initialMarkdown: '', onDirty });
-
-    mockEditorInstance._fireUpdate();
-    expect(onDirty).toHaveBeenCalledOnce();
-  });
-
-  it('destroy() calls editor.destroy() and unsubscribes', async () => {
-    const container = document.createElement('div');
-    const instance = await createVisualEditor({ container, initialMarkdown: '' });
-
-    instance.destroy();
-
-    expect(mockEditorInstance.destroy).toHaveBeenCalledOnce();
-    // The subscribe mock returns a vi.fn() as the unsubscribe handle
-    const unsubscribe = mockEditorInstance.subscribe.mock.results[0]!.value as ReturnType<typeof vi.fn>;
-    expect(unsubscribe).toHaveBeenCalledOnce();
-  });
-
-  it('getMarkdown() returns empty string when result.code is undefined', async () => {
-    mockEditorInstance.getMarkdown.mockResolvedValue({});
-    const container = document.createElement('div');
-    const instance = await createVisualEditor({ container, initialMarkdown: '' });
-    await expect(instance.getMarkdown()).resolves.toBe('');
+    // Mock navigator.platform for GetHostContext
+    Object.defineProperty(navigator, 'platform', {
+      value: 'Win32',
+      configurable: true
+    });
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('creates an iframe and appends it to the container', async () => {
+    // We don't await because it waits for 'ready' message which won't come yet
+    const promise = createVisualEditor({
+      container,
+      initialMarkdown: '# Hello',
+    });
+
+    const iframe = container.querySelector('iframe');
+    expect(iframe).toBeTruthy();
+    expect(iframe?.src).toContain('/visual-editor/index.html');
+  });
+
+  it('responds to VSC_VEH_GetHostContext with correct defaults', async () => {
+    const promise = createVisualEditor({
+      container,
+      initialMarkdown: '# Hello',
+      documentPath: '/test.qmd'
+    });
+
+    const iframe = container.querySelector('iframe')!;
+    const postMessageSpy = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    // Simulate GetHostContext request from editor
+    window.dispatchEvent(new MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: {
+        jsonrpc: '2.0',
+        id: 123,
+        method: 'vsc_ve_get_host_context',
+        params: []
+      }
+    }));
+
+    // Wait for microtasks
+    await new Promise(res => setTimeout(res, 0));
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 123,
+        result: expect.objectContaining({
+          documentPath: '/test.qmd',
+          isWindowsDesktop: true
+        })
+      }),
+      '*'
+    );
+  });
+
+  it('initializes editor with initialMarkdown upon VSC_VEH_OnEditorReady', async () => {
+    const promise = createVisualEditor({
+      container,
+      initialMarkdown: '# Start'
+    });
+
+    const iframe = container.querySelector('iframe')!;
+    const postMessageSpy = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    // 1. Editor says "I'm ready"
+    window.dispatchEvent(new MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { jsonrpc: '2.0', id: 1, method: 'vsc_veh_on_editor_ready', params: [] }
+    }));
+
+    await new Promise(res => setTimeout(res, 0));
+
+    // 2. Host should respond(id=1, null) AND call vsc_ve_init(markdown)
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, result: null }),
+      '*'
+    );
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'vsc_ve_init',
+        params: ['# Start', null]
+      }),
+      '*'
+    );
+  });
+
+  it('getMarkdown() sends vsc_ve_get_markdown_from_state and returns result', async () => {
+    const instancePromise = createVisualEditor({
+      container,
+      initialMarkdown: '# Init'
+    });
+
+    const iframe = container.querySelector('iframe')!;
+
+    // Simulate initialization flow so editorInitialized = true
+    window.dispatchEvent(new MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { jsonrpc: '2.0', id: 1, method: 'vsc_veh_on_editor_ready', params: [] }
+    }));
+    // Simulate update so currentStateJson is set
+    window.dispatchEvent(new MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { jsonrpc: '2.0', id: 2, method: 'vsc_veh_on_editor_updated', params: [{ some: 'state' }] }
+    }));
+
+    const instance = await instancePromise;
+    const getMdPromise = instance.getMarkdown();
+
+    // Host should have sent vsc_ve_get_markdown_from_state
+    // Find the message with that method to get its ID
+    const msg = vi.mocked(iframe.contentWindow!.postMessage).mock.calls.find(c => c[0].method === 'vsc_ve_get_markdown_from_state');
+    const rpcId = msg![0].id;
+
+    // Simulate response from editor
+    window.dispatchEvent(new MessageEvent('message', {
+      source: iframe.contentWindow,
+      data: { jsonrpc: '2.0', id: rpcId, result: '# Final Markdown' }
+    }));
+
+    const result = await getMdPromise;
+    expect(result).toBe('# Final Markdown');
+  });
+
+  it('destroy() removes the iframe and event listener', async () => {
+    const instance = await createVisualEditor({ container, initialMarkdown: '' });
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    instance.destroy();
+
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(removeSpy).toHaveBeenCalledWith('message', expect.any(Function));
   });
 });

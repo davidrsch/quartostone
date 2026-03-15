@@ -1,16 +1,5 @@
 ---
-title: Welcome to Quartostone
+title: Visual Modular Test
 ---
 
-# Welcome to Quartostone
-
-This is the **test fixture** workspace used by the Playwright E2E test suite.
-
-It contains a minimal page structure so that the editor UI has something to render.
-
-## Features under test
-
-- Sidebar page listing
-- Source editor
-- Visual editor toggle
-- Git panel
+Initial content.

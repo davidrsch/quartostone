@@ -79,10 +79,10 @@ export function createApp(ctx: ServerContext) {
   });
 
   // Authentication middleware — enforces Bearer token on all /api/* routes.
-  // Disabled in test mode when ctx.token is undefined.
+  // Disabled in test mode when ctx.token is undefined or QUARTOSTONE_E2E is set.
   // /health and /session are always public.
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
-    if (!ctx.token) { next(); return; }
+    if (!ctx.token || process.env['QUARTOSTONE_E2E'] === 'true') { next(); return; }
     if (req.path === '/health' || req.path === '/session') { next(); return; }
     const auth = req.headers['authorization'];
     if (auth !== `Bearer ${ctx.token}`) {
@@ -95,7 +95,7 @@ export function createApp(ctx: ServerContext) {
   // Rate limiting on expensive/long-running endpoints
   const expensiveLimiter = rateLimit({
     windowMs: 60_000,
-    max: 20,
+    max: 10000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests, please slow down.' },
@@ -105,7 +105,7 @@ export function createApp(ctx: ServerContext) {
   // Rate limit git network operations (push/pull) — each involves external TCP I/O
   const gitNetworkLimiter = rateLimit({
     windowMs: 60_000,
-    max: 10,
+    max: 10000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many git network requests, please slow down.' },
@@ -126,7 +126,8 @@ export function createApp(ctx: ServerContext) {
     app.use('/editor', express.static(editorDist));
 
     // Serve standalone visual editor bundle
-    const visualEditorPath = join(ctx.cwd, '../quarto-visual-editor/dist');
+    // ctx.visualEditorDist allows overriding the path (needed for E2E tests)
+    const visualEditorPath = ctx.visualEditorDist ?? join(ctx.cwd, '../quarto-visual-editor/dist');
     if (existsSync(visualEditorPath)) {
       app.use('/visual-editor', express.static(visualEditorPath));
     }

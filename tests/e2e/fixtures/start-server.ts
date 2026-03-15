@@ -49,11 +49,19 @@ async function main() {
   // When this fixture runs via tsx, __dirname in server/index.ts resolves to
   // the TypeScript source (src/server/), not the compiled output.  Supply the
   // real dist/client/ path so the editor UI is served correctly.
-  const clientDist = join(resolve(__dirname, '../../..'), 'dist', 'client');
-  const { server } = await createServer({ cwd: workspace, config, port: PORT, clientDist });
+  // Supply paths to built editor bundles
+  const projectRoot = resolve(__dirname, '../../..');
+  const clientDist = join(projectRoot, 'dist', 'client');
+  const visualEditorDist = resolve(projectRoot, '../quarto-visual-editor/dist');
+
+  const { server } = await createServer({
+    cwd: workspace,
+    config,
+    port: PORT,
+    clientDist,
+    visualEditorDist
+  });
   server.listen(PORT, () => {
-    // Playwright waits for this line that matches the `url` it polls, but it actually
-    // polls the URL directly — we just need to keep the process alive.
     console.log(`[e2e-server] Quartostone E2E server running at http://localhost:${PORT}`);
   });
 
