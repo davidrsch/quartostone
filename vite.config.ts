@@ -23,11 +23,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: `http://localhost:${serverPort}`, changeOrigin: false },
-      '/ws': { target: `ws://localhost:${serverPort}`, ws: true },
+      '/api': { target: `http://127.0.0.1:${serverPort}`, changeOrigin: false },
+      '/ws': { target: `ws://127.0.0.1:${serverPort}`, ws: true },
       // Proxy the standalone visual editor if requested through the main dev server
       '/visual-editor': {
-        target: `http://localhost:${serverPort}`,
+        target: `http://127.0.0.1:${serverPort}`,
         changeOrigin: false
       }
     },

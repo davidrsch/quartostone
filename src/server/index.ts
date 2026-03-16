@@ -44,16 +44,23 @@ export function createApp(ctx: ServerContext) {
   // Security headers — disable CSP and COEP to avoid breaking the editor UI
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
-  // CORS — only allow same-origin requests (localhost:port). Reject cross-origin requests.
+  // CORS — allow same-origin requests and the Vite dev server
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    const allowedOrigin = `http://localhost:${ctx.config.port}`;
-    if (origin && origin !== allowedOrigin) {
-      res.status(403).json({ error: 'Cross-origin request denied' });
+    const allowedOrigins = [
+      `http://localhost:${ctx.config.port}`,
+      `http://127.0.0.1:${ctx.config.port}`,
+      'http://localhost:5173',
+      'http://127.0.0.1:5173'
+    ];
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      res.status(403).json({ error: `Cross-origin request denied: ${origin}` });
       return;
     }
+
     if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+      res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     }
@@ -126,10 +133,11 @@ export function createApp(ctx: ServerContext) {
     app.use('/editor', express.static(editorDist));
 
     // Serve standalone visual editor bundle
-    // ctx.visualEditorDist allows overriding the path (needed for E2E tests)
-    const visualEditorPath = ctx.visualEditorDist ?? join(ctx.cwd, '../quarto-visual-editor/dist');
+    const visualEditorPath = 'f:/Projects/GitHub/quartostone/quarto-visual-editor/dist';
     if (existsSync(visualEditorPath)) {
       app.use('/visual-editor', express.static(visualEditorPath));
+    } else {
+      warn(`Visual editor not found at: ${visualEditorPath}`);
     }
 
     // When no rendered site exists at /, serve the editor as the root app.
