@@ -19,11 +19,11 @@ const VSC_VEH_SaveDocument = 'vsc_veh_save_document';
 const VSC_VEH_RenderDocument = 'vsc_veh_render_document';
 const VSC_VEH_EditorResourceUri = 'vsc_veh_editor_resource_url';
 const VSC_VEH_OpenURL = 'vsc_veh_open_url';
-const VSC_VEH_NavigateToXRef = 'vsc_veh_navigate_to_xref';
-const VSC_VEH_NavigateToFile = 'vsc_veh_navigate_to_file';
-const VSC_VEH_ResolveImageUris = 'vsc_veh_resolve_image_uris';
-const VSC_VEH_ResolveBase64Images = 'vsc_veh_resolve_base64_images';
-const VSC_VEH_SelectImage = 'vsc_veh_select_image';
+const VSC_VEH_NavigateToXRef = 'vsc_ve_navigate_to_xref';
+const VSC_VEH_NavigateToFile = 'vsc_ve_navigate_to_file';
+const VSC_VE_Init = 'vsc_ve_init';
+const VSC_VE_GetMarkdownFromState = 'vsc_ve_get_markdown_from_state';
+const VSC_VE_PrefsChanged = 'vsc_ve_prefs_changed';
 
 // Services API (editor calls these for prefs, dictionary, math, source)
 const kPrefsGetPrefs = "prefs_get_prefs";
@@ -45,8 +45,9 @@ const kPandocMarkdownToAst = "pandoc_markdown_to_ast";
 const kPandocAstToMarkdown = "pandoc_ast_to_markdown";
 
 // Host → Editor (host calls these on the editor)
-const VSC_VE_Init = 'vsc_ve_init';
-const VSC_VE_GetMarkdownFromState = 'vsc_ve_get_markdown_from_state';
+const VSC_VEH_ResolveImageUris = 'vsc_veh_resolve_image_uris';
+const VSC_VEH_ResolveBase64Images = 'vsc_veh_resolve_base64_images';
+const VSC_VEH_SelectImage = 'vsc_veh_select_image';
 
 // ── Public interface ───────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ export interface VisualEditorInstance {
   destroy(): void;
   getCommands(): any[];
   onStateChanged(callback: () => void): () => void;
+  updateTheme(): void;
 }
 
 // ── Factory ───────────────────────────────────────────────────────────────────
@@ -85,22 +87,28 @@ export async function createVisualEditor(
   // ── Create the iframe ──────────────────────────────────────────────────────
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;';
-  iframe.src = '/visual-editor/index.html';
+  
+  const isDark = document.documentElement.classList.contains('dark') ||
+      !document.documentElement.classList.contains('light'); // default to dark
+      
+  const themeParam = isDark ? '&theme=dark' : '&theme=light';
+  iframe.src = `/visual-editor/index.html?v=${Date.now()}${themeParam}`;
   opts.container.appendChild(iframe);
 
   // ── Inject VS Code-compatible CSS variables into the iframe ────────────────
   // The visual editor's theme.ts reads these from the iframe's <html> element.
   // In VS Code, the webview host sets them. In Quartostone, we inject them.
-  function injectVSCodeTheme() {
+  const injectVSCodeTheme = () => {
     const idoc = iframe.contentDocument;
     if (!idoc) return;
     const isDark = document.documentElement.classList.contains('dark') ||
-      document.body.classList.contains('dark');
+      !document.documentElement.classList.contains('light'); // default to dark
+    
     // VS Code class needed for darkMode detection in the editor
-    idoc.body.className = isDark ? 'vscode-dark' : 'vscode-light';
+    idoc.body.className = isDark ? 'vscode-dark bp4-dark' : 'vscode-light';
     const css = isDark ? {
-      '--vscode-editor-background': '#1e1e1e',
-      '--vscode-editor-foreground': '#d4d4d4',
+      '--vscode-editor-background': '#1f1f1f',
+      '--vscode-editor-foreground': '#ffffff',
       '--vscode-editor-font-size': '13px',
       '--vscode-editor-font-family': 'Consolas, monospace',
       '--vscode-editor-selectionBackground': '#264f78',
@@ -108,12 +116,12 @@ export async function createVisualEditor(
       '--vscode-editorCursor-foreground': '#aeafad',
       '--vscode-textLink-foreground': '#4ec9b0',
       '--vscode-breadcrumb-foreground': '#a0a0a0',
-      '--vscode-titleBar-activeBackground': '#3c3c3c',
-      '--vscode-titleBar-inactiveBackground': '#3c3c3c',
-      '--vscode-panel-border': '#404040',
-      '--vscode-notebook-cellBorderColor': '#404040',
+      '--vscode-titleBar-activeBackground': '#333333',
+      '--vscode-titleBar-inactiveBackground': '#333333',
+      '--vscode-panel-border': '#333333',
+      '--vscode-notebook-cellBorderColor': '#444444',
       '--vscode-notebook-cellEditorBackground': '#252526',
-      '--vscode-notebook-focusedCellBorder': '#007acc',
+      '--vscode-notebook-focusedCellBorder': '#4f6bed',
       '--vscode-commandCenter-border': '#333333',
       '--vscode-focusBorder': '#007fd4',
       '--vscode-editorWidget-foreground': '#cccccc',
@@ -132,6 +140,23 @@ export async function createVisualEditor(
       '--vscode-disabledForeground': '#6c6c6c',
       '--vscode-charts-orange': '#d18616',
       '--vscode-list-deemphasizedForeground': '#8c8c8c',
+      '--vscode-editor-findMatchHighlightBackground': '#333d4f',
+      // VS Code Syntax Palette (Dark Mode)
+      '--vscode-syntax-keyword': '#569cd6',
+      '--vscode-syntax-atom': '#b5cea8',
+      '--vscode-syntax-number': '#b5cea8',
+      '--vscode-syntax-variable': '#9cdcfe',
+      '--vscode-syntax-def': '#dcdcaa',
+      '--vscode-syntax-operator': '#d4d4d4',
+      '--vscode-syntax-comment': '#6a9955',
+      '--vscode-syntax-string': '#ce9178',
+      '--vscode-syntax-meta': '#569cd6',
+      '--vscode-syntax-builtin': '#569cd6',
+      '--vscode-syntax-bracket': '#d4d4d4',
+      '--vscode-syntax-tag': '#569cd6',
+      '--vscode-syntax-attribute': '#9cdcfe',
+      '--vscode-syntax-link': '#4ec9b0',
+      '--vscode-syntax-error': '#f44747',
     } : {
       '--vscode-editor-background': '#ffffff',
       '--vscode-editor-foreground': '#000000',
@@ -166,10 +191,48 @@ export async function createVisualEditor(
       '--vscode-disabledForeground': '#a0a0a0',
       '--vscode-charts-orange': '#bc8501',
       '--vscode-list-deemphasizedForeground': '#6c6c6c',
+      '--vscode-editor-findMatchHighlightBackground': '#ea5c0033',
+      // VS Code Syntax Palette (Light Mode)
+      '--vscode-syntax-keyword': '#0000ff',
+      '--vscode-syntax-atom': '#0000cd',
+      '--vscode-syntax-number': '#098658',
+      '--vscode-syntax-variable': '#001080',
+      '--vscode-syntax-def': '#795e26',
+      '--vscode-syntax-operator': '#000000',
+      '--vscode-syntax-comment': '#008000',
+      '--vscode-syntax-string': '#a31515',
+      '--vscode-syntax-meta': '#267f99',
+      '--vscode-syntax-builtin': '#795e26',
+      '--vscode-syntax-bracket': '#000000',
+      '--vscode-syntax-tag': '#800000',
+      '--vscode-syntax-attribute': '#ff0000',
+      '--vscode-syntax-link': '#0000ff',
+      '--vscode-syntax-error': '#f44747',
     };
     const htmlEl = idoc.documentElement;
     Object.entries(css).forEach(([k, v]) => htmlEl.style.setProperty(k, v));
-  }
+
+    // Force nuclear styles (0px radius, dark portals)
+    let nuclearStyle = idoc.getElementById('quarto-nuclear-styles');
+    if (!nuclearStyle) {
+      nuclearStyle = idoc.createElement('style');
+      nuclearStyle.id = 'quarto-nuclear-styles';
+      idoc.head.appendChild(nuclearStyle);
+    }
+    nuclearStyle.textContent = `
+      * { border-radius: 0px !important; }
+      .fui-MenuList, .fui-PopoverSurface, .fui-MenuPopover, .fui-DialogSurface { 
+        border-radius: 0px !important; 
+        background-color: #1f1f1f !important; 
+        color: #d4d4d4 !important; 
+        border: 1px solid #333333 !important;
+        box-shadow: none !important;
+      }
+      .fui-MenuItem:hover {
+        background-color: #333333 !important;
+      }
+    `;
+  };
 
   iframe.addEventListener('load', () => { injectVSCodeTheme(); });
 
@@ -233,12 +296,14 @@ export async function createVisualEditor(
 
         // ── Called first — editor asks for host context before rendering ──────
         case VSC_VEH_GetHostContext:
+          const isHostDark = !document.documentElement.classList.contains('light');
           respond(id, {
             documentPath: opts.documentPath || '',
             resourceDir: '/',
             projectDir: '/',
             isWindowsDesktop: navigator.platform.toLowerCase().includes('win'),
             executableLanguages: [],
+            darkMode: isHostDark,
           });
           break;
 
@@ -316,7 +381,7 @@ export async function createVisualEditor(
         case kPrefsGetPrefs:
           respond(id, {
             showOutline: false,
-            darkMode: document.body.classList.contains('dark'),
+            darkMode: document.documentElement.classList.contains('dark'),
             fontSize: 14,
             fontFamily: "var(--bs-body-font-family)",
             maxContentWidth: 1000,
@@ -466,5 +531,10 @@ export async function createVisualEditor(
 
     getCommands(): any[] { return []; },
     onStateChanged(_cb: () => void): () => void { return () => { }; },
+    updateTheme() {
+      injectVSCodeTheme();
+      // Notify the editor to re-read theme state from DOM and re-render React/Fluent UI components
+      callEditor(VSC_VE_PrefsChanged, [{}]);
+    },
   };
 }
