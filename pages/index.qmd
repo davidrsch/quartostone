@@ -9,10 +9,10 @@ This is your first page. Edit it in **Visual mode** (WYSIWYG) or **Source mode**
 
 ## What you can do
 
--   **Write** — rich text with headings, lists, callouts, and code blocks
--   **Execute code** — Python, R, Julia, and Observable JS via Quarto
--   **Version control** — every save can auto-commit to Git
--   **Publish** — render your workspace as a Quarto website with one command
+- **Write** — rich text with headings, lists, callouts, and code blocks
+- **Execute code** — Python, R, Julia, and Observable JS via Quarto
+- **Version control** — every save can auto-commit to Git
+- **Publish** — render your workspace as a Quarto website with one command
 
 ## Getting started
 
