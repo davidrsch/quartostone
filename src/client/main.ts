@@ -875,12 +875,16 @@ const secondaryTabs = new TabBarManager(
     const next = toggleTheme(document.documentElement);
     storeTheme(next);
     applyTheme(next, document.documentElement, btnTheme);
+    activeVisual?.updateTheme();
   });
 
   // Respond to OS theme preference changes (only when user has no override)
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
     const stored = localStorage.getItem('qs_theme');
-    if (!stored) applyTheme(e.matches ? 'light' : 'dark', document.documentElement, btnTheme);
+    if (!stored) {
+      applyTheme(e.matches ? 'light' : 'dark', document.documentElement, btnTheme);
+      activeVisual?.updateTheme();
+    }
   });
 }
 

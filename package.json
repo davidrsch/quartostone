@@ -16,7 +16,7 @@
     "build:all": "npm run build && npm run build:client",
     "build:all:with-panmirror": "npm run build && npm run build:client && npm run build:panmirror",
     "build:panmirror": "node scripts/build-panmirror.mjs",
-    "dev:server": "tsx watch src/cli/commands/serve.ts",
+    "dev:server": "tsx watch src/cli/index.ts serve --port 4242 --no-open",
     "dev:client": "vite",
     "lint": "eslint src tests",
     "lint:fix": "eslint --fix src tests",
