@@ -113,15 +113,39 @@
               </button>
               <div id="export-dropdown" class="export-dropdown hidden">
                 <div class="export-menu-label">Export as…</div>
-                <button class="export-item" data-format="html">📄 HTML (standalone)</button>
-                <button class="export-item" data-format="typst">📄 PDF (typst)</button>
-                <button class="export-item" data-format="pdf">📄 PDF (LaTeX)</button>
-                <button class="export-item" data-format="docx">📝 Word (.docx)</button>
-                <button class="export-item" data-format="revealjs">📊 RevealJS slides</button>
-                <button class="export-item" data-format="beamer">📊 Beamer slides (PDF)</button>
-                <button class="export-item" data-format="epub">📖 EPUB</button>
+                <button class="export-item" data-format="html">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8.5 2.15v2.35c0 .28.22.5.5.5h2.35l-2.85-2.85ZM9 1.5H3A1.5 1.5 0 0 0 1.5 3v10A1.5 1.5 0 0 0 3 14.5h10a1.5 1.5 0 0 0 1.5-1.5V6h-4.5A1.5 1.5 0 0 1 8.5 4.5v-3Zm1 .2L14.28 6.5h-3.78a.5.5 0 0 1-.5-.5V1.7ZM4 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5Zm0 2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5Zm.5 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7Z"/></svg>
+                  <span>HTML (standalone)</span>
+                </button>
+                <button class="export-item" data-format="typst">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8.5 2.15v2.35c0 .28.22.5.5.5h2.35l-2.85-2.85ZM9 1.5H3A1.5 1.5 0 0 0 1.5 3v10A1.5 1.5 0 0 0 3 14.5h10a1.5 1.5 0 0 0 1.5-1.5V6h-4.5A1.5 1.5 0 0 1 8.5 4.5v-3Zm1 .2L14.28 6.5h-3.78a.5.5 0 0 1-.5-.5V1.7ZM4 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5Zm0 2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5Zm.5 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7Z"/></svg>
+                  <span>PDF (typst)</span>
+                </button>
+                <button class="export-item" data-format="pdf">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8.5 2.15v2.35c0 .28.22.5.5.5h2.35l-2.85-2.85ZM9 1.5H3A1.5 1.5 0 0 0 1.5 3v10A1.5 1.5 0 0 0 3 14.5h10a1.5 1.5 0 0 0 1.5-1.5V6h-4.5A1.5 1.5 0 0 1 8.5 4.5v-3Zm1 .2L14.28 6.5h-3.78a.5.5 0 0 1-.5-.5V1.7ZM4 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5Zm0 2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5Zm.5 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7Z"/></svg>
+                  <span>PDF (LaTeX)</span>
+                </button>
+                <button class="export-item" data-format="docx">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8.5 2.15v2.35c0 .28.22.5.5.5h2.35l-2.85-2.85ZM9 1.5H3A1.5 1.5 0 0 0 1.5 3v10A1.5 1.5 0 0 0 3 14.5h10a1.5 1.5 0 0 0 1.5-1.5V6h-4.5A1.5 1.5 0 0 1 8.5 4.5v-3Zm1 .2L14.28 6.5h-3.78a.5.5 0 0 1-.5-.5V1.7ZM4 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5Zm0 2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5Zm.5 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7Z"/></svg>
+                  <span>Word (.docx)</span>
+                </button>
+                <button class="export-item" data-format="revealjs">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M2.5 3A1.5 1.5 0 0 0 1 4.5v6A1.5 1.5 0 0 0 2.5 12h3.2l-.78 1.56a.5.5 0 0 0 .9.44L6.96 12h2.08l1.14 1.99a.5.5 0 1 0 .86-.5L10.3 12h2.2a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 12.5 3h-10ZM2 4.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-6Z"/></svg>
+                  <span>RevealJS slides</span>
+                </button>
+                <button class="export-item" data-format="beamer">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M2.5 3A1.5 1.5 0 0 0 1 4.5v6A1.5 1.5 0 0 0 2.5 12h3.2l-.78 1.56a.5.5 0 0 0 .9.44L6.96 12h2.08l1.14 1.99a.5.5 0 1 0 .86-.5L10.3 12h2.2a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 12.5 3h-10ZM2 4.5a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-6Z"/></svg>
+                  <span>Beamer slides (PDF)</span>
+                </button>
+                <button class="export-item" data-format="epub">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8.5 2.15v2.35c0 .28.22.5.5.5h2.35l-2.85-2.85ZM9 1.5H3A1.5 1.5 0 0 0 1.5 3v10A1.5 1.5 0 0 0 3 14.5h10a1.5 1.5 0 0 0 1.5-1.5V6h-4.5A1.5 1.5 0 0 1 8.5 4.5v-3Zm1 .2L14.28 6.5h-3.78a.5.5 0 0 1-.5-.5V1.7ZM4 7.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5Zm0 2.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5Zm.5 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7Z"/></svg>
+                  <span>EPUB</span>
+                </button>
                 <hr class="export-sep">
-                <button class="export-item" data-format="custom">⚙ Custom format…</button>
+                <button class="export-item" data-format="custom">
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M7.06 1.48a1.5 1.5 0 0 1 2.88 0l.13.43a4 4 0 0 1 1.25.72l.41-.18a1.5 1.5 0 0 1 2.05 2.05l-.17.41a4 4 0 0 1 .73 1.25l.43.13a1.5 1.5 0 0 1 0 2.87l-.43.13a4 4 0 0 1-.72 1.25l.18.42a1.5 1.5 0 0 1-2.05 2.04l-.4-.17a4 4 0 0 1-1.26.73l-.13.43a1.5 1.5 0 0 1-2.88 0l-.13-.43a4 4 0 0 1-1.25-.72l-.4.18a1.5 1.5 0 0 1-2.06-2.05l.18-.41a4 4 0 0 1-.73-1.25l-.43-.13a1.5 1.5 0 0 1 0-2.87l.43-.13a4 4 0 0 1 .72-1.25l-.18-.4a1.5 1.5 0 0 1 2.05-2.05l.41.17a4 4 0 0 1 1.25-.73l.13-.43Zm1.44-.95a.5.5 0 0 0-.96 0l-.2.66-.18.06a5 5 0 0 0-1.8 1.05l-.13.12-.62-.26a.5.5 0 0 0-.68.68l.26.62-.12.13a5 5 0 0 0-1.05 1.8l-.06.18-.66.2a.5.5 0 0 0 0 .96l.66.2.06.18a5 5 0 0 0 1.05 1.81l.12.12-.26.6-.01.03a.5.5 0 0 0 .69.65l.62-.26.13.12a5 5 0 0 0 1.8 1.05l.18.06.2.66a.5.5 0 0 0 .96 0l.2-.66.18-.06a5 5 0 0 0 1.81-1.05l.12-.12.61.26.04.01a.5.5 0 0 0 .65-.69l-.26-.62.12-.13a5 5 0 0 0 1.05-1.8l.06-.18.66-.2a.5.5 0 0 0 0-.96l-.66-.2-.06-.18a5 5 0 0 0-1.05-1.81l-.12-.12.26-.62a.5.5 0 0 0-.68-.68l-.62.26-.13-.12a5 5 0 0 0-1.8-1.05l-.18-.06-.2-.66ZM8.5 11.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-1a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>
+                  <span>Custom format…</span>
+                </button>
               </div>
             </div>
           </div>

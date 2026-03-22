@@ -1346,30 +1346,7 @@ dialog input[type="text"]:focus {
   opacity: 0.85;
 }
 
-/* ─── Mode toggle buttons ─── */
-#btn-mode-source,
-#btn-mode-visual {
-  font-size: 11px;
-  padding: 2px 10px;
-  border-radius: 3px 0 0 3px;
-  border: 1px solid var(--border);
-  background: var(--btn-bg);
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s;
-}
 
-#btn-mode-visual {
-  border-radius: 0 3px 3px 0;
-  border-left: none;
-}
-
-#btn-mode-source.active,
-#btn-mode-visual.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
 
 /* ─── Tiptap / ProseMirror visual editor ─── */
 .ProseMirror {
@@ -2417,20 +2394,7 @@ dialog input[type="text"]:focus {
   display: inline-flex;
 }
 
-#btn-export {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
 
-#btn-export:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 .export-dropdown.hidden {
   display: none;
@@ -2440,9 +2404,9 @@ dialog input[type="text"]:focus {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: var(--surface2);
+  background: var(--dialog-bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
   z-index: 200;
   min-width: 200px;
@@ -2459,12 +2423,16 @@ dialog input[type="text"]:focus {
 }
 
 .export-item {
-  display: block;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 0 4px;
   text-align: left;
   background: transparent;
   border: none;
-  padding: 6px 16px;
+  border-radius: 0;
+  padding: 6px 12px;
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
@@ -2479,6 +2447,64 @@ dialog input[type="text"]:focus {
   border-top: 1px solid var(--border);
   margin: 4px 0;
 }
+
+/* Edit mode picker */
+.edit-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.edit-mode-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+  opacity: 1;
+}
+
+.edit-mode-dropdown.hidden {
+  display: none;
+}
+
+.edit-mode-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--dialog-bg);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .25);
+  z-index: 200;
+  min-width: 150px;
+  padding: 4px 0;
+}
+
+.edit-mode-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.edit-mode-item:hover {
+  background: var(--hover);
+}
+
 
 /* ── Preview pane ─────────────────────────────────────────────────────────── */
 
@@ -2560,84 +2586,7 @@ dialog input[type="text"]:focus {
 }
 
 
-#preview-resizer {
-  width: 4px;
-  background: var(--border);
-  cursor: col-resize;
-  flex-shrink: 0;
-  transition: background .15s;
-}
 
-#preview-resizer:hover,
-#preview-resizer.dragging {
-  background: var(--accent, #7c6af7);
-}
-
-#preview-pane {
-  width: 45%;
-  min-width: 200px;
-  max-width: 70%;
-  display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-left: 1px solid var(--border);
-  position: relative;
-  overflow: hidden;
-}
-
-#preview-pane.hidden {
-  display: none;
-}
-
-#preview-resizer.hidden {
-  display: none;
-}
-
-#preview-frame {
-  flex: 1;
-  border: none;
-  width: 100%;
-  height: 100%;
-}
-
-#preview-loading,
-#preview-error {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, .85);
-  font-size: 13px;
-  color: var(--text-dim);
-  z-index: 5;
-}
-
-#preview-error {
-  color: #f97171;
-  padding: 16px;
-  text-align: center;
-}
-
-#btn-preview {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-#btn-preview.active {
-  background: var(--accent, #7c6af7);
-  color: #fff;
-  border-color: transparent;
-}
-
-#btn-preview:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
 
 /* ── Backlinks panel ──────────────────────────────────────────────────────── */
 
