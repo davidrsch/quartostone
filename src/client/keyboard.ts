@@ -13,7 +13,6 @@ export type KeyboardShortcutOptions = {
   openCmdPalette(): void;
   closeCmdPalette(): void;
   toggleSplit(): void;
-  clickProperties(): void;
 };
 
 /**
@@ -27,15 +26,15 @@ export function registerKeyboardShortcuts(opts: KeyboardShortcutOptions): void {
   document.addEventListener('keydown', e => {
     const mod = e.ctrlKey || e.metaKey;
 
-    // Ctrl+S — save
+    // Ctrl+S — save and commit
     if (mod && e.key === 's') {
       e.preventDefault();
-      if (isDirty) void opts.saveCurrentPage();
+      document.getElementById('btn-save')?.click();
     }
-    // Ctrl+Shift+G — open commit dialog (L-1)
+    // Ctrl+Shift+G — fallback for commit dialog
     if (mod && e.shiftKey && e.key === 'G') {
       e.preventDefault();
-      if (activePath) opts.openCommitDialog(opts.makeAutoSlug());
+      document.getElementById('btn-save')?.click();
     }
     // Ctrl+Shift+E — toggle visual/source editor mode
     if (mod && e.shiftKey && e.key === 'E') {
@@ -44,11 +43,7 @@ export function registerKeyboardShortcuts(opts: KeyboardShortcutOptions): void {
         void opts.switchMode(editorMode === 'visual' ? 'source' : 'visual');
       }
     }
-    // Ctrl+Shift+P — toggle preview panel (L-1)
-    if (mod && e.shiftKey && e.key === 'P') {
-      e.preventDefault();
-      document.getElementById('btn-preview')?.click();
-    }
+
     // Ctrl+P — search pages overlay
     if (mod && !e.shiftKey && e.key === 'p') {
       e.preventDefault();
@@ -64,11 +59,7 @@ export function registerKeyboardShortcuts(opts: KeyboardShortcutOptions): void {
       e.preventDefault();
       opts.toggleSplit();
     }
-    // Ctrl+Shift+B — toggle properties panel shortcut
-    if (mod && e.shiftKey && e.key === 'B') {
-      e.preventDefault();
-      opts.clickProperties();
-    }
+
     // Escape — close command palette if open
     if (e.key === 'Escape') {
       if (!document.getElementById('cmd-palette')!.classList.contains('hidden')) {

@@ -47,7 +47,7 @@ test.describe('Visual Editor - System Integration & Integrity', () => {
     await page.keyboard.press('Control+End');
     await page.keyboard.type(text, { delay: 20 });
     // onEditorUpdated (→ onDirty) should fire and enable the Save button
-    await expect(page.locator('#btn-save')).toBeEnabled({ timeout: 10_000 });
+    await expect(page.locator('#sb-save-status')).toHaveText('Unsaved changes', { timeout: 10_000 });
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -72,7 +72,7 @@ test.describe('Visual Editor - System Integration & Integrity', () => {
     await page.keyboard.press('Control+End');
     await page.keyboard.type(testText, { delay: 20 });
 
-    await expect(page.locator('#btn-save')).toBeEnabled({ timeout: 10_000 });
+    await expect(page.locator('#sb-save-status')).toHaveText('Unsaved changes', { timeout: 10_000 });
 
     const savePromise = waitForSave(page, pageName);
     await page.click('#btn-save');

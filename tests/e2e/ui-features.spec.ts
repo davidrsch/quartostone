@@ -76,10 +76,10 @@ test.describe('#116 Tooltip title attributes', () => {
   const TITLED_BUTTONS = [
     { id: '#btn-mode-source',  contains: 'Source' },
     { id: '#btn-mode-visual',  contains: 'Visual' },
-    { id: '#btn-properties',   contains: 'properties' },
-    { id: '#btn-preview',      contains: 'preview' },
+
+
     { id: '#btn-save',         contains: 'Save' },
-    { id: '#btn-commit',       contains: 'Commit' },
+
     { id: '#btn-new-page',     contains: 'page' },
     { id: '#btn-theme',        contains: 'theme' },
     { id: '#btn-graph',        contains: 'graph' },

@@ -72,8 +72,6 @@
 
 
 
-            <button id="btn-save" disabled title="Save (Ctrl+S)" aria-label="Save page">Save</button>
-            <button id="btn-commit" disabled title="Commit changes (Ctrl+Shift+G)" aria-label="Open commit dialog">Commit</button>
             <button id="btn-split" title="Split editor (Ctrl+\\)" aria-label="Toggle split editor" aria-pressed="false" class="toolbar-icon-btn">⧉</button>
             <button id="btn-kbd" title="Keyboard shortcuts reference" aria-label="Show keyboard shortcuts" class="toolbar-icon-btn">?</button>
           </div>
@@ -148,6 +146,13 @@
                 </button>
               </div>
             </div>
+            
+            <button id="btn-save" class="edit-mode-btn" title="Save and Commit (Ctrl+S)" aria-label="Save and Commit">
+              <!-- Fluent Save icon -->
+              <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                <path d="M3 2.5v11A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5V5.2a1.5 1.5 0 0 0-.44-1.06L9.85 1.44A1.5 1.5 0 0 0 8.8 1H4.5A1.5 1.5 0 0 0 3 2.5ZM4 13.5v-11a.5.5 0 0 1 .5-.5H8v3.5A1.5 1.5 0 0 0 9.5 7H12v6.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5ZM11 6H9.5A.5.5 0 0 1 9 5.5V2.2l2.8 2.8H11V6Z"/>
+              </svg>
+            </button>
           </div>
         </div>
 

@@ -78,25 +78,14 @@ test.describe('Opening a page from the sidebar', () => {
 // ── Toolbar state ─────────────────────────────────────────────────────────────
 
 test.describe('Toolbar state', () => {
-  test('Save button is disabled before a page is opened', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('#btn-save')).toBeDisabled();
-  });
-
-  test('Commit button is disabled before a page is opened', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('#btn-commit')).toBeDisabled();
-  });
-
   test('all toolbar buttons have a non-empty title attribute', async ({ page }) => {
     await page.goto('/');
     // Check key toolbar buttons have tooltip titles (from #116)
     const buttons = [
       '#btn-mode-source',
       '#btn-mode-visual',
-      '#btn-properties',
+
       '#btn-save',
-      '#btn-commit',
       '#btn-new-page',
       '#btn-new-db',
       '#btn-new-folder',
@@ -128,17 +117,7 @@ test.describe('Dirty state tracking', () => {
     }
   });
 
-  test('typing in the editor enables the Save button', async ({ page }) => {
-    await page.goto('/');
-    await page.locator('#file-tree .tree-item.file').first().click();
-    await expect(page.locator('.cm-editor')).toBeVisible({ timeout: 8_000 });
 
-    // Click into the editor then type
-    await page.locator('.cm-content').click();
-    await page.keyboard.type(' test-change');
-
-    await expect(page.locator('#btn-save')).toBeEnabled({ timeout: 3_000 });
-  });
 
   test('Ctrl+S shortcut triggers save when dirty', async ({ page }) => {
     await page.goto('/');
@@ -149,13 +128,13 @@ test.describe('Dirty state tracking', () => {
     await page.keyboard.type(' __e2e_save_test__');
 
     // Wait until dirty
-    await expect(page.locator('#btn-save')).toBeEnabled({ timeout: 3_000 });
+    await expect(page.locator('#sb-save-status')).toHaveText('Unsaved changes', { timeout: 3_000 });
 
     // Trigger save via shortcut
     await page.keyboard.press('Control+s');
 
     // After save the button should return to disabled
-    await expect(page.locator('#btn-save')).toBeDisabled({ timeout: 5_000 });
+    await expect(page.locator('#sb-save-status')).toHaveText('Saved', { timeout: 5_000 });
   });
 });
 
