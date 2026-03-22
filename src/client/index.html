@@ -69,12 +69,48 @@
                 <button id="btn-new-branch">+ New branch</button>
               </div>
             </div>
-            <button id="btn-mode-source" class="active" title="Source editor (Ctrl+Shift+E)">Source</button>
-            <button id="btn-mode-visual" title="Visual WYSIWYG editor (Ctrl+Shift+E)">Visual</button>
-            <button id="btn-properties" title="Toggle page properties (Ctrl+Shift+B)" aria-expanded="false">Properties</button>
-            <button id="btn-preview" title="Toggle live Quarto preview (Ctrl+Shift+P)" disabled aria-expanded="false">Preview</button>
-            <div id="export-picker">
-              <button id="btn-export" disabled title="Export to another format" aria-haspopup="true">Export ▾</button>
+
+
+
+            <button id="btn-save" disabled title="Save (Ctrl+S)" aria-label="Save page">Save</button>
+            <button id="btn-commit" disabled title="Commit changes (Ctrl+Shift+G)" aria-label="Open commit dialog">Commit</button>
+            <button id="btn-split" title="Split editor (Ctrl+\\)" aria-label="Toggle split editor" aria-pressed="false" class="toolbar-icon-btn">⧉</button>
+            <button id="btn-kbd" title="Keyboard shortcuts reference" aria-label="Show keyboard shortcuts" class="toolbar-icon-btn">?</button>
+          </div>
+        </div>
+
+        <!-- Visual editor formatting toolbar (#140) -->
+        <div id="visual-toolbar" class="hidden"></div>
+
+        <!-- Tab bar (#112) -->
+        <div id="tabset-panel" style="display:flex; justify-content:space-between; width:100%; border-bottom: 1px solid var(--border); background: var(--bg-toolbar);">
+          <div id="tab-bar" style="flex:1; min-width:0; overflow-x:auto;"></div>
+          <div style="display:flex; align-items:center; padding-right: 8px; gap: 4px;">
+            <!-- Edit mode picker: VS Code-style pencil button top-right -->
+            <div id="edit-mode-picker" style="position:relative;">
+              <button id="btn-edit-mode" class="edit-mode-btn" title="Switch editor mode" aria-haspopup="true" aria-expanded="false">
+                <!-- Fluent pencil edit icon -->
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12.14 1.32a2.03 2.03 0 0 1 2.87 2.86l-1.07 1.07-2.86-2.86 1.06-1.07Zm-1.78 1.78L2.57 10.9A1.5 1.5 0 0 0 2 11.96V14h2.04c.4 0 .78-.16 1.06-.44l7.8-7.79-2.54-2.67Z"/></svg>
+              </button>
+              <div id="edit-mode-dropdown" class="edit-mode-dropdown hidden" role="menu">
+                <button id="btn-edit-source" class="edit-mode-item" role="menuitem" data-mode="source">
+                  <!-- Fluent code icon -->
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M5.15 3.15a.5.5 0 0 0-.7-.7L.64 6.64a1.5 1.5 0 0 0 0 2.12l3.81 3.8a.5.5 0 0 0 .7-.7L1.7 8.41a.5.5 0 0 1 0-.7l3.45-3.46c.2-.2.2-.5 0-.7Zm6.06-.7a.5.5 0 0 1 .7 0l3.8 3.82c.59.58.59 1.53 0 2.12l-3.8 3.8a.5.5 0 0 1-.7-.7L14.65 8.05a.5.5 0 0 0 0-.7l-3.44-3.5a.5.5 0 0 1 0-.7ZM6.67 13.91a.5.5 0 0 0 .64-.26l2.5-6.5a.5.5 0 0 0-.93-.36l-2.5 6.5a.5.5 0 0 0 .29.62Z"/></svg>
+                  <span>Source</span>
+                </button>
+                <button id="btn-edit-visual" class="edit-mode-item" role="menuitem" data-mode="visual">
+                  <!-- Fluent preview/eye icon -->
+                  <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M8 3.5C4.7 3.5 1.84 5.76.2 8.64a1.5 1.5 0 0 0 0 1.22C1.84 12.74 4.7 15 8 15s6.16-2.26 7.8-5.14a1.5 1.5 0 0 0 0-1.22C14.16 5.76 11.3 3.5 8 3.5ZM8 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm-2.5-4a2.5 2.5 0 1 0 5 0 2.5 2.5 0 0 0-5 0Z"/></svg>
+                  <span>Visual</span>
+                </button>
+              </div>
+            </div>
+            
+            <div id="export-picker" style="position:relative;">
+              <button id="btn-export" disabled title="Export to another format" aria-haspopup="true" class="edit-mode-btn">
+                <!-- Fluent Share/Export icon -->
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M11 2H2v12h12V7h-1v6H3V3h8V2Zm1.85 2H11V3h4v4h-1V4.71l-5.65 5.64-.7-.7L12.85 4Z"/></svg>
+              </button>
               <div id="export-dropdown" class="export-dropdown hidden">
                 <div class="export-menu-label">Export as…</div>
                 <button class="export-item" data-format="html">📄 HTML (standalone)</button>
@@ -88,18 +124,8 @@
                 <button class="export-item" data-format="custom">⚙ Custom format…</button>
               </div>
             </div>
-            <button id="btn-save" disabled title="Save (Ctrl+S)" aria-label="Save page">Save</button>
-            <button id="btn-commit" disabled title="Commit changes (Ctrl+Shift+G)" aria-label="Open commit dialog">Commit</button>
-            <button id="btn-split" title="Split editor (Ctrl+\\)" aria-label="Toggle split editor" aria-pressed="false" class="toolbar-icon-btn">⧉</button>
-            <button id="btn-kbd" title="Keyboard shortcuts reference" aria-label="Show keyboard shortcuts" class="toolbar-icon-btn">?</button>
           </div>
         </div>
-
-        <!-- Visual editor formatting toolbar (#140) -->
-        <div id="visual-toolbar" class="hidden"></div>
-
-        <!-- Tab bar (#112) -->
-        <div id="tab-bar"></div>
 
         <!-- Breadcrumb navigation (#139) -->
 
@@ -114,22 +140,8 @@
               <div id="tab-bar-2"></div>
               <div id="editor-mount-2"></div>
             </div>
-            <div id="preview-resizer" class="hidden"></div>
-            <div id="preview-pane" class="hidden">
-              <div id="preview-loading" class="hidden">Loading preview…</div>
-              <div id="preview-error" class="hidden"></div>
-              <iframe id="preview-frame" title="Quarto live preview" src="about:blank"></iframe>
-            </div>
-          </div>
 
-          <!-- Page properties panel -->
-          <aside id="properties-panel" class="hidden">
-            <div id="properties-header">
-              <span>Page Properties</span>
-              <button id="btn-close-props" title="Close">×</button>
-            </div>
-            <div id="properties-body"></div>
-          </aside>
+          </div>
         </div>
 
         <div id="no-page-message" class="visible">
