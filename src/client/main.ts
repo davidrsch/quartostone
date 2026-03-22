@@ -31,7 +31,7 @@ import type { EditorView } from '@codemirror/view';
 import { applyTheme, toggleTheme, storeTheme, resolveInitialTheme } from './theme.js';
 import { filterEntries, moveIdx } from './cmdpalette/filter.js';
 import type { PaletteEntry } from './cmdpalette/filter.js';
-import { renderBreadcrumb as renderBreadcrumbPure } from './breadcrumb.js';
+
 import { showToast } from './utils/toast.js';
 import type { ToastKind } from './utils/toast.js';
 import { TabBarManager } from './tabbar/index.js';
@@ -58,7 +58,7 @@ function ensureEl<T extends HTMLElement = HTMLElement>(id: string): T {
 const fileTreeEl = ensureEl('file-tree');
 const editorMountEl = ensureEl('editor-mount');
 const noPageMessageEl = ensureEl('no-page-message');
-const pageTitleEl = ensureEl('current-page-title');
+
 const btnSave = document.getElementById('btn-save') as HTMLButtonElement;
 const btnCommit = document.getElementById('btn-commit') as HTMLButtonElement;
 const btnNewPage = document.getElementById('btn-new-page') as HTMLButtonElement;
@@ -382,21 +382,7 @@ async function saveCurrentPage() {
   }
 }
 
-// ─── Breadcrumb navigation (#139) ────────────────────────────────────────────
-// Thin wrapper that binds the module-level DOM element and sidebar reference
-// to the pure renderBreadcrumb function from breadcrumb.ts.
-function renderBreadcrumb(path: string | null): void {
-  const el = document.getElementById('editor-breadcrumb');
-  if (!el) return;
-  renderBreadcrumbPure(path, el, (segPath: string) => {
-    const target = fileTreeEl.querySelector<HTMLElement>(`[data-path="${segPath}"]`);
-    if (target) {
-      target.scrollIntoView({ block: 'nearest' });
-      target.focus();
-      target.click();
-    }
-  });
-}
+
 
 // ─── Editor load ────────────────────────────────────────────────────────────── 
 async function openPage(path: string, name: string) {  // M-1: guard against silently discarding unsaved changes
@@ -415,9 +401,7 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
 
     primaryTabs.ensure(path, name);
     setActivePath(path);
-    renderBreadcrumb(path);
     setIsDirty(false);
-    pageTitleEl.textContent = name;
     noPageMessageEl.classList.remove('visible');
     btnSave.disabled = true;
     btnCommit.disabled = false;
@@ -459,7 +443,6 @@ async function openPage(path: string, name: string) {  // M-1: guard against sil
         showToast(`Failed to load page: ${String(e)}`, 'error');
         noPageMessageEl.classList.add('visible');
         setActivePath(null);
-        renderBreadcrumb(null);
       }
     } else {
       activeView = await createEditor({
@@ -581,7 +564,7 @@ function toggleSplit(): void {
     // When opening, clone the current primary file into pane 2 (if any is open)
     setFocusedPane('primary');
     if (activePath) {
-      void openPageInPane2(activePath, pageTitleEl.textContent ?? activePath);
+      void openPageInPane2(activePath, activePath);
     }
   } else {
     closeSplitPane();
@@ -635,13 +618,11 @@ initSidebar(fileTreeEl, (path, name) => {
     const cleanPath = path.endsWith('.qmd') ? path : `${path}.qmd`;
     if (activePath && (activePath === path || activePath === cleanPath)) {
       setActivePath(null);
-      renderBreadcrumb(null);
       activeView?.destroy(); activeView = null;
       activeVisual?.destroy(); activeVisual = null;
       activeDb?.destroy(); activeDb = null;
       editorMountEl.innerHTML = '';
       noPageMessageEl.classList.add('visible');
-      pageTitleEl.textContent = '';
       btnSave.disabled = true;
       btnCommit.disabled = true;
     }
@@ -656,7 +637,7 @@ branchPicker = initBranchPicker((branch, stashConflict) => {
   showToast(`Switched to branch "${branch}"`, 'success');
   if (stashConflict) showToast('Stash re-apply had conflicts — check your files', 'error', 6000);
   // Reload current page on branch switch so content reflects new branch
-  if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath);
+  if (activePath) void openPage(activePath, activePath);
 }, showToast);
 
 // ── Export picker ───────────────────────────────────────────────────────────
@@ -683,7 +664,7 @@ document.getElementById('btn-graph')?.addEventListener('click', () => graphView?
 
 initHistoryPanel(historyPanelEl, () => {
   // After a restore, reload the current page
-  if (activePath) void openPage(activePath, pageTitleEl.textContent ?? activePath).catch((e: unknown) => showToast(String(e), 'error'));
+  if (activePath) void openPage(activePath, activePath).catch((e: unknown) => showToast(String(e), 'error'));
   showToast('File restored to selected commit', 'success');
 }).then(hp => { historySetPage = hp.setPage; }).catch(err => showToast(`History panel init failed: ${String(err)}`, 'error'));
 
@@ -750,13 +731,11 @@ const primaryTabs = new TabBarManager(
   (path, name) => openPage(path, name),
   () => {
     setActivePath(null);
-    renderBreadcrumb(null);
     activeView?.destroy(); activeView = null;
     activeVisual?.destroy(); activeVisual = null;
     activeDb?.destroy(); activeDb = null;
     editorMountEl.innerHTML = '';
     noPageMessageEl.classList.add('visible');
-    pageTitleEl.textContent = '';
     btnSave.disabled = true; btnCommit.disabled = true;
   },
 );
@@ -771,11 +750,7 @@ const secondaryTabs = new TabBarManager(
   },
 );
 
-{
-  const titleObs = new MutationObserver(() => { primaryTabs.render(); });
-  titleObs.observe(pageTitleEl, { childList: true, characterData: true, subtree: true });
-  window.addEventListener('beforeunload', () => titleObs.disconnect());
-}
+
 
 // ─── #113 Command palette (Ctrl+K) ───────────────────────────────────────────
 {

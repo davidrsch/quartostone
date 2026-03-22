@@ -9,28 +9,57 @@
 :root {
   --sidebar-width: 260px;
   --toolbar-height: 44px;
-  --bg: #1e1e1e;
-  --bg-sidebar: #252526;
-  --bg-toolbar: #2d2d2d;
-  --bg-hover: #37373d;
-  --bg-active: #094771;
-  --text: #cccccc;
-  --text-dim: #8a8a8a;
+  
+  /* Fluent UI Dark Theme (V9) equivalents */
+  --bg: #1f1f1f;
+  --bg-sidebar: #292929;
+  --bg-toolbar: #333333;
+  --bg-hover: #3d3d3d;
+  --bg-active: #2f2f2f;
+  --text: #ffffff;
+  --text-dim: #d1d1d1;
   --text-heading: #ffffff;
-  --border: #3e3e42;
-  --accent: #0e70c0;
-  --accent-hover: #1177bb;
-  --btn-bg: #3a3d41;
-  --btn-hover: #45494e;
-  --danger: #f44747;
-  --success: #4ec994;
+  --border: #444444;
+  --accent: #4f6bed;       /* Fluent Blue */
+  --accent-hover: #3858da;
+  --btn-bg: #333333;
+  --btn-hover: #3d3d3d;
+  --danger: #f85149;
+  --success: #3fb950;
+  
   /* Additional component vars */
-  --dialog-bg: #2d2d2d;
-  --toast-bg: #3c3c3c;
-  --scrollbar-thumb: #555;
-  --scrollbar-thumb-hover: #777;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --dialog-bg: #292929;
+  --toast-bg: #333333;
+  --scrollbar-thumb: #444;
+  --scrollbar-thumb-hover: #555;
+  --border-radius: 0px;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 13px;
+}
+
+:root.light {
+  /* Fluent UI Light Theme (V9) equivalents */
+  --bg: #ffffff;
+  --bg-sidebar: #f5f5f5;
+  --bg-toolbar: #eeeeee;
+  --bg-hover: #e0e0e0;
+  --bg-active: #e9e9e9;
+  --text: #242424;
+  --text-dim: #616161;
+  --text-heading: #000000;
+  --border: #e0e0e0;
+  --accent: #0078d4;
+  --accent-hover: #106ebe;
+  --btn-bg: #ffffff;
+  --btn-hover: #f3f2f1;
+  --danger: #d13438;
+  --success: #107c10;
+  --dialog-bg: #ffffff;
+  --toast-bg: #f3f2f1;
+  --scrollbar-thumb: #c8c8c8;
+  --scrollbar-thumb-hover: #a19f9d;
 }
 
 /* Fix app height to account for status bar */
@@ -95,13 +124,13 @@ body {
   gap: 6px;
   padding: 4px 16px;
   cursor: pointer;
-  border-radius: 4px;
-  margin: 0 4px;
+  border-radius: var(--border-radius);
+  margin: 0 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: none;
-  transition: background 0.1s;
+  transition: background 0.1s, color 0.1s;
 }
 
 .tree-item:hover {
@@ -211,12 +240,12 @@ body {
 
 /* ─── Context menu ─── */
 .ctx-menu {
-  background: var(--bg-sidebar, #252526);
+  background: var(--bg-sidebar);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--border-radius);
   padding: 4px 0;
   min-width: 180px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .45);
+  box-shadow: var(--shadow);
   z-index: 9999;
 }
 
@@ -509,13 +538,7 @@ body {
   margin: 0 4px;
 }
 
-#current-page-title {
-  font-weight: 500;
-  color: var(--text-heading);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
 
 #toolbar-actions {
   display: flex;
@@ -528,10 +551,10 @@ button {
   border: 1px solid var(--border);
   background: var(--btn-bg);
   color: var(--text);
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   font-size: 12px;
-  transition: background 0.1s;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 
 button:hover:not(:disabled) {
@@ -649,11 +672,11 @@ button.active {
 dialog {
   background: var(--dialog-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--border-radius);
   color: var(--text);
   padding: 24px;
   min-width: 360px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow);
 }
 
 dialog::backdrop {
@@ -3137,62 +3160,7 @@ dialog input[type="text"]:focus {
   color: var(--text, #e2e8f0);
 }
 
-/* ─── #139 Breadcrumb navigation ─────────────────────────────────────────── */
-#editor-breadcrumb {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  padding: 0 12px;
-  background: var(--bg, #1e1e2e);
-  border-bottom: 1px solid var(--border, #2d2d2d);
-  font-size: 12px;
-  color: var(--text-dim, #94a3b8);
-  overflow-x: auto;
-  flex-shrink: 0;
-  height: 24px;
-  scrollbar-width: none;
-  /* Firefox */
-}
 
-#editor-breadcrumb::-webkit-scrollbar {
-  display: none;
-}
-
-#editor-breadcrumb.hidden {
-  display: none;
-}
-
-.bc-seg {
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  color: var(--text-dim, #94a3b8);
-  white-space: nowrap;
-  transition: background 0.12s, color 0.12s;
-}
-
-.bc-seg:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, .08));
-  color: var(--text, #e2e8f0);
-}
-
-.bc-seg.bc-current {
-  color: var(--text, #e2e8f0);
-  cursor: default;
-  font-weight: 500;
-}
-
-.bc-seg.bc-current:hover {
-  background: transparent;
-}
-
-.bc-sep {
-  color: var(--text-dim, #94a3b8);
-  opacity: 0.45;
-  padding: 0 1px;
-  user-select: none;
-  flex-shrink: 0;
-}
 
 /* ─── #113 Command palette ───────────────────────────────────────────────── */
 #cmd-palette {
