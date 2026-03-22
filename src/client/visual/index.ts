@@ -219,19 +219,7 @@ export async function createVisualEditor(
       nuclearStyle.id = 'quarto-nuclear-styles';
       idoc.head.appendChild(nuclearStyle);
     }
-    nuclearStyle.textContent = `
-      * { border-radius: 0px !important; }
-      .fui-MenuList, .fui-PopoverSurface, .fui-MenuPopover, .fui-DialogSurface { 
-        border-radius: 0px !important; 
-        background-color: #1f1f1f !important; 
-        color: #d4d4d4 !important; 
-        border: 1px solid #333333 !important;
-        box-shadow: none !important;
-      }
-      .fui-MenuItem:hover {
-        background-color: #333333 !important;
-      }
-    `;
+    nuclearStyle.textContent = '';
   };
 
   iframe.addEventListener('load', () => { injectVSCodeTheme(); });
