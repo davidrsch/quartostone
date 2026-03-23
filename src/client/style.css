@@ -2515,6 +2515,16 @@ dialog input[type="text"]:focus {
   height: 100%;
 }
 
+/* ── Global actions bar (buttons only, no tabs) ──────────────────────────── */
+#global-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  border-bottom: 1px solid var(--border, #2d2d2d);
+  background: var(--bg-toolbar, #1e1e1e);
+  min-height: 34px;
+}
+
 /* ─── #140 Split editor pane ──────────────────────────────────────────────── */
 .editor-pane {
   display: flex;
@@ -2559,7 +2569,8 @@ dialog input[type="text"]:focus {
   display: none;
 }
 
-/* Secondary tab bar (inside #editor-pane-secondary) */
+/* Tab bars (inside each editor pane header) */
+#tab-bar,
 #tab-bar-2 {
   display: flex;
   align-items: stretch;
@@ -2567,10 +2578,12 @@ dialog input[type="text"]:focus {
   border-bottom: 1px solid var(--border, #2d2d2d);
   overflow-x: auto;
   flex-shrink: 0;
+  flex-grow: 1;
   min-height: 0;
   max-height: 34px;
 }
 
+#tab-bar:empty,
 #tab-bar-2:empty {
   display: none;
   max-height: 0;

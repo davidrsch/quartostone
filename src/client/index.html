@@ -59,10 +59,9 @@
       <!-- ── Editor area ── -->
       <main id="main">
         
-        <!-- Tab bar + actions (#112) -->
-        <div id="tabset-panel" style="display:flex; justify-content:space-between; width:100%; border-bottom: 1px solid var(--border); background: var(--bg-toolbar);">
-            <div id="tab-bar" style="flex:1; min-width:0; overflow-x:auto;"></div>
-            <div style="display:flex; align-items:center; padding-right: 8px; gap: 4px;">
+        <!-- Global actions bar: buttons only — tab bars live inside each editor pane -->
+        <div id="global-actions-bar">
+            <div style="display:flex; align-items:center; padding: 0 8px; gap: 4px;">
             <div id="branch-picker" style="position:relative; margin-right:4px;">
               <button id="btn-branch-picker" class="edit-mode-btn" title="Current branch — click to switch" aria-haspopup="true" style="display:flex; align-items:center; gap:6px;">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -164,6 +163,7 @@
         <div id="editor-body">
           <div id="editor-split">
             <div id="editor-pane-primary" class="editor-pane focused-pane">
+              <div class="pane-header"><div id="tab-bar" class="tab-bar"></div></div>
               <div id="editor-mount"></div>
             </div>
             <div id="editor-pane-divider" class="hidden" aria-hidden="true" title="Drag to resize panes"></div>
@@ -176,8 +176,6 @@
           </div>
         </div>
 
-        
-        </div>
 
         <div id="no-page-message" class="visible">
           <div class="empty-state">
