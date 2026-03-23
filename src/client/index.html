@@ -59,9 +59,10 @@
       <!-- ── Editor area ── -->
       <main id="main">
         
-        <!-- Unified Editor Toolbar -->
-        <div id="editor-toolbar" style="display:flex; justify-content:flex-end; align-items:center; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--bg-toolbar); gap: 4px;">
-            <div style="flex:1;"></div>
+        <!-- Tab bar + actions (#112) -->
+        <div id="tabset-panel" style="display:flex; justify-content:space-between; width:100%; border-bottom: 1px solid var(--border); background: var(--bg-toolbar);">
+            <div id="tab-bar" style="flex:1; min-width:0; overflow-x:auto;"></div>
+            <div style="display:flex; align-items:center; padding-right: 8px; gap: 4px;">
             <div id="branch-picker" style="position:relative; margin-right:4px;">
               <button id="btn-branch-picker" class="edit-mode-btn" title="Current branch — click to switch" aria-haspopup="true" style="display:flex; align-items:center; gap:6px;">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -153,6 +154,7 @@
                 <path fill-rule="evenodd" d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v9A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5v-9A1.5 1.5 0 0 1 2.5 2ZM2 3.5v9a.5.5 0 0 0 .5.5h5V3H2.5A.5.5 0 0 0 2 3.5ZM8.5 13h5a.5.5 0 0 0 .5-.5v-9A.5.5 0 0 0 13.5 3h-5v10Z" clip-rule="evenodd"></path>
               </svg>
             </button>
+          </div>
         </div>
 
 
@@ -162,9 +164,6 @@
         <div id="editor-body">
           <div id="editor-split">
             <div id="editor-pane-primary" class="editor-pane focused-pane">
-              <div class="pane-header">
-                <div id="tab-bar" class="tab-bar"></div>
-              </div>
               <div id="editor-mount"></div>
             </div>
             <div id="editor-pane-divider" class="hidden" aria-hidden="true" title="Drag to resize panes"></div>
