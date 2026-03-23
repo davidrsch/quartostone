@@ -61,17 +61,6 @@
         <div id="editor-toolbar">
 
           <div id="toolbar-actions">
-            <div id="branch-picker">
-              <button id="btn-branch-picker" class="branch-btn" title="Current branch — click to switch" aria-haspopup="true">⎇ <span id="branch-picker-label">main</span></button>
-              <div id="branch-dropdown" class="branch-dropdown hidden">
-                <div id="branch-list"></div>
-                <hr>
-                <button id="btn-new-branch">+ New branch</button>
-              </div>
-            </div>
-
-
-
             <button id="btn-split" title="Split editor (Ctrl+\\)" aria-label="Toggle split editor" aria-pressed="false" class="toolbar-icon-btn">⧉</button>
           </div>
         </div>
@@ -83,6 +72,20 @@
         <div id="tabset-panel" style="display:flex; justify-content:space-between; width:100%; border-bottom: 1px solid var(--border); background: var(--bg-toolbar);">
           <div id="tab-bar" style="flex:1; min-width:0; overflow-x:auto;"></div>
           <div style="display:flex; align-items:center; padding-right: 8px; gap: 4px;">
+            <div id="branch-picker" style="position:relative; margin-right:4px;">
+              <button id="btn-branch-picker" class="edit-mode-btn" title="Current branch — click to switch" aria-haspopup="true" style="display:flex; align-items:center; gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M4 11.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm7.25-6.5a1.5 1.5 0 1 0 1.5-1.5 1.5 1.5 0 0 0-1.5 1.5ZM4 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm.32.74a2.5 2.5 0 0 1 6.2 0 1.5 1.5 0 0 0-.52.86 1.5 1.5 0 0 0-5.16 0A.5.5 0 0 0 4.5 6a1.5 1.5 0 0 0-.18-.76ZM2.5 6a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3a.5.5 0 0 0-.5-.5Zm9 4V7h-1v3a.5.5 0 0 0 .5.5h1Zm0 0h.5v-1h-.5v1Zm.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+                </svg>
+                <span id="branch-picker-label">main</span>
+              </button>
+              <div id="branch-dropdown" class="branch-dropdown hidden">
+                <div id="branch-list"></div>
+                <hr>
+                <button id="btn-new-branch">+ New branch</button>
+              </div>
+            </div>
+            
             <!-- Edit mode picker: VS Code-style pencil button top-right -->
             <div id="edit-mode-picker" style="position:relative;">
               <button id="btn-edit-mode" class="edit-mode-btn" title="Switch editor mode" aria-haspopup="true" aria-expanded="false">
