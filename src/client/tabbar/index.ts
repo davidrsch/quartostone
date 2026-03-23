@@ -16,11 +16,13 @@ export class TabBarManager {
   private activeTabPath: string | null = null;
 
   constructor(
-    private readonly barId: string,
+    public readonly barId: string,
     /** Called when the user clicks a tab, or when a closed active tab's neighbor should open. */
     private readonly onOpen: (path: string, name: string) => void,
     /** Called when the last tab is closed (activeTabPath is already null at this point). */
     private readonly onAllClosed: () => void = () => {},
+    /** Called when a tab from a DIFFERENT TabBarManager is dropped here. */
+    private readonly onExternalDrop?: (path: string, name: string, sourceBarId: string) => void,
   ) {}
 
   render(): void {
@@ -34,6 +36,18 @@ export class TabBarManager {
       el.setAttribute('role', 'tab');
       el.setAttribute('aria-selected', String(tab.path === this.activeTabPath));
       el.dataset['path'] = tab.path;
+      el.draggable = true;
+
+      el.addEventListener('dragstart', e => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('application/json', JSON.stringify({
+            barId: this.barId,
+            path: tab.path,
+            name: tab.name
+          }));
+          e.dataTransfer.effectAllowed = 'move';
+        }
+      });
 
       const dot = document.createElement('span');
       dot.className = 'editor-tab-dot';
@@ -59,6 +73,48 @@ export class TabBarManager {
       });
       bar.appendChild(el);
     }
+
+    // Handle dropping tabs into this bar
+    bar.ondragover = e => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    };
+
+    bar.ondrop = e => {
+      e.preventDefault();
+      if (!e.dataTransfer) return;
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('application/json'));
+        if (!data || !data.path || !data.barId) return;
+
+        if (data.barId === this.barId) {
+          // Internal reorder
+          const draggedIdx = this.tabs.findIndex(t => t.path === data.path);
+          if (draggedIdx === -1) return;
+          // Determine drop index based on mouse X
+          let dropIdx = this.tabs.length;
+          const children = Array.from(bar.children);
+          for (let i = 0; i < children.length; i++) {
+            const rect = children[i].getBoundingClientRect();
+            if (e.clientX < rect.left + rect.width / 2) {
+              dropIdx = i;
+              break;
+            }
+          }
+          const [draggedTab] = this.tabs.splice(draggedIdx, 1);
+          if (dropIdx > draggedIdx) dropIdx--; // adjust since we removed it
+          this.tabs.splice(dropIdx, 0, draggedTab);
+          this.render();
+        } else {
+          // External drop (from another pane)
+          if (this.onExternalDrop) {
+            this.onExternalDrop(data.path, data.name, data.barId);
+          }
+        }
+      } catch (err) {
+        // Ignore parsing errors for non-tab drops
+      }
+    };
   }
 
   /** Add tab if not present, set it active, and re-render. */

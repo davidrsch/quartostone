@@ -58,20 +58,10 @@
 
       <!-- ── Editor area ── -->
       <main id="main">
-        <div id="editor-toolbar">
-
-          <div id="toolbar-actions">
-            <button id="btn-split" title="Split editor (Ctrl+\\)" aria-label="Toggle split editor" aria-pressed="false" class="toolbar-icon-btn">⧉</button>
-          </div>
-        </div>
-
-        <!-- Visual editor formatting toolbar (#140) -->
-        <div id="visual-toolbar" class="hidden"></div>
-
-        <!-- Tab bar (#112) -->
-        <div id="tabset-panel" style="display:flex; justify-content:space-between; width:100%; border-bottom: 1px solid var(--border); background: var(--bg-toolbar);">
-          <div id="tab-bar" style="flex:1; min-width:0; overflow-x:auto;"></div>
-          <div style="display:flex; align-items:center; padding-right: 8px; gap: 4px;">
+        
+        <!-- Unified Editor Toolbar -->
+        <div id="editor-toolbar" style="display:flex; justify-content:flex-end; align-items:center; padding: 4px 8px; border-bottom: 1px solid var(--border); background: var(--bg-toolbar); gap: 4px;">
+            <div style="flex:1;"></div>
             <div id="branch-picker" style="position:relative; margin-right:4px;">
               <button id="btn-branch-picker" class="edit-mode-btn" title="Current branch — click to switch" aria-haspopup="true" style="display:flex; align-items:center; gap:6px;">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -85,8 +75,6 @@
                 <button id="btn-new-branch">+ New branch</button>
               </div>
             </div>
-            
-            <!-- Edit mode picker: VS Code-style pencil button top-right -->
             <div id="edit-mode-picker" style="position:relative;">
               <button id="btn-edit-mode" class="edit-mode-btn" title="Switch editor mode" aria-haspopup="true" aria-expanded="false">
                 <!-- Fluent pencil edit icon -->
@@ -105,7 +93,6 @@
                 </button>
               </div>
             </div>
-            
             <div id="export-picker" style="position:relative;">
               <button id="btn-export" disabled title="Export to another format" aria-haspopup="true" class="edit-mode-btn">
                 <!-- Fluent Share/Export icon -->
@@ -148,7 +135,6 @@
                 </button>
               </div>
             </div>
-            
             <button id="btn-save" class="edit-mode-btn" title="Save and Commit (Ctrl+S)" aria-label="Save and Commit">
               <!-- Fluent Save icon -->
               <svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
@@ -161,24 +147,37 @@
                 <path d="M2.5 3A1.5 1.5 0 0 0 1 4.5v7A1.5 1.5 0 0 0 2.5 13h11a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 13.5 3h-11ZM2 4.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-7ZM4 9a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 9Zm.5-3.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5Zm3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5Zm3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5Z"/>
               </svg>
             </button>
-          </div>
+            <button id="btn-split" class="edit-mode-btn" title="Split editor (Ctrl+\)" aria-label="Toggle split editor" aria-pressed="false">
+              <!-- Square split vertically icon -->
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v9A1.5 1.5 0 0 1 13.5 14h-11A1.5 1.5 0 0 1 1 12.5v-9A1.5 1.5 0 0 1 2.5 2ZM2 3.5v9a.5.5 0 0 0 .5.5h5V3H2.5A.5.5 0 0 0 2 3.5ZM8.5 13h5a.5.5 0 0 0 .5-.5v-9A.5.5 0 0 0 13.5 3h-5v10Z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
         </div>
 
-        <!-- Breadcrumb navigation (#139) -->
 
-
+        <!-- Visual editor formatting toolbar (#140) -->
+        <div id="visual-toolbar" class="hidden"></div>
+        <!-- Split editor body -->
         <div id="editor-body">
           <div id="editor-split">
             <div id="editor-pane-primary" class="editor-pane focused-pane">
+              <div class="pane-header">
+                <div id="tab-bar" class="tab-bar"></div>
+              </div>
               <div id="editor-mount"></div>
             </div>
             <div id="editor-pane-divider" class="hidden" aria-hidden="true" title="Drag to resize panes"></div>
             <div id="editor-pane-secondary" class="editor-pane">
-              <div id="tab-bar-2"></div>
+              <div class="pane-header">
+                <div id="tab-bar-2" class="tab-bar"></div>
+              </div>
               <div id="editor-mount-2"></div>
             </div>
-
           </div>
+        </div>
+
+        
         </div>
 
         <div id="no-page-message" class="visible">

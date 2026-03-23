@@ -1,0 +1,3 @@
+# Theme Sync Test
+
+Verifying dark mode.

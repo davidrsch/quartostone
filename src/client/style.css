@@ -540,9 +540,9 @@ body {
 
 
 
-#toolbar-actions {
+.pane-header {
   display: flex;
-  gap: 6px;
+  width: 100%;
   align-items: center;
 }
 
@@ -2559,23 +2559,7 @@ dialog input[type="text"]:focus {
   display: none;
 }
 
-/* Secondary tab bar — identical to #tab-bar */
-#tab-bar-2 {
-  display: flex;
-  align-items: stretch;
-  background: var(--bg-sidebar, #252526);
-  border-bottom: 1px solid var(--border, #2d2d2d);
-  overflow-x: auto;
-  flex-shrink: 0;
-  min-height: 0;
-  max-height: 34px;
-}
-
-#tab-bar-2:empty {
-  display: none;
-  max-height: 0;
-  border: none;
-}
+/* Secondary tab bar styling removed, unified into .tab-bar */
 
 /* Editor mounts fill their pane */
 #editor-split #editor-mount,
@@ -3027,8 +3011,9 @@ dialog input[type="text"]:focus {
 }
 
 /* ─── #112 Tab bar ───────────────────────────────────────────────────────── */
-#tab-bar {
+.tab-bar {
   display: flex;
+  flex: 1;
   align-items: stretch;
   background: var(--bg-sidebar, #252526);
   border-bottom: 1px solid var(--border, #2d2d2d);
@@ -3038,7 +3023,7 @@ dialog input[type="text"]:focus {
   max-height: 34px;
 }
 
-#tab-bar:empty {
+.tab-bar:empty {
   display: none;
   max-height: 0;
   border: none;

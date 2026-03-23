@@ -688,6 +688,13 @@ const primaryTabs = new TabBarManager(
     editorMountEl.innerHTML = '';
     noPageMessageEl.classList.add('visible');
   },
+  (path, name, sourceBarId) => {
+    // If dropped from secondary pane, close it there and open it here
+    if (sourceBarId === 'tab-bar-2') {
+      secondaryTabs.close(path);
+    }
+    openPage(path, name);
+  }
 );
 
 const secondaryTabs = new TabBarManager(
@@ -698,6 +705,14 @@ const secondaryTabs = new TabBarManager(
     activeView2?.destroy(); activeView2 = null;
     editorMount2El.innerHTML = '';
   },
+  (path, name, sourceBarId) => {
+    // If dropped from primary pane, close it there and open it here
+    if (sourceBarId === 'tab-bar') {
+      primaryTabs.close(path);
+    }
+    setFocusedPane('secondary');
+    void openPageInPane2(path, name);
+  }
 );
 
 

@@ -1,0 +1,7 @@
+---
+title: Nav Target
+---
+
+# Navigation Target
+
+This page exists for navigation E2E.
