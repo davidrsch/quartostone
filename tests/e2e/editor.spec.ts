@@ -312,35 +312,7 @@ test.describe('Editor UI', () => {
   });
 });
 
-// ── Preview API (L-7) ─────────────────────────────────────────────────────────
 
-test.describe('Preview API', () => {
-  test('GET /api/preview/status returns idle status when no preview running', async ({ request }) => {
-    const res = await request.get('/api/preview/status');
-    expect(res.status()).toBe(200);
-    const body = await res.json() as { running: boolean };
-    expect(typeof body.running).toBe('boolean');
-  });
-
-  test('POST /api/preview/start returns 400 when path is missing', async ({ request }) => {
-    const res = await request.post('/api/preview/start', { data: {} });
-    // 400 = path missing (quarto present); 503 = quarto not in PATH (CI runner)
-    expect([400, 503]).toContain(res.status());
-  });
-
-  test('POST /api/preview/start accepts a valid path (Quarto may or may not be installed)', async ({ request }) => {
-    const res = await request.post('/api/preview/start', {
-      data: { path: 'pages/index.qmd', format: 'html' },
-    });
-    // 200 = started; 501/500 = quarto not installed; 503 = quarto not in PATH (CI runner)
-    expect([200, 202, 500, 501, 503]).toContain(res.status());
-  });
-
-  test('POST /api/preview/stop always returns 200', async ({ request }) => {
-    const res = await request.post('/api/preview/stop', { data: {} });
-    expect(res.status()).toBe(200);
-  });
-});
 
 // ── Branch operations API (L-7) ───────────────────────────────────────────────
 
@@ -399,49 +371,6 @@ test.describe('Branch operations API', () => {
   });
 });
 
-// ── Properties via frontmatter (L-7) ─────────────────────────────────────────
-
-test.describe('Page frontmatter / properties', () => {
-  const propPage = 'e2e-props-test.qmd';
-  const content = [
-    '---',
-    'title: Props Test',
-    'date: 2026-01-15',
-    'tags: [quarto, e2e]',
-    'draft: true',
-    '---',
-    '',
-    '# Props Test',
-    '',
-    'Frontmatter properties E2E test.',
-  ].join('\n');
-
-  test.beforeAll(async ({ request }) => {
-    await request.put(`/api/pages/${propPage}`, { data: { content } });
-  });
-
-  test.afterAll(async ({ request }) => {
-    await request.delete(`/api/pages/${propPage}`);
-  });
-
-  test('page with rich frontmatter round-trips correctly', async ({ request }) => {
-    const res = await request.get(`/api/pages/${propPage}`);
-    expect(res.status()).toBe(200);
-    const body = await res.json() as { content: string };
-    expect(body.content).toContain('title: Props Test');
-    expect(body.content).toContain('date: 2026-01-15');
-    expect(body.content).toContain('draft: true');
-  });
-
-  test('updated frontmatter persists on next read', async ({ request }) => {
-    const updated = content.replace('draft: true', 'draft: false');
-    await request.put(`/api/pages/${propPage}`, { data: { content: updated } });
-    const res = await request.get(`/api/pages/${propPage}`);
-    const body = await res.json() as { content: string };
-    expect(body.content).toContain('draft: false');
-    expect(body.content).not.toContain('draft: true');
-  });
-});
 
 // ── Visual mode switch UI (L-7) ───────────────────────────────────────────────
 

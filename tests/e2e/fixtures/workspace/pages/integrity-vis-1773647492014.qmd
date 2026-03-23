@@ -1,0 +1,3 @@
+# Visual test
+
+Base content. VISUAL_UNIQUE_CONTENT
